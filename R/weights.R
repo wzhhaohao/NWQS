@@ -1,9 +1,5 @@
 #' @importFrom stats glm predict gaussian as.formula
 
-# -------------------------------------------------------------------------
-# Spline-WQS Weight Calculation
-# -------------------------------------------------------------------------
-
 #' Calculate Spline-WQS Weights (Single Iteration)
 #' 计算 Spline-WQS 权重 (单次迭代)
 #'
@@ -62,6 +58,7 @@
 #'   Returns `NULL` if OOB sample size is zero (edge case).
 #'   返回每个混合物组分的归一化权重向量。如果重要性均为负或0返回 NA。
 #'
+#' @importFrom stats glm predict gaussian as.formula
 #' @export
 calc_spline_wqs_weights = function(data, mix_name, dependent_var = "y",
                                    expand_func = wqs_nonlinear_expand,
@@ -83,6 +80,10 @@ calc_spline_wqs_weights = function(data, mix_name, dependent_var = "y",
     # 这里的 ... 将 df_spline 等参数传递给 wqs_nonlinear_expand
     train_data_spline = expand_func(train_raw, mix_name, ...)
     oob_data_spline = expand_func(oob_raw, mix_name, ...)
+
+    # # 仅测试
+    # train_data_spline = expand_func(train_raw, mix_name)
+    # oob_data_spline = expand_func(oob_raw, mix_name)
 
     # 合并最终数据集
     base_cols = !(names(data) %in% mix_name)
@@ -141,4 +142,3 @@ calc_spline_wqs_weights = function(data, mix_name, dependent_var = "y",
 
     return(weights)
 }
-

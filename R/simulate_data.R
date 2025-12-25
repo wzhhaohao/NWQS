@@ -150,65 +150,6 @@ generate_covariates = function(n_obs = 1000,
 # -------------------------------------------------------------------------
 # -------------------------------------------------------------------------
 
-#' Quantile or Percentile Transformation / 分位数或百分位数变换
-#'
-#' @description
-#' A hybrid function combining flexible ranking methods:
-#' 1. "quantile": gWQS-style integer binning (handles ties and boundaries robustly).
-#' 2. "percentile": Continuous percentile ranking (0 to 1).
-#' 这是一个融合函数，结合了灵活的排名方法：
-#' 1. "quantile": gWQS 风格的整数分箱（稳健处理重复值和边界）。
-#' 2. "percentile": 连续百分位数排名（0 到 1）。
-#'
-#' @param data data.frame. Input data. / 输入数据。
-#' @param method character. "quantile" (default) or "percentile". / 变换方法。
-#' @param q integer. Number of quantiles (only used if method = "quantile"). / 分位数数量。
-#' @return data.frame. Transformed data. / 变换后的数据。
-#' @export
-trans_quantile = function(data, method = c("quantile", "percentile"), q = 4) {
-    data = as.data.frame(data)
-    method = match.arg(method)
-  
-    if (method == "percentile") {
-        transform_func = function(x) {
-            rank(x) / (length(x) + 1)
-        }
-    
-        # Apply to all columns
-        res_list = lapply(data, transform_func)
-    
-    } else {
-        if (!is.numeric(q) || q < 1) stop("'q' must be a positive number")
-
-        transform_func = function(x) {
-            breaks = unique(quantile(x, probs = seq(0, 1, by = 1/q), na.rm = TRUE))
-      
-            # Handle Boundaries (gWQS style: Force -Inf / Inf for robustness)
-            if (length(breaks) == 1) {
-                breaks = c(-Inf, breaks)
-            } else {
-                breaks[1] = -Inf
-                breaks[length(breaks)] = Inf
-            }
-      
-            # Cut (Binning): Returns integer values from 0 to q-1
-            as.numeric(cut(x, breaks = breaks, labels = FALSE, include.lowest = TRUE)) - 1
-        }
-    
-        # Apply to all columns
-        res_list = lapply(data, transform_func)
-    }
-  
-    # Convert list back to data.frame and preserve names
-    res_df = as.data.frame(res_list)
-    names(res_df) = names(data)
-  
-    return(res_df)
-}
-
-# -------------------------------------------------------------------------
-# -------------------------------------------------------------------------
-
 #' Generate Linear Model Data / 生成线性模型数据
 #'
 #' @description
@@ -363,3 +304,9 @@ gen_nonlinear_data = function(n_obs = 1000,
     return(as.data.frame(final_df))
 }
 
+
+# TODO：gen_nonlinear_bio_data
+
+# TODO：gen_nonlinear_multinonial_data
+
+# TODO:设计一个重复测量的数据生成函数

@@ -1,17 +1,12 @@
 #' @importFrom splines ns
 #' @importFrom stats quantile
 
-# -------------------------------------------------------------------------
-# 1. Quantile Transformation Helper / 分位数变换工具
-# -------------------------------------------------------------------------
-
 #' Quantile or Percentile Transformation / 分位数或百分位数变换
 #'
 #' @description
 #' A hybrid function combining flexible ranking methods:
 #' 1. "quantile": gWQS-style integer binning (handles ties and boundaries robustly).
 #' 2. "percentile": Continuous percentile ranking (0 to 1).
-#' \cr
 #' 这是一个融合函数，结合了灵活的排名方法：
 #' 1. "quantile": gWQS 风格的整数分箱（稳健处理重复值和边界）。
 #' 2. "percentile": 连续百分位数排名（0 到 1）。
@@ -63,9 +58,6 @@ trans_quantile = function(data, method = c("quantile", "percentile"), q = 4) {
 }
 
 # -------------------------------------------------------------------------
-# 2. Nonlinear Expansion Helper / 非线性展开工具
-# -------------------------------------------------------------------------
-
 #' Nonlinear Expansion for WQS (Natural Splines) / WQS 非线性展开 (自然样条)
 #'
 #' @description
@@ -87,7 +79,6 @@ trans_quantile = function(data, method = c("quantile", "percentile"), q = 4) {
 #'   可选的自定义转换函数。如果为 NULL，则应用默认的四分位数转换。
 #' @param df_spline integer. Degrees of freedom for the natural spline. Default is 3.
 #'   自然样条的自由度。默认为 3。
-#' @param ... Additional arguments passed to the transformation function.
 #'
 #' @return matrix. A matrix containing the spline basis functions for all mixture components.
 #'   Column names are formatted as `{Component}_B{BasisIndex}`.
@@ -97,21 +88,20 @@ wqs_nonlinear_expand = function(data, mix_name, transform_fun = NULL, df_spline 
     trans_data = data[mix_name]
     
     # 转换预测变量 (可选)
-    # 如果未提供转换函数，默认使用 trans_quantile
+    # 如果未提供转换函数，默认使用 trans_quantile (需确保该函数在环境中存在)
     if (!is.null(transform_fun) && is.function(transform_fun)) {
         transfered_data = transform_fun(trans_data)
     } else {
-        # 注意：这里调用了本文件上方的 trans_quantile 函数
-        # 默认使用 4 分位数 (Quartiles)
-        transfered_data = trans_quantile(trans_data, method = "quantile", q = 4)
+        # 注意：这里假设环境中存在 trans_quantile 函数
+        transform_fun = function(x) trans_quantile(trans_data, method = "quantile", q = 4)
+        transfered_data = transform_fun(trans_data)
     }
     
     # 对每一列应用自然样条展开
-    # 使用 splines::ns 生成自然三次样条基底
     mat_spline_list = lapply(transfered_data, function(x) splines::ns(x, df = df_spline))
     mat_spline_full = do.call(cbind, mat_spline_list)
 
-    # 生成规范的列名: ComponentName_B1, ComponentName_B2 ...
+    # 生成列名
     total_cols = ncol(mat_spline_full)
     cols_per_mix = total_cols / length(mix_name)
 
