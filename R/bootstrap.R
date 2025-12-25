@@ -54,6 +54,8 @@
 #'   Failed iterations contain `NULL`.
 #'   返回一个长度为 `B` 的命名列表，包含所有迭代的结果。失败的迭代包含 `NULL`。
 #'
+#' @importFrom future plan
+#' @importFrom future.apply future_lapply
 #' @export
 run_bootstrap = function(data, 
                          mix_name,

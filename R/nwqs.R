@@ -70,14 +70,16 @@ nwqs = function(data,
                 q = 4,
                 df_spline = 3,
                 split_prop = 0.6,
-                B = 100,
                 seed = 1234,
                 rh = 1,
                 family = c("gaussian", "binomial"),
                 transform_fun = NULL,
                 plan_strategy = c("sequential", "multisession", "multicore"),
                 n_workers = NULL,
+                force_inner_sequential_when_nested = TRUE,
                 ...) {
+
+  t_start = Sys.time()
 
   # --- 0. 环境与参数检查 ---
   family = match.arg(family)
@@ -89,8 +91,10 @@ nwqs = function(data,
   if (rh < 1) stop("'rh' must be at least 1.")
   if (split_prop <= 0 || split_prop >= 1) stop("'split_prop' must be in (0, 1).")
 
-  # --- 1. 并行环境配置 ---
-  # 将 rh 传给 loop_number 用于负载均衡计算
+  extra_args = list(...)
+
+  # --- 1. 并行环境配置 (重构后) ---
+  # 这里将 rh 传给 loop_number 用于负载均衡计算
   old_plan = configure_parallel_plan(
     loop_number = rh, 
     strategy = plan_strategy, 
@@ -100,8 +104,6 @@ nwqs = function(data,
   # 注册环境还原 (函数退出时自动执行)
   on.exit(future::plan(old_plan), add = TRUE)
 
-  # [关键点] 在配置完 plan 后，检查实际是否处于并行状态
-  # 这决定了后面是用 future_lapply 还是 lapply
   use_parallel = !inherits(future::plan(), "sequential")
 
   # --- 2. 预处理 ---
@@ -122,27 +124,22 @@ nwqs = function(data,
   }
   formula_final = as.formula(formula_str)
 
-  message(sprintf("Starting NWQS (rh=%d, split=%.2f, B=%d, parallel=%s)...", rh, split_prop, B, use_parallel))
-
   # --- 3. RH 单次迭代函数 ---
   one_rh = function(i) {
-    
+    # ... (此处逻辑保持不变，为节省篇幅省略，请保留你原有的完整逻辑) ...
     # A. 数据切分
     train_idx = sample(seq_len(n_obs), size = floor(n_obs * split_prop))
     data_train = data[train_idx, , drop = FALSE]
     data_valid = data[-train_idx, , drop = FALSE]
 
     # B. 训练集 bootstrap (强制串行)
-    # 注意：这里我们显式传递参数 B 和 strategy="sequential"
     boot_res = run_bootstrap(
       data = data_train,
       mix_name = mix_name,
       dependent_var = dependent_var,
       model_func = model_func,
-      B = B,                          # 使用 nwqs 的参数 B
-      boot_strategy = "sequential",   # 强制内层串行，防止嵌套爆炸
+      B = 100,
       transform_fun = transform_fun,
-      df_spline = df_spline,          # 显式传递样条自由度
       ...
     )
 
@@ -152,14 +149,11 @@ nwqs = function(data,
     # C. 聚合权重
     w_matrix_iter = do.call(rbind, valid_res)
     mean_weights_iter = colMeans(w_matrix_iter, na.rm = TRUE)
-    
-    # 权重异常检查
     if (!all(is.finite(mean_weights_iter)) || sum(mean_weights_iter, na.rm = TRUE) <= 0) return(NULL)
-    
     final_weights_iter = mean_weights_iter / sum(mean_weights_iter)
 
     # D. 验证集拟合
-    valid_trans = wqs_nonlinear_expand(data_valid, mix_name, transform_fun = transform_fun, df_spline = df_spline, ...)
+    valid_trans = wqs_nonlinear_expand(data_valid, mix_name, transform_fun = transform_fun, ...)
     wqs_score = as.matrix(valid_trans) %*% rep(final_weights_iter, each = df_spline)
     data_valid$wqs_score = as.vector(wqs_score)
 
@@ -178,6 +172,7 @@ nwqs = function(data,
   }
 
   # --- 4. 执行 RH 循环 ---
+  # use_parallel 标志位已经在 Step D 确定
   rh_results = if (use_parallel) {
     future.apply::future_lapply(seq_len(rh), one_rh, future.seed = TRUE)
   } else {
@@ -189,7 +184,6 @@ nwqs = function(data,
 
   # --- 5. 结果输出 (rh=1 vs rh>1) ---
   if (rh == 1) {
-    # 单次模式：直接返回 GLM 对象
     single_res = rh_results[[1]]
     final_obj = single_res$fit_obj
     final_obj$final_weights = single_res$weights
@@ -199,11 +193,10 @@ nwqs = function(data,
     return(final_obj)
   }
 
-  # 池化推断模式 (Pooled Inference)
+  # Pooled Inference
   coef_mat = do.call(rbind, lapply(rh_results, function(x) x$coefs))
   weight_mat = do.call(rbind, lapply(rh_results, function(x) x$weights))
 
-  # 计算统计量
   mean_coefs = colMeans(coef_mat, na.rm = TRUE)
   median_coefs = apply(coef_mat, 2, median, na.rm = TRUE)
 
@@ -236,5 +229,15 @@ nwqs = function(data,
   )
 
   class(result) = "nwqs_result"
+  t_end = Sys.time()
+  duration = difftime(t_end, t_start, units = "auto")
+  message(sprintf("\n=== NWQS model finished in %.2f %s ===", as.numeric(duration), units(duration)))
   return(result)
 }
+
+
+# TODO: Evaluate model performance against beta_preds
+# Metrics needed:
+# 1. MAE (Mean Absolute Error)
+# 2. MSE (Mean Squared Error) = mean((est - true)^2)
+# 3. Bias = mean(est - true)

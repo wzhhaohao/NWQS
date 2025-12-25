@@ -39,6 +39,7 @@
 #' @return The *previous* future plan (invisibly). This is intended to be used with `on.exit()` to restore the environment state after execution.
 #'   返回旧的并行计划（不可见对象），必须配合 `on.exit()` 使用以在函数结束时还原环境。
 #'
+#' @importFrom future plan availableCores
 #' @export
 configure_parallel_plan = function(loop_number, strategy = "multicore", n_workers = NULL, reserve_cpu = 0.2, ...) {
     
