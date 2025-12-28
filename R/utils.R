@@ -84,21 +84,19 @@ trans_quantile = function(data, method = c("quantile", "percentile"), q = 4) {
 #'   Column names are formatted as `{Component}_B{BasisIndex}`.
 #'   返回包含所有混合物组分样条基函数的矩阵。
 #' @export
-wqs_nonlinear_expand = function(data, mix_name, transform_fun = NULL, df_spline = 3, ...) {
-    trans_data = data[mix_name]
-    
-    # 转换预测变量 (可选)
-    # 如果未提供转换函数，默认使用 trans_quantile (需确保该函数在环境中存在)
-    if (!is.null(transform_fun) && is.function(transform_fun)) {
-        transfered_data = transform_fun(trans_data)
-    } else {
-        # 注意：这里假设环境中存在 trans_quantile 函数
-        transform_fun = function(x) trans_quantile(trans_data, method = "quantile", q = 4)
-        transfered_data = transform_fun(trans_data)
-    }
-    
+#' FIXME q 参数没有传递过去,之后默认4，先测试传入
+wqs_nonlinear_expand = function(data, mix_name, df_spline = 3, q = 4) {
+
+    # FIXME：可能是这里的q没有传递过去
+    trans_data = data[, mix_name] 
+
+    X = 0:(q - 1)
+    temp_spline = splines::ns(X, df = df_spline)
+    temp_knots = attr(temp_spline, "knots")
+    temp_boundary = attr(temp_spline, "Boundary.knots")
+
     # 对每一列应用自然样条展开
-    mat_spline_list = lapply(transfered_data, function(x) splines::ns(x, df = df_spline))
+    mat_spline_list = lapply(trans_data, function(x) splines::ns(x, df = df_spline, knots = temp_knots, Boundary.knots = temp_boundary))
     mat_spline_full = do.call(cbind, mat_spline_list)
 
     # 生成列名
