@@ -62,6 +62,8 @@
 #'   返回 `nwqs_result` 类对象，结构取决于 `rh`。
 #'
 #' @export
+#' 
+# BUG: 去修复动态分箱的不稳定性（Dynamic Binning Instability），rh后子集的分位数不一定等于全局的分位数
 nwqs = function(data,
                 mix_name,
                 covariates = NULL,
@@ -76,12 +78,11 @@ nwqs = function(data,
                 transform_fun = NULL,
                 plan_strategy = c("sequential", "multisession", "multicore"),
                 n_workers = NULL,
-                force_inner_sequential_when_nested = TRUE,
+                B = 100,
                 ...) {
 
   t_start = Sys.time()
-
-  # --- 0. 环境与参数检查 ---
+  args = list(...)
   family = match.arg(family)
   plan_strategy = match.arg(plan_strategy)
 
@@ -91,14 +92,15 @@ nwqs = function(data,
   if (rh < 1) stop("'rh' must be at least 1.")
   if (split_prop <= 0 || split_prop >= 1) stop("'split_prop' must be in (0, 1).")
 
-  extra_args = list(...)
-
   # --- 1. 并行环境配置 (重构后) ---
   # 这里将 rh 传给 loop_number 用于负载均衡计算
+  current_reserve = if (!is.null(args$cpu_reserve)) args$cpu_reserve else 0.2
+
   old_plan = configure_parallel_plan(
     loop_number = rh, 
     strategy = plan_strategy, 
-    n_workers = n_workers
+    n_workers = n_workers,
+    reserve_cpu = current_reserve
   )
   
   # 注册环境还原 (函数退出时自动执行)
@@ -106,11 +108,14 @@ nwqs = function(data,
 
   use_parallel = !inherits(future::plan(), "sequential")
 
+  # TODO: 去对data进行分位数处理
   # --- 2. 预处理 ---
   if (is.null(transform_fun)) {
-    current_q = q
-    transform_fun = function(x) trans_quantile(x, q = current_q)
+    transform_fun = function(x) trans_quantile(x, q = q)
   }
+
+  data_Q = data
+  data_Q[mix_name] = transform_fun(data[mix_name])
 
   if (!is.null(seed)) set.seed(seed)
   n_obs = nrow(data)
@@ -129,8 +134,8 @@ nwqs = function(data,
     # ... (此处逻辑保持不变，为节省篇幅省略，请保留你原有的完整逻辑) ...
     # A. 数据切分
     train_idx = sample(seq_len(n_obs), size = floor(n_obs * split_prop))
-    data_train = data[train_idx, , drop = FALSE]
-    data_valid = data[-train_idx, , drop = FALSE]
+    data_train = data_Q[train_idx, , drop = FALSE]
+    data_valid = data_Q[-train_idx, , drop = FALSE]
 
     # B. 训练集 bootstrap (强制串行)
     boot_res = run_bootstrap(
@@ -139,7 +144,8 @@ nwqs = function(data,
       dependent_var = dependent_var,
       model_func = model_func,
       B = 100,
-      transform_fun = transform_fun,
+      q = q,
+      df_spline = df_spline,
       ...
     )
 
@@ -153,7 +159,7 @@ nwqs = function(data,
     final_weights_iter = mean_weights_iter / sum(mean_weights_iter)
 
     # D. 验证集拟合
-    valid_trans = wqs_nonlinear_expand(data_valid, mix_name, transform_fun = transform_fun, ...)
+    valid_trans = wqs_nonlinear_expand(data_valid, mix_name, df_spline = df_spline, q = q)
     wqs_score = as.matrix(valid_trans) %*% rep(final_weights_iter, each = df_spline)
     data_valid$wqs_score = as.vector(wqs_score)
 

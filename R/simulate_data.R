@@ -173,8 +173,9 @@ generate_linear_data = function(n_obs = 1000,
                                 beta_preds,
                                 snr_db = 10,
                                 transform_fun = NULL,
+                                seed = NULL,
                                 ...) {
-  
+    if (!is.null(seed)) set.seed(seed)
     if (!requireNamespace("MASS", quietly = TRUE)) stop("Package 'MASS' required")
 
     # Generate Components
@@ -188,7 +189,7 @@ generate_linear_data = function(n_obs = 1000,
         preds_final = preds_scaled
     }
 
-    names(preds_final) = paste0("Component", 1:ncol(preds_final))
+    names(preds_scaled) = paste0("Component", 1:ncol(preds_scaled))
 
     # Generate Background Covariates (passing '...')
     cov_list = generate_covariates(n_obs = n_obs, ...)
@@ -260,6 +261,7 @@ gen_nonlinear_data = function(n_obs = 1000,
     names(preds_scaled) = paste0("Component", 1:ncol(preds_scaled))
   
     # Transform Predictors (Optional)
+    # FIXME: 关于 transform_fun 中，对分位数化后-1了，所以要保证所有逻辑都一致，其次就是到底要不要把transform_fun放在外面
     if (!is.null(transform_fun) && is.function(transform_fun)) {
         preds_trans = transform_fun(preds_scaled)
     } else {
@@ -286,8 +288,8 @@ gen_nonlinear_data = function(n_obs = 1000,
     # Calculate Clean Signal (Y_clean)
     # Logic: Repeat the single coefficient for a variable across all its spline basis functions
     # eta = Spline_Matrix * (beta_expanded)
-    beta_expanded = rep(beta_preds, each = df_spline)
-    eta_spline = as.matrix(mat_spline_full) %*% (beta_wqs * beta_expanded)
+    beta_expanded = rep(beta_preds * beta_wqs, each = df_spline)
+    eta_spline = as.matrix(mat_spline_full) %*% beta_expanded
     
     y_clean = eta_spline + cov_list$eta_cov
   

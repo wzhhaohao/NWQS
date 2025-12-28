@@ -61,12 +61,12 @@ run_bootstrap = function(data,
                          mix_name,
                          dependent_var = "y",
                          model_func = calc_spline_wqs_weights, 
-                         B = 100, 
+                         B = B, 
                          seed = NULL,
                          boot_strategy = c("sequential", "multisession", "multicore"),
                          boot_n_workers = NULL, 
                          ...) {
-
+    args = list(...)
     boot_strategy = match.arg(boot_strategy)
 
     # ---------- 并行策略配置 (调用独立函数) ----------
@@ -82,15 +82,17 @@ run_bootstrap = function(data,
     # 处理随机种子
     use.seed = if (is.null(seed)) TRUE else seed
 
-    # 执行并行计算
+    # BUG:这里存在问题
     results = future.apply::future_lapply(seq_len(B), function(i) {
 
-        # 安全运行模型函数
         tryCatch({
-            # 参数透传
-            model_func(data = data, 
-                       mix_name = mix_name, 
-                       dependent_var = dependent_var, ...)
+            do.call(
+              model_func,
+              c(list(data = data,
+                     mix_name = mix_name,
+                     dependent_var = dependent_var),
+                args)   # 关键：展开转发给 model_func 的 ...
+            )
         }, error = function(e) {
             warning(paste("Bootstrap iteration", i, "failed with error:", e$message))
             return(NULL)
@@ -98,8 +100,6 @@ run_bootstrap = function(data,
 
     }, future.seed = use.seed)
 
-    # 命名结果
     names(results) = paste0("B_", seq_len(B))
-
     return(results)
 }

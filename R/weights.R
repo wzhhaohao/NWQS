@@ -64,8 +64,9 @@ calc_spline_wqs_weights = function(data, mix_name, dependent_var = "y",
                                    expand_func = wqs_nonlinear_expand,
                                    shuffle = 100, ...) {
 
+    args = list(...)
+
     n_obs = nrow(data)
-    
     # 产生 Bootstrap 索引 (有放回)
     idx = sample(seq_len(n_obs), size = n_obs, replace = TRUE)
     oob_idx = setdiff(seq_len(n_obs), idx)
@@ -78,8 +79,10 @@ calc_spline_wqs_weights = function(data, mix_name, dependent_var = "y",
 
     # 非线性转换 (在循环外只做一次，保证效率)
     # 这里的 ... 将 df_spline 等参数传递给 wqs_nonlinear_expand
-    train_data_spline = expand_func(train_raw, mix_name, ...)
-    oob_data_spline = expand_func(oob_raw, mix_name, ...)
+    q = args$q
+    df = args$df_spline
+    train_data_spline = expand_func(train_raw, mix_name, df_spline = df, q = q)
+    oob_data_spline = expand_func(oob_raw, mix_name, df_spline = df, q = q)
 
     # # 仅测试
     # train_data_spline = expand_func(train_raw, mix_name)
