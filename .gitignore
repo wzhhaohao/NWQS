@@ -6,3 +6,6 @@ src/*.o
 src/*.so
 *.dll
 *.dylib
+dev_test.R
+dev_gwqs_test.R
+tests/
