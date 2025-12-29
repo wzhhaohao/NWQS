@@ -125,7 +125,7 @@ generate_sigma = function(n_vars, mode = c("medium", "low", "high", "mixed"), rh
 generate_covariates = function(n_obs = 1000,
                                beta_cont = 0.5,
                                beta_bin = -0.8,
-                               beta_cat = c(0.1, -0.4, 0.7),
+                               beta_cat = c(0, -0.4, 0.7),
                                prob_bin = 0.5,
                                prob_cat = c(1/3, 1/3, 1/3)) {
   
