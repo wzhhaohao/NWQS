@@ -1,7 +1,4 @@
-#' @importFrom future plan availableCores
-
 #' Configure Intelligent Parallel Plan with Load Balancing
-#' 智能负载均衡并行策略配置
 #'
 #' @description
 #' Automatically configures the parallel processing plan using the `future` package.

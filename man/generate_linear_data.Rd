@@ -2,7 +2,7 @@
 % Please edit documentation in R/simulate_data.R
 \name{generate_linear_data}
 \alias{generate_linear_data}
-\title{Generate Linear Model Data / 生成线性模型数据}
+\title{Generate Linear Model Data}
 \usage{
 generate_linear_data(
   n_obs = 1000,
@@ -12,6 +12,7 @@ generate_linear_data(
   beta_preds,
   snr_db = 10,
   transform_fun = NULL,
+  seed = NULL,
   ...
 )
 }

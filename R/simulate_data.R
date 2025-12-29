@@ -1,4 +1,4 @@
-#' Add Gaussian noise given target SNR / 根据信噪比添加高斯噪音
+#' Add Gaussian noise given target SNR
 #'
 #' @description
 #' Calculates signal power and adds white noise based on target SNR (dB).
@@ -108,7 +108,7 @@ generate_sigma = function(n_vars, mode = c("medium", "low", "high", "mixed"), rh
 # -------------------------------------------------------------------------
 # -------------------------------------------------------------------------
 
-#' Generate Covariates / 生成背景协变量
+#' Generate Covariates
 #'
 #' @description
 #' Generates data with continuous, binary, and categorical variables and their linear effects.
@@ -150,7 +150,7 @@ generate_covariates = function(n_obs = 1000,
 # -------------------------------------------------------------------------
 # -------------------------------------------------------------------------
 
-#' Generate Linear Model Data / 生成线性模型数据
+#' Generate Linear Model Data
 #'
 #' @description
 #' Generates main predictors (multivariate normal) and covariates, adding noise based on SNR.
@@ -261,7 +261,6 @@ gen_nonlinear_data = function(n_obs = 1000,
     names(preds_scaled) = paste0("Component", 1:ncol(preds_scaled))
   
     # Transform Predictors (Optional)
-    # FIXME: 关于 transform_fun 中，对分位数化后-1了，所以要保证所有逻辑都一致，其次就是到底要不要把transform_fun放在外面
     if (!is.null(transform_fun) && is.function(transform_fun)) {
         preds_trans = transform_fun(preds_scaled)
     } else {
