@@ -1,5 +1,3 @@
-#' @importFrom stats glm predict gaussian as.formula
-
 #' Calculate Spline-WQS Weights (Single Iteration)
 #' 计算 Spline-WQS 权重 (单次迭代)
 #'

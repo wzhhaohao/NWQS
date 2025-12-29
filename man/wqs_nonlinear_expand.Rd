@@ -4,7 +4,7 @@
 \alias{wqs_nonlinear_expand}
 \title{Nonlinear Expansion for WQS (Natural Splines) / WQS 非线性展开 (自然样条)}
 \usage{
-wqs_nonlinear_expand(data, mix_name, transform_fun = NULL, df_spline = 3, ...)
+wqs_nonlinear_expand(data, mix_name, df_spline = 3, q = 4)
 }
 \arguments{
 \item{data}{data.frame. The dataset containing the mixture variables.
@@ -13,14 +13,12 @@ wqs_nonlinear_expand(data, mix_name, transform_fun = NULL, df_spline = 3, ...)
 \item{mix_name}{character vector. Names of the mixture components to be expanded.
 需要展开的混合物组分名称。}
 
-\item{transform_fun}{function. Optional custom transformation function applied before spline expansion.
-If NULL, applies a default quantile transformation (q=4).
-可选的自定义转换函数。如果为 NULL，则应用默认的四分位数转换。}
-
 \item{df_spline}{integer. Degrees of freedom for the natural spline. Default is 3.
 自然样条的自由度。默认为 3。}
 
-\item{...}{Additional arguments passed to the transformation function.}
+\item{transform_fun}{function. Optional custom transformation function applied before spline expansion.
+If NULL, applies a default quantile transformation (q=4).
+可选的自定义转换函数。如果为 NULL，则应用默认的四分位数转换。}
 }
 \value{
 matrix. A matrix containing the spline basis functions for all mixture components.

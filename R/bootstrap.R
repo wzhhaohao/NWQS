@@ -1,7 +1,4 @@
-#' @importFrom future plan
-#' @importFrom future.apply future_lapply
-
-#' Bootstrap General Runner (Parallel) / 通用并行 Bootstrap 运行器
+#' Bootstrap General Runner (Parallel)
 #'
 #' @description
 #' Orchestrates the parallel execution of the bootstrap process for WQS regression.
@@ -82,7 +79,6 @@ run_bootstrap = function(data,
     # 处理随机种子
     use.seed = if (is.null(seed)) TRUE else seed
 
-    # BUG:这里存在问题
     results = future.apply::future_lapply(seq_len(B), function(i) {
 
         tryCatch({
@@ -91,7 +87,7 @@ run_bootstrap = function(data,
               c(list(data = data,
                      mix_name = mix_name,
                      dependent_var = dependent_var),
-                args)   # 关键：展开转发给 model_func 的 ...
+                args) 
             )
         }, error = function(e) {
             warning(paste("Bootstrap iteration", i, "failed with error:", e$message))

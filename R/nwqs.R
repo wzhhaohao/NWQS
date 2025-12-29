@@ -1,6 +1,3 @@
-#' @importFrom stats glm coef AIC pnorm sd median as.formula
-#' @importFrom future plan
-#' @importFrom future.apply future_lapply
 
 #' Repeated Holdout Non-linear / Linear WQS Regression (Dual Mode)
 #' 重复保留非线性/线性 WQS 回归 (双模式)
@@ -60,10 +57,10 @@
 #'
 #' @return An object of class `nwqs_result`. Structure depends on `rh`.
 #'   返回 `nwqs_result` 类对象，结构取决于 `rh`。
-#'
+#' @importFrom stats glm coef AIC pnorm sd median as.formula
+#' @importFrom future plan
+#' @importFrom future.apply future_lapply
 #' @export
-#' 
-# BUG: 去修复动态分箱的不稳定性（Dynamic Binning Instability），rh后子集的分位数不一定等于全局的分位数
 nwqs = function(data,
                 mix_name,
                 covariates = NULL,
@@ -108,7 +105,6 @@ nwqs = function(data,
 
   use_parallel = !inherits(future::plan(), "sequential")
 
-  # TODO: 去对data进行分位数处理
   # --- 2. 预处理 ---
   if (is.null(transform_fun)) {
     transform_fun = function(x) trans_quantile(x, q = q)

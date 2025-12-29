@@ -2,7 +2,7 @@
 % Please edit documentation in R/simulate_data.R
 \name{add_noise_by_snr}
 \alias{add_noise_by_snr}
-\title{Add Gaussian noise given target SNR / 根据信噪比添加高斯噪音}
+\title{Add Gaussian noise given target SNR}
 \usage{
 add_noise_by_snr(signal_vec, snr_db)
 }

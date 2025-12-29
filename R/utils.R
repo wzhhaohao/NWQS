@@ -1,7 +1,4 @@
-#' @importFrom splines ns
-#' @importFrom stats quantile
-
-#' Quantile or Percentile Transformation / 分位数或百分位数变换
+#' Quantile or Percentile Transformation 
 #'
 #' @description
 #' A hybrid function combining flexible ranking methods:
@@ -15,6 +12,8 @@
 #' @param method character. "quantile" (default) or "percentile". / 变换方法。
 #' @param q integer. Number of quantiles (only used if method = "quantile"). / 分位数数量。
 #' @return data.frame. Transformed data. / 变换后的数据。
+#' @importFrom splines ns
+#' @importFrom stats quantile
 #' @export
 trans_quantile = function(data, method = c("quantile", "percentile"), q = 4) {
     data = as.data.frame(data)
@@ -84,10 +83,8 @@ trans_quantile = function(data, method = c("quantile", "percentile"), q = 4) {
 #'   Column names are formatted as `{Component}_B{BasisIndex}`.
 #'   返回包含所有混合物组分样条基函数的矩阵。
 #' @export
-#' FIXME q 参数没有传递过去,之后默认4，先测试传入
 wqs_nonlinear_expand = function(data, mix_name, df_spline = 3, q = 4) {
 
-    # FIXME：可能是这里的q没有传递过去
     trans_data = data[, mix_name] 
 
     X = 0:(q - 1)

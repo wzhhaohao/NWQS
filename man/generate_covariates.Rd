@@ -2,13 +2,13 @@
 % Please edit documentation in R/simulate_data.R
 \name{generate_covariates}
 \alias{generate_covariates}
-\title{Generate Covariates / 生成背景协变量}
+\title{Generate Covariates}
 \usage{
 generate_covariates(
   n_obs = 1000,
   beta_cont = 0.5,
   beta_bin = -0.8,
-  beta_cat = c(0.1, -0.4, 0.7),
+  beta_cat = c(0, -0.4, 0.7),
   prob_bin = 0.5,
   prob_cat = c(1/3, 1/3, 1/3)
 )
