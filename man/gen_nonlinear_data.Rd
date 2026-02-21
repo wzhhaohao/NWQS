@@ -15,6 +15,7 @@ gen_nonlinear_data(
   transform_fun = NULL,
   df_spline = 3,
   seed = NULL,
+  shape = "linear_like",
   ...
 )
 }

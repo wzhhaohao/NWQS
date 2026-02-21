@@ -9,3 +9,5 @@ src/*.so
 dev_test.R
 dev_gwqs_test.R
 tests/
+R/update_next_time.R
+exploration_notes.R

@@ -247,6 +247,7 @@ gen_nonlinear_data = function(n_obs = 1000,
                               transform_fun = NULL, 
                               df_spline = 3,
                               seed = NULL,
+                              shape = "linear_like",
                               ...) {
   
     if (!requireNamespace("splines", quietly = TRUE)) stop("Package 'splines' required")
@@ -284,15 +285,86 @@ gen_nonlinear_data = function(n_obs = 1000,
   
     # Generate Covariates & Linear Effects
     cov_list = generate_covariates(n_obs = n_obs, ...)
+
+    # 增加非线性形状内容
+    # Expand beta coefficients based on specified shape
+    if (shape == "linear_like") {
+            pattern = c(1, 1, 1) 
+        } else if (shape == "u_shape") {
+            pattern = c(1.5, -3.0, 1.5) 
+        } else if (shape == "s_shape") {
+            pattern = c(1, -1, 1)
+        } else if (shape == "threshold") {
+            # 新增：环境污染物典型的“阈值/曲棍球棍”效应
+            # B1(低剂量) = 0 (无害)
+            # B2(中剂量) = 0.5 (开始突破代偿阈值，微微上升)
+            # B3(高剂量) = 4.0 (彻底崩溃，风险陡增)
+            pattern = c(0, 0.5, 4.0) 
+        } else {
+            pattern = rep(1, df_spline) # Fallback
+        }
+
+    beta_expanded = numeric(n_vars * df_spline)
+
+    for (i in 1:n_vars) {
+        # 基础 beta
+        b = beta_preds[i] * beta_wqs
+        
+        # 确定该变量在 beta_expanded 中的索引范围
+        idx_start = (i - 1) * df_spline + 1
+        idx_end   = i * df_spline
+        
+        # 应用模式：基础beta * 形状因子
+        beta_expanded[idx_start:idx_end] = b * pattern
+    }
   
-    # Calculate Clean Signal (Y_clean)
-    # Logic: Repeat the single coefficient for a variable across all its spline basis functions
-    # eta = Spline_Matrix * (beta_expanded)
-    beta_expanded = rep(beta_preds * beta_wqs, each = df_spline)
-    eta_spline = as.matrix(mat_spline_full) %*% beta_expanded
+
+    # # ---------------------------------------------------------
+    # # [修改点 3] 计算 Eta 并强制去中心化 (Calculate & Center)
+    # # ---------------------------------------------------------
+    # # 1. 计算原始样条效应
+    # eta_spline = as.matrix(mat_spline_full) %*% beta_expanded
+    # eta_spline = as.vector(eta_spline)
     
-    y_clean = eta_spline + cov_list$eta_cov
-  
+    # # 2. *** 核心修复 *** : 去中心化 (Centering)
+    # # 这一步消除了由 U型/S型 系数带来的意外截距偏移。
+    # # 使得非线性项只贡献"方差(形状)"，而不改变数据的"均值(Level)"。
+    # eta_spline_centered = eta_spline - mean(eta_spline)
+    
+    # # 3. 加上协变量和截距
+    # # cov_list$eta_cov 里面包含由 generate_covariates 生成的 Intercept
+    # y_clean = eta_spline_centered + cov_list$eta_cov
+
+    # ---------------------------------------------------------
+    # [修改点 3] 计算 Eta 并减去基线值 (修复版)
+    # ---------------------------------------------------------
+    
+    # 1. 计算原始样条效应
+    eta_spline = as.matrix(mat_spline_full) %*% beta_expanded
+    eta_spline = as.vector(eta_spline)
+    
+    # 2. 找到"基线状态"的值 (假设 preds_trans 的最小值代表极低暴露)
+    min_vals = lapply(preds_trans, min)
+    
+    # 3. *** 核心修复 *** : 使用 predict 提取基线样条值
+    # 我们不能对单个数值重新调用 ns()，而应该用 predict() 
+    # 将最小值代入由全量数据生成的样条基(mat_spline_list)中
+    mat_spline_baseline_list = lapply(1:n_vars, function(i) {
+      predict(mat_spline_list[[i]], newx = min_vals[[i]])
+    })
+    
+    # 组合基线样本的样条基矩阵
+    mat_spline_baseline = do.call(cbind, mat_spline_baseline_list)
+    
+    # 计算基线状态下的效应值
+    baseline_effect = as.vector(mat_spline_baseline %*% beta_expanded)
+
+    # 4. 减去基线效应，使最低暴露点的非线性效应严格为 0
+    eta_spline_adjusted = eta_spline - baseline_effect
+    
+    # 5. 加上协变量和截距 
+    y_clean = eta_spline_adjusted + cov_list$eta_cov
+
     # Add Noise based on SNR
     y_observed = add_noise_by_snr(as.vector(y_clean), snr_db = snr_db)
   
@@ -307,147 +379,37 @@ gen_nonlinear_data = function(n_obs = 1000,
 }
 
 
-# TODO：gen_nonlinear_bio_data
-#' Generate Non-linear Binary Model Data with Splines, Link Function, and SNR
-#' 生成基于自然样条的非线性二分类数据 (支持 Logit/Probit/Cloglog 及 SNR 加噪)
-#'
-#' @description
-#' Generates predictors, expands using splines, adds covariates, adds Gaussian noise 
-#' to the linear predictor based on SNR, and samples binary Y using the specified link function.
-#' 生成预测变量，使用样条扩展，加入协变量，根据信噪比向线性预测值添加高斯噪声，
-#' 最后通过指定的连接函数生成二分类 Y。
-#'
-#' @param n_obs integer. Sample size. / 样本量。
-#' @param mu_preds numeric vector. Mean vector for predictors. / 预测变量均值。
-#' @param sigma_preds matrix. Covariance matrix for predictors. / 预测变量协方差矩阵。
-#' @param beta_wqs numeric. Scaling factor for coefficients. / 系数缩放因子。
-#' @param beta_preds numeric vector. Coefficients for the predictors. Length must equal n_vars.
-#' @param intercept numeric. Intercept of the model. / 模型截距。
-#' @param link character. Link function: "logit", "probit", "cloglog".
-#' @param snr_db numeric. Signal-to-Noise Ratio (dB) for the linear predictor. 
-#'   Default is Inf (no noise). / 线性预测值的信噪比。默认为 Inf（无额外噪声）。
-#' @param transform_fun function. Function to transform predictors. / 变换函数。
-#' @param df_spline integer. Degrees of freedom for natural splines. / 自然样条自由度。
-#' @param seed integer. Random seed. / 随机种子。
-#' @param ... arguments passed to generate_covariates.
-#' 
-#' @return data.frame. Contains Y (0/1), predictors, covariates.
-#' @export
-# gen_nonlinear_bio_data = function(n_obs = 1000, 
-#                                   mu_preds, 
-#                                   sigma_preds, 
-#                                   beta_wqs = 1, 
-#                                   beta_preds,
-#                                   intercept = 0,
-#                                   link = c("logit", "probit", "cloglog"), 
-#                                   snr_db = Inf,  # 新增参数，避免传入 ... 导致报错
-#                                   transform_fun = NULL, 
-#                                   df_spline = 3,
-#                                   seed = NULL,
-#                                   ...) {
-  
-#     if (!requireNamespace("splines", quietly = TRUE)) stop("Package 'splines' required")
-#     if (!requireNamespace("MASS", quietly = TRUE)) stop("Package 'MASS' required")
-  
-#     # Validate link argument
-#     link = match.arg(link)
-
-#     if (!is.null(seed)) set.seed(seed)
-  
-#     # 1. Generate Raw Predictors
-#     preds_raw = MASS::mvrnorm(n_obs, mu = mu_preds, Sigma = sigma_preds)
-#     preds_scaled = as.data.frame(scale(preds_raw)) 
-#     n_vars = ncol(preds_scaled)
-#     names(preds_scaled) = paste0("Component", 1:ncol(preds_scaled))
-  
-#     # 2. Transform Predictors
-#     if (!is.null(transform_fun) && is.function(transform_fun)) {
-#         preds_trans = transform_fun(preds_scaled)
-#     } else {
-#         preds_trans = preds_scaled
-#     }
-  
-#     # 3. Create Spline Basis Matrix
-#     mat_spline_list = lapply(preds_trans, function(x) splines::ns(x, df = df_spline))
-#     mat_spline_full = do.call(cbind, mat_spline_list)
-
-#     if (length(beta_preds) != n_vars) {
-#         stop(sprintf("Length of 'beta_preds' (%d) must match n_vars (%d).", length(beta_preds), n_vars))
-#     }
-  
-#     # 4. Generate Covariates
-#     # 注意：此时 snr_db 已经被上面的参数捕获，不会进入 ...，所以不会报错
-#     cov_list = generate_covariates(n_obs = n_obs, ...)
-  
-#     # 5. Calculate Linear Predictor (Eta) - Pure Signal
-#     beta_expanded = rep(beta_preds * beta_wqs, each = df_spline)
-    
-#     eta_clean = intercept + 
-#                 (as.matrix(mat_spline_full) %*% beta_expanded) + 
-#                 cov_list$eta_cov
-    
-#     eta_clean = as.vector(eta_clean)
-
-#     # 6. Add Noise to Linear Predictor based on SNR
-#     # 使用您提供的 add_noise_by_snr 函数
-#     # 如果 snr_db 是 Inf，则不加噪
-#     if (!is.null(snr_db) && is.finite(snr_db)) {
-#         eta_final = add_noise_by_snr(eta_clean, snr_db)
-#     } else {
-#         eta_final = eta_clean
-#     }
-
-#     # 7. Calculate Probability (Inverse Link Function) using Noisy Eta
-#     if (link == "logit") {
-#         probs = 1 / (1 + exp(-eta_final))
-#     } else if (link == "probit") {
-#         probs = pnorm(eta_final)
-#     } else if (link == "cloglog") {
-#         probs = 1 - exp(-exp(eta_final))
-#     }
-
-#     # 8. Generate Binary Outcome
-#     y_binary = rbinom(n_obs, size = 1, prob = probs)
-  
-#     # 9. Combine Results
-#     cols_cov = setdiff(names(cov_list$mm), "eta_cov")
-  
-#     final_df = cbind(y = y_binary, 
-#                      preds_scaled, 
-#                      cov_list$mm[, cols_cov, drop = FALSE])
-  
-#     # Attributes for debugging
-#     attr(final_df, "true_prob") = probs
-#     attr(final_df, "link_used") = link
-#     attr(final_df, "snr_db") = snr_db
-    
-#     return(as.data.frame(final_df))
-# }
-
-
-
-
 #' Generate Non-linear Binary Model Data (Auto-Balanced)
 #' 生成基于自然样条的非线性二分类数据 (支持自动平衡 0/1 比例)
 #'
-#' @param target_prop numeric. Target proportion of Y=1 (e.g., 0.5). 
-#'   If NULL, uses the provided 'intercept'.
-#'   目标事件发生率。如果提供（如 0.5），程序会自动忽略 'intercept' 参数，
-#'   计算出能让 Y=1 比例达到该目标的截距。
-#' @param ... (其他参数同前)
+#' @param n_obs integer. 样本量。
+#' @param mu_preds numeric vector. 预测变量均值。
+#' @param sigma_preds matrix. 预测变量协方差矩阵。
+#' @param beta_wqs numeric. 混合物整体效应杠杆系数。
+#' @param beta_preds numeric vector. 各物质权重分配的基础系数。
+#' @param intercept numeric. 基础截距。如果 target_prop 不为 NULL，此参数将被覆盖。
+#' @param target_prop numeric. 目标事件发生率 (如 0.5)。自动计算让 Y=1 比例达到目标的截距。
+#' @param link character. 连接函数 ("logit", "probit", "cloglog")。
+#' @param snr_db numeric. 信噪比 (添加到潜变量 eta 上)。Inf 表示无额外噪声。
+#' @param transform_fun function. 预测变量的转换函数 (如分位数转换)。
+#' @param df_spline integer. 样条自由度。
+#' @param seed integer. 随机种子。
+#' @param shape character. 混合物的非线性形状模式 ("linear_like", "u_shape", "s_shape")。
+#' @param ... 传递给 generate_covariates 的参数。
 #' @export
 gen_nonlinear_bio_data = function(n_obs = 1000, 
                                   mu_preds, 
                                   sigma_preds, 
                                   beta_wqs = 1, 
                                   beta_preds,
-                                  intercept = 0, # 如果 target_prop 不为 NULL，此参数将被覆盖
-                                  target_prop = NULL, # <--- 新增核心参数
+                                  intercept = 0, 
+                                  target_prop = NULL, 
                                   link = c("logit", "probit", "cloglog"), 
                                   snr_db = Inf,
                                   transform_fun = NULL, 
                                   df_spline = 3,
                                   seed = NULL,
+                                  shape = "linear_like", # <--- 新增核心参数1：形状控制
                                   ...) {
   
     if (!requireNamespace("splines", quietly = TRUE)) stop("Package 'splines' required")
@@ -462,7 +424,7 @@ gen_nonlinear_bio_data = function(n_obs = 1000,
     n_vars = ncol(preds_scaled)
     names(preds_scaled) = paste0("Component", 1:ncol(preds_scaled))
   
-    # 2. Transform Predictors
+    # 2. Transform Predictors (e.g., Quantiles)
     if (!is.null(transform_fun) && is.function(transform_fun)) {
         preds_trans = transform_fun(preds_scaled)
     } else {
@@ -480,17 +442,56 @@ gen_nonlinear_bio_data = function(n_obs = 1000,
     # 4. Generate Covariates
     cov_list = generate_covariates(n_obs = n_obs, ...)
   
-    # 5. Calculate Partial Linear Predictor (Excluding Intercept)
     # -----------------------------------------------------------
-    beta_expanded = rep(beta_preds * beta_wqs, each = df_spline)
+    # [新增核心 2]: Expand beta coefficients based on explicit shapes
+    # -----------------------------------------------------------
+    if (shape == "linear_like") {
+            pattern = c(1, 1, 1) 
+        } else if (shape == "u_shape") {
+            pattern = c(1.5, -3.0, 1.5) 
+        } else if (shape == "s_shape") {
+            pattern = c(1, -1, 1)
+        } else if (shape == "threshold") {
+            # 新增：环境污染物典型的“阈值/曲棍球棍”效应
+            # B1(低剂量) = 0 (无害)
+            # B2(中剂量) = 0.5 (开始突破代偿阈值，微微上升)
+            # B3(高剂量) = 4.0 (彻底崩溃，风险陡增)
+            pattern = c(0, 0.5, 4.0) 
+        } else {
+            pattern = rep(1, df_spline) # Fallback
+        }
+
+    beta_expanded = numeric(n_vars * df_spline)
+    for (i in 1:n_vars) {
+        b = beta_preds[i] * beta_wqs
+        idx_start = (i - 1) * df_spline + 1
+        idx_end   = i * df_spline
+        beta_expanded[idx_start:idx_end] = b * pattern
+    }
     
-    # eta_partial 包含了样条效应 + 协变量效应 (cov_list$eta_cov 里通常包含了一个默认为0的intercept，这没关系，我们会在后面调整)
-    eta_partial = (as.matrix(mat_spline_full) %*% beta_expanded) + cov_list$eta_cov
-    eta_partial = as.vector(eta_partial)
+    # -----------------------------------------------------------
+    # [新增核心 3]: 计算潜变量 Eta 并减去基准效应 (Anchoring to 0)
+    # -----------------------------------------------------------
+    # A. 算原始样条得分
+    eta_spline_raw = as.matrix(mat_spline_full) %*% beta_expanded
+    eta_spline_raw = as.vector(eta_spline_raw)
+    
+    # B. 算基线得分 (未暴露组的得分)
+    min_vals = lapply(preds_trans, min)
+    mat_spline_baseline_list = lapply(1:n_vars, function(i) {
+      predict(mat_spline_list[[i]], newx = min_vals[[i]])
+    })
+    mat_spline_baseline = do.call(cbind, mat_spline_baseline_list)
+    baseline_effect = as.vector(mat_spline_baseline %*% beta_expanded)
+    
+    # C. 强制对齐：得到纯净的绝对偏效应 (使得最低暴露组的非线性潜风险严格为0)
+    eta_spline_adjusted = eta_spline_raw - baseline_effect
+
+    # 5. 组合最终的 Partial Predictor (不含截距，截距由后面求解)
+    eta_partial = eta_spline_adjusted + cov_list$eta_cov
 
     # 6. Add Noise to Linear Predictor (Latent Variable Noise)
     # -----------------------------------------------------------
-    # 我们先加噪，再找截距。这样能保证最终观测到的 Y 是平衡的。
     if (!is.null(snr_db) && is.finite(snr_db)) {
         eta_noisy_partial = add_noise_by_snr(eta_partial, snr_db)
     } else {
@@ -504,7 +505,7 @@ gen_nonlinear_bio_data = function(n_obs = 1000,
     if (!is.null(target_prop)) {
         if (target_prop <= 0 || target_prop >= 1) stop("target_prop must be between 0 and 1")
         
-        # 定义目标函数：给定截距 b0，计算平均概率与目标的差值
+        # 目标函数：寻找最优截距 b0，使得群体的平均预测概率 = 目标发病率
         calc_mean_prob_diff = function(b0) {
             eta_temp = b0 + eta_noisy_partial
             
@@ -518,9 +519,8 @@ gen_nonlinear_bio_data = function(n_obs = 1000,
             return(mean(p) - target_prop)
         }
         
-        # 使用 uniroot 求解让差值为 0 的截距
-        # 搜索范围 -50 到 50 通常足够覆盖绝大多数情况
         tryCatch({
+            # 在极其极端的 Logit 尺度下搜索截距 (-50到50通常能覆盖发病率从 0.0001% 到 99.999% 的范围)
             root_res = uniroot(calc_mean_prob_diff, interval = c(-50, 50), extendInt = "yes")
             final_intercept = root_res$root
         }, error = function(e) {
@@ -550,26 +550,27 @@ gen_nonlinear_bio_data = function(n_obs = 1000,
                      preds_scaled, 
                      cov_list$mm[, cols_cov, drop = FALSE])
   
-    # Attributes for debugging
+    # 附加信息 (方便 Debug 和查看模型的真实参数)
     attr(final_df, "true_prob") = probs
     attr(final_df, "link_used") = link
     attr(final_df, "snr_db") = snr_db
-    attr(final_df, "intercept_used") = final_intercept # 记录自动计算的截距
+    attr(final_df, "intercept_used") = final_intercept 
     attr(final_df, "target_prop") = target_prop
     
     return(as.data.frame(final_df))
 }
-# TODO：gen_nonlinear_multinonial_data
-# 看看文章，暂时还不认为需要些
 
-# TODO: 设计一个poisson分布的数据生成函数
+
+
+
+# TODO：gen_nonlinear_multinonial_data
 #' Generate Non-linear Count Model Data (Poisson)
 #' 生成基于自然样条的非线性计数数据 (Poisson Regression)
 #'
 #' @description
 #' Generates predictors, expands using splines, adds covariates, calculates expected counts (lambda)
-#' via log-link, and samples count Y from Poisson distribution.
-#' 生成预测变量，使用样条扩展，加入协变量，通过对数连接函数计算期望次数，并从泊松分布中生成计数 Y。
+#' via log-link, and samples count Y from Poisson distribution. Support explicit shape control.
+#' 生成预测变量，使用样条扩展，加入协变量，通过对数连接函数计算期望次数，并从泊松分布中生成计数 Y。支持明确的非线性形状控制。
 #'
 #' @param n_obs integer. Sample size. / 样本量。
 #' @param mu_preds numeric vector. Mean vector for predictors.
@@ -584,6 +585,7 @@ gen_nonlinear_bio_data = function(n_obs = 1000,
 #' @param transform_fun function.
 #' @param df_spline integer.
 #' @param seed integer.
+#' @param shape character. 混合物的非线性形状模式 ("linear_like", "u_shape", "s_shape", "threshold")。
 #' @param ... arguments passed to generate_covariates.
 #'
 #' @return data.frame. Contains Y (count), predictors, covariates.
@@ -598,73 +600,112 @@ gen_nonlinear_count_data = function(n_obs = 1000,
                                 transform_fun = NULL, 
                                 df_spline = 3,
                                 seed = NULL,
+                                shape = "linear_like", # <--- 新增核心参数1：形状控制
                                 ...) {
 
-if (!is.null(seed)) set.seed(seed)
+    if (!requireNamespace("splines", quietly = TRUE)) stop("Package 'splines' required")
+    if (!requireNamespace("MASS", quietly = TRUE)) stop("Package 'MASS' required")
 
-# 1. Generate & Transform Predictors
-preds_raw = MASS::mvrnorm(n_obs, mu = mu_preds, Sigma = sigma_preds)
-preds_scaled = as.data.frame(scale(preds_raw)) 
-names(preds_scaled) = paste0("Component", 1:ncol(preds_scaled))
+    if (!is.null(seed)) set.seed(seed)
 
-if (!is.null(transform_fun) && is.function(transform_fun)) {
-    preds_trans = transform_fun(preds_scaled)
-} else {
-    preds_trans = preds_scaled
+    # 1. Generate & Transform Predictors
+    preds_raw = MASS::mvrnorm(n_obs, mu = mu_preds, Sigma = sigma_preds)
+    preds_scaled = as.data.frame(scale(preds_raw)) 
+    n_vars = ncol(preds_scaled)
+    names(preds_scaled) = paste0("Component", 1:n_vars)
+
+    if (!is.null(transform_fun) && is.function(transform_fun)) {
+        preds_trans = transform_fun(preds_scaled)
+    } else {
+        preds_trans = preds_scaled
+    }
+
+    # 2. Spline Expansion
+    mat_spline_list = lapply(preds_trans, function(x) splines::ns(x, df = df_spline))
+    mat_spline_full = do.call(cbind, mat_spline_list)
+
+    if (length(beta_preds) != n_vars) {
+        stop("Length of beta_preds must match number of predictors.")
+    }
+
+    # 3. Covariates
+    cov_list = generate_covariates(n_obs = n_obs, ...)
+
+    # -----------------------------------------------------------
+    # [新增核心 4]: Expand beta coefficients based on explicit shapes
+    # -----------------------------------------------------------
+    if (shape == "linear_like") {
+        pattern = c(1, 1, 1) 
+    } else if (shape == "u_shape") {
+        pattern = c(1.5, -3.0, 1.5) 
+    } else if (shape == "s_shape") {
+        pattern = c(1, -1, 1)
+    } else if (shape == "threshold") {
+        pattern = c(0, 0.5, 4.0) 
+    } else {
+        pattern = rep(1, df_spline) # Fallback
+    }
+
+    beta_expanded = numeric(n_vars * df_spline)
+    for (i in 1:n_vars) {
+        b = beta_preds[i] * beta_wqs
+        idx_start = (i - 1) * df_spline + 1
+        idx_end   = i * df_spline
+        beta_expanded[idx_start:idx_end] = b * pattern
+    }
+
+    # -----------------------------------------------------------
+    # [新增核心 5]: 计算潜变量 Eta 并减去基准效应 (Anchoring to 0)
+    # -----------------------------------------------------------
+    eta_spline_raw = as.matrix(mat_spline_full) %*% beta_expanded
+    eta_spline_raw = as.vector(eta_spline_raw)
+    
+    # 提取并减去基线效应
+    min_vals = lapply(preds_trans, min)
+    mat_spline_baseline_list = lapply(1:n_vars, function(i) {
+      predict(mat_spline_list[[i]], newx = min_vals[[i]])
+    })
+    mat_spline_baseline = do.call(cbind, mat_spline_baseline_list)
+    baseline_effect = as.vector(mat_spline_baseline %*% beta_expanded)
+    
+    eta_spline_adjusted = eta_spline_raw - baseline_effect
+
+    # 合并偏效应 (此时没有截距)
+    eta_partial = eta_spline_adjusted + cov_list$eta_cov
+
+    # 6. Add Noise to Eta (Latent Overdispersion source)
+    if (!is.null(snr_db) && is.finite(snr_db)) {
+        eta_noisy_partial = add_noise_by_snr(eta_partial, snr_db)
+    } else {
+        eta_noisy_partial = eta_partial
+    }
+
+    # 7. Apply Intercept (Log-scale)
+    # 这里我们加上用户指定的 intercept。
+    # 因为前面做了 baseline anchoring，这个 intercept 完美代表了最低暴露人群的 Log 基础发生率
+    eta_final = intercept + eta_noisy_partial
+
+    # 8. Inverse Link: Log -> Count Mean (Lambda)
+    lambda = exp(eta_final)
+
+    # [安全检查] 防止 lambda 过大导致 rpois 溢出
+    # 在 Poisson 回归中，系数稍微大一点（比如 10），exp(10) 就变成 22000 了
+    if (any(lambda > 10000)) {
+        warning("Some lambda values are extremely high (>10000). Consider reducing betas, beta_wqs, or intercept.")
+    }
+
+    # 9. Sample Outcome (Poisson)
+    y_count = rpois(n_obs, lambda = lambda)
+
+    # 10. Combine Results
+    cols_cov = setdiff(names(cov_list$mm), "eta_cov")
+    final_df = cbind(y = y_count, 
+                     preds_scaled, 
+                     cov_list$mm[, cols_cov, drop = FALSE])
+
+    attr(final_df, "true_lambda") = lambda
+    attr(final_df, "snr_db") = snr_db
+
+    return(as.data.frame(final_df))
 }
-
-# 2. Spline Expansion
-mat_spline_list = lapply(preds_trans, function(x) splines::ns(x, df = df_spline))
-mat_spline_full = do.call(cbind, mat_spline_list)
-
-if (length(beta_preds) != ncol(preds_scaled)) {
-    stop("Length of beta_preds must match number of predictors.")
-}
-
-# 3. Covariates
-cov_list = generate_covariates(n_obs = n_obs, ...)
-
-# 4. Calculate Linear Predictor (Eta)
-# Eta is on the LOG scale
-beta_expanded = rep(beta_preds * beta_wqs, each = df_spline)
-
-eta_clean = intercept + 
-            (as.matrix(mat_spline_full) %*% beta_expanded) + 
-            cov_list$eta_cov
-
-eta_clean = as.vector(eta_clean)
-
-# 5. Add Noise to Eta (Optional Overdispersion source)
-if (!is.null(snr_db) && is.finite(snr_db)) {
-    eta_final = add_noise_by_snr(eta_clean, snr_db)
-} else {
-    eta_final = eta_clean
-}
-
-# 6. Inverse Link: Log -> Count Mean (Lambda)
-# lambda = exp(eta)
-lambda = exp(eta_final)
-
-# [安全检查] 防止 lambda 过大导致 rpois 溢出或产生不切实际的数据
-# 在 Poisson 回归中，系数稍微大一点（比如 5），exp(5) 就变成 148 了，exp(10) 就是 22000
-if (any(lambda > 10000)) {
-    warning("Some lambda values are extremely high (>10000). Consider reducing betas or intercept.")
-}
-
-# 7. Sample Outcome (Poisson)
-y_count = rpois(n_obs, lambda = lambda)
-
-# 8. Combine Results
-cols_cov = setdiff(names(cov_list$mm), "eta_cov")
-final_df = cbind(y = y_count, 
-                    preds_scaled, 
-                    cov_list$mm[, cols_cov, drop = FALSE])
-
-attr(final_df, "true_lambda") = lambda
-attr(final_df, "snr_db") = snr_db
-
-return(as.data.frame(final_df))
-}
-
-
 # TODO:设计一个重复测量的数据生成函数
