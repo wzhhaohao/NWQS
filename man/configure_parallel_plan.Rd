@@ -17,8 +17,8 @@ configure_parallel_plan(
 需要并行执行的任务/循环总数。}
 
 \item{strategy}{character. The parallel strategy to use. Defaults to "multicore" (efficient for Linux/macOS).
-\strong{Note}: Windows users should strictly use "multisession".
-并行策略，默认为 "multicore"。Windows 用户请务必使用 "multisession"。}
+\strong{Note}: Windows users should strictly use "multicore".
+并行策略，默认为 "multicore"。Windows 用户请务必使用 "multicore"。}
 
 \item{n_workers}{integer. Optional. Manually specify the number of workers.
 If NULL (default), the function calculates the optimal number automatically.

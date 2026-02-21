@@ -58,88 +58,282 @@
 #'
 #' @importFrom stats glm predict gaussian as.formula
 #' @export
-calc_spline_wqs_weights = function(data, mix_name, dependent_var = "y",
-                                   expand_func = wqs_nonlinear_expand,
-                                   shuffle = 100, ...) {
+# calc_spline_wqs_weights = function(data, mix_name, dependent_var = "y",
+#                                    expand_func = wqs_nonlinear_expand,
+#                                    shuffle = 100, ...) {
 
-    args = list(...)
+#     args = list(...)
 
-    n_obs = nrow(data)
+#     n_obs = nrow(data)
+#     # 产生 Bootstrap 索引 (有放回)
+#     idx = sample(seq_len(n_obs), size = n_obs, replace = TRUE)
+#     oob_idx = setdiff(seq_len(n_obs), idx)
+
+#     if (length(oob_idx) == 0) return(NULL)
+
+#     # 准备训练和 OOB 数据
+#     train_raw = data[idx, , drop = FALSE]
+#     oob_raw = data[oob_idx, , drop = FALSE]
+
+#     # 非线性转换 (在循环外只做一次，保证效率)
+#     # 这里的 ... 将 df_spline 等参数传递给 wqs_nonlinear_expand
+#     q = args$q
+#     df = args$df_spline
+#     train_data_spline = expand_func(train_raw, mix_name, df_spline = df, q = q)
+#     oob_data_spline = expand_func(oob_raw, mix_name, df_spline = df, q = q)
+
+#     # # 仅测试
+#     # train_data_spline = expand_func(train_raw, mix_name)
+#     # oob_data_spline = expand_func(oob_raw, mix_name)
+
+#     # 合并最终数据集
+#     base_cols = !(names(data) %in% mix_name)
+#     train_final = cbind(train_raw[, base_cols, drop = FALSE], train_data_spline)
+#     oob_final = cbind(oob_raw[, base_cols, drop = FALSE], oob_data_spline)
+
+#     # 动态构造公式
+#     spline_vars = colnames(train_data_spline)
+#     covariates = setdiff(names(train_raw)[base_cols], dependent_var)
+#     formula_str = paste(dependent_var, "~", paste(c(spline_vars, covariates), collapse = " + "))
+#     internal_formula = as.formula(formula_str)
+
+#     # 拟合模型 (目前固定为 gaussian，后续可考虑通过 ... 或新参数传入 family)
+#     fit = glm(formula = internal_formula, data = train_final, family = gaussian())
+
+#     # 计算基础 MSE
+#     y_true = oob_raw[[dependent_var]]
+#     base_pred = predict(fit, newdata = oob_final)
+#     base_mse = mean((y_true - base_pred)^2)
+
+#     # 核心优化：成组洗牌计算重要性
+#     importance_scores = numeric(length(mix_name))
+#     names(importance_scores) = mix_name
+
+#     for (var in mix_name) {
+#         # 识别该变量对应的所有样条基函数列
+#         # 使用正则匹配保证准确性 (如 Component1_B1, Component1_B2...)
+#         target_cols = spline_vars[grep(paste0("^", var, "_B"), spline_vars)]
+
+#         shuffled_mse_list = numeric(shuffle)
+
+#         for (k in seq_len(shuffle)) {
+#             temp_oob_final = oob_final
+
+#             # 同步洗牌：同一组分的所有基函数共用同一个随机索引，保持组分内部结构
+#             shuffle_idx = sample(nrow(temp_oob_final))
+#             temp_oob_final[, target_cols] = temp_oob_final[shuffle_idx, target_cols]
+
+#             # 直接预测，不再重新 expand，速度极快
+#             shuffled_pred = predict(fit, newdata = temp_oob_final)
+#             shuffled_mse_list[k] = mean((y_true - shuffled_pred)^2)
+#         }
+
+#         # 计算该变量的平均 MSE 增量 (Permutation Importance)
+#         importance_scores[var] = max(0, mean(shuffled_mse_list) - base_mse)
+#     }
+
+#     # 计算归一化权重
+#     out = importance_scores
+#     if (sum(out) <= 0) {
+#         warning("所有变量的重要性得分为 0 或负数，返回 NA")
+#         weights = NA
+#     } else {
+#         weights = sqrt(out) / sum(sqrt(out))
+#     }
+
+#     return(weights)
+# }
+
+
+# calc_spline_wqs_weights = function(data, mix_name, dependent_var = "y",
+#                                    expand_func = wqs_nonlinear_expand,
+#                                    shuffle = 100, ...) {
+
+#     args = list(...)
+
+#     n_obs = nrow(data)
+#     # 产生 Bootstrap 索引 (有放回)
+#     idx = sample(seq_len(n_obs), size = n_obs, replace = TRUE)
+#     oob_idx = setdiff(seq_len(n_obs), idx)
+
+#     if (length(oob_idx) == 0) return(NULL)
+
+#     # 准备训练和 OOB 数据
+#     train_raw = data[idx, , drop = FALSE]
+#     oob_raw = data[oob_idx, , drop = FALSE]
+
+#     # 非线性转换
+#     q = args$q
+#     df = args$df_spline
+#     train_data_spline = expand_func(train_raw, mix_name, df_spline = df, q = q)
+#     oob_data_spline = expand_func(oob_raw, mix_name, df_spline = df, q = q)
+
+#     # 合并最终数据集
+#     base_cols = !(names(data) %in% mix_name)
+#     train_final = cbind(train_raw[, base_cols, drop = FALSE], train_data_spline)
+#     oob_final = cbind(oob_raw[, base_cols, drop = FALSE], oob_data_spline)
+
+#     # 动态构造公式
+#     spline_vars = colnames(train_data_spline)
+#     covariates = setdiff(names(train_raw)[base_cols], dependent_var)
+#     formula_str = paste(dependent_var, "~", paste(c(spline_vars, covariates), collapse = " + "))
+#     internal_formula = as.formula(formula_str)
+
+#     # 拟合模型
+#     fit = glm(formula = internal_formula, data = train_final, family = gaussian())
+
+#     # 计算基础 MSE
+#     y_true = oob_raw[[dependent_var]]
+#     base_pred = predict(fit, newdata = oob_final)
+#     base_mse = mean((y_true - base_pred)^2)
+
+#     # 核心优化：成组洗牌计算重要性
+#     importance_scores = numeric(length(mix_name))
+#     names(importance_scores) = mix_name
+
+#     for (var in mix_name) {
+#         target_cols = spline_vars[grep(paste0("^", var, "_B"), spline_vars)]
+#         shuffled_mse_list = numeric(shuffle)
+
+#         for (k in seq_len(shuffle)) {
+#             temp_oob_final = oob_final
+#             shuffle_idx = sample(nrow(temp_oob_final))
+#             temp_oob_final[, target_cols] = temp_oob_final[shuffle_idx, target_cols]
+#             shuffled_pred = predict(fit, newdata = temp_oob_final)
+#             shuffled_mse_list[k] = mean((y_true - shuffled_pred)^2)
+#         }
+#         importance_scores[var] = max(0, mean(shuffled_mse_list) - base_mse)
+#     }
+
+#     # ==========================================
+#     # 以下为路线 B 的核心修改区域
+#     # ==========================================
+#     out = importance_scores
+#     if (sum(out) <= 0) {
+#         warning("所有变量的重要性得分为 0 或负数，返回 NA")
+        
+#         # [原代码] weights = NA
+#         # [修改为] 统一返回格式，方便外层处理
+#         weights = rep(NA, length(mix_name))
+#         names(weights) = mix_name
+        
+#         # [新增修改] 提取形状系数 (Shape Coefficients)
+#         # 原因：当重要性为0时，形状系数也应该被初始化为 NA 占位。
+#         shape_coefs = rep(NA, length(spline_vars))
+#         names(shape_coefs) = spline_vars
+        
+#     } else {
+#         # [原代码] weights = sqrt(out) / sum(sqrt(out))
+#         # 权重计算逻辑保持不变
+#         weights = sqrt(out) / sum(sqrt(out))
+        
+#         # [新增修改] 提取形状系数 (Shape Coefficients)
+#         # 原因：路线 B 不仅需要权重，还需要记录每次拟合出来的样条基函数系数，以还原真实曲线。
+#         # 我们从 fit 对象中提取出所有系数，然后只保留属于样条基函数 (spline_vars) 的部分。
+#         all_coefs = coef(fit)
+#         shape_coefs = all_coefs[spline_vars]
+        
+#         # [防御性编程] 处理可能的 NA 值
+#         # 原因：如果出现极端的多重共线性，GLM 可能会 drop 掉某个基函数并返回 NA。
+#         # 在计算预测值时，NA 系数相当于该基函数对模型无贡献，所以将其置为 0。
+#         shape_coefs[is.na(shape_coefs)] = 0
+#     }
+
+#     # [原代码] return(weights)
+#     # [修改为] 返回一个 List，同时包含权重和形状系数
+#     # 原因：外层的 one_rh 函数需要用 shapes 还原曲线，再用 weights 进行加权。
+#     return(list(
+#         weights = weights,
+#         shapes = shape_coefs
+#     ))
+# }
+
+
+
+#' Calculate Spline WQS Weights (Matrix Engine)
+#' 极限提速版：抛弃 glm() 和 predict()，全程使用 glm.fit 和矩阵直乘
+#' 
+#' @export
+calc_spline_wqs_weights = function(X_matrix, y_vector, mix_name, spline_vars, fam_obj, shuffle = 100, ...) {
+    
+    n_obs = nrow(X_matrix)
+    
     # 产生 Bootstrap 索引 (有放回)
     idx = sample(seq_len(n_obs), size = n_obs, replace = TRUE)
     oob_idx = setdiff(seq_len(n_obs), idx)
 
     if (length(oob_idx) == 0) return(NULL)
 
-    # 准备训练和 OOB 数据
-    train_raw = data[idx, , drop = FALSE]
-    oob_raw = data[oob_idx, , drop = FALSE]
+    # 1. 极速矩阵切片提取 Train 和 OOB
+    X_train = X_matrix[idx, , drop = FALSE]
+    y_train = y_vector[idx]
+    X_oob = X_matrix[oob_idx, , drop = FALSE]
+    y_oob = y_vector[oob_idx]
 
-    # 非线性转换 (在循环外只做一次，保证效率)
-    # 这里的 ... 将 df_spline 等参数传递给 wqs_nonlinear_expand
-    q = args$q
-    df = args$df_spline
-    train_data_spline = expand_func(train_raw, mix_name, df_spline = df, q = q)
-    oob_data_spline = expand_func(oob_raw, mix_name, df_spline = df, q = q)
+    # 2. 调用底层的 C 级数学引擎 glm.fit (无任何 S3 开销)
+    fit = glm.fit(x = X_train, y = y_train, family = fam_obj)
+    
+    # 提取系数，处理可能因共线性产生的 NA
+    coefs = fit$coefficients
+    coefs[is.na(coefs)] = 0
+    
+    # 获取 Family 的逆连接函数 (用于将 eta 转成 mu)
+    linkinv = fam_obj$linkinv
 
-    # # 仅测试
-    # train_data_spline = expand_func(train_raw, mix_name)
-    # oob_data_spline = expand_func(oob_raw, mix_name)
+    # 3. 计算基础 OOB MSE (抛弃 predict，使用极速矩阵相乘)
+    eta_base = as.numeric(X_oob %*% coefs)
+    mu_base = linkinv(eta_base)
+    base_mse = mean((y_oob - mu_base)^2)
 
-    # 合并最终数据集
-    base_cols = !(names(data) %in% mix_name)
-    train_final = cbind(train_raw[, base_cols, drop = FALSE], train_data_spline)
-    oob_final = cbind(oob_raw[, base_cols, drop = FALSE], oob_data_spline)
-
-    # 动态构造公式
-    spline_vars = colnames(train_data_spline)
-    covariates = setdiff(names(train_raw)[base_cols], dependent_var)
-    formula_str = paste(dependent_var, "~", paste(c(spline_vars, covariates), collapse = " + "))
-    internal_formula = as.formula(formula_str)
-
-    # 拟合模型 (目前固定为 gaussian，后续可考虑通过 ... 或新参数传入 family)
-    fit = glm(formula = internal_formula, data = train_final, family = gaussian())
-
-    # 计算基础 MSE
-    y_true = oob_raw[[dependent_var]]
-    base_pred = predict(fit, newdata = oob_final)
-    base_mse = mean((y_true - base_pred)^2)
-
-    # 核心优化：成组洗牌计算重要性
+    # 4. 核心优化：成组洗牌计算重要性
     importance_scores = numeric(length(mix_name))
     names(importance_scores) = mix_name
 
-    for (var in mix_name) {
-        # 识别该变量对应的所有样条基函数列
-        # 使用正则匹配保证准确性 (如 Component1_B1, Component1_B2...)
-        target_cols = spline_vars[grep(paste0("^", var, "_B"), spline_vars)]
+    # 预分配打乱用的矩阵，避免在循环中重复申请内存
+    X_oob_shuffled = X_oob
+    n_oob = length(oob_idx)
 
+    for (var in mix_name) {
+        # 直接使用 grep 找到该物质对应的样条基函数列的数字索引
+        target_cols = grep(paste0("^", var, "_B"), colnames(X_matrix))
+        
         shuffled_mse_list = numeric(shuffle)
 
         for (k in seq_len(shuffle)) {
-            temp_oob_final = oob_final
-
-            # 同步洗牌：同一组分的所有基函数共用同一个随机索引，保持组分内部结构
-            shuffle_idx = sample(nrow(temp_oob_final))
-            temp_oob_final[, target_cols] = temp_oob_final[shuffle_idx, target_cols]
-
-            # 直接预测，不再重新 expand，速度极快
-            shuffled_pred = predict(fit, newdata = temp_oob_final)
-            shuffled_mse_list[k] = mean((y_true - shuffled_pred)^2)
+            # 仅打乱目标物质的列，绝不复制整个矩阵
+            shuffle_idx = sample(n_oob)
+            X_oob_shuffled[, target_cols] = X_oob[shuffle_idx, target_cols]
+            
+            # 极速重新计算 MSE
+            eta_shuffled = as.numeric(X_oob_shuffled %*% coefs)
+            mu_shuffled = linkinv(eta_shuffled)
+            shuffled_mse_list[k] = mean((y_oob - mu_shuffled)^2)
         }
-
-        # 计算该变量的平均 MSE 增量 (Permutation Importance)
+        
+        # 还原打乱的列，供下一个物质使用
+        X_oob_shuffled[, target_cols] = X_oob[, target_cols]
+        
         importance_scores[var] = max(0, mean(shuffled_mse_list) - base_mse)
     }
 
-    # 计算归一化权重
+    # ==========================================
+    # 返回结果组装
+    # ==========================================
     out = importance_scores
     if (sum(out) <= 0) {
-        warning("所有变量的重要性得分为 0 或负数，返回 NA")
-        weights = NA
+        weights = rep(NA_real_, length(mix_name))
+        names(weights) = mix_name
+        shape_coefs = rep(NA_real_, length(spline_vars))
+        names(shape_coefs) = spline_vars
     } else {
         weights = sqrt(out) / sum(sqrt(out))
+        # 精准提取形状系数
+        shape_coefs = coefs[spline_vars]
+        shape_coefs[is.na(shape_coefs)] = 0
     }
 
-    return(weights)
+    return(list(
+        weights = weights,
+        shapes = shape_coefs
+    ))
 }

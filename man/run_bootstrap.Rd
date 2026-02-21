@@ -11,7 +11,7 @@ run_bootstrap(
   model_func = calc_spline_wqs_weights,
   B = B,
   seed = NULL,
-  boot_strategy = c("sequential", "multisession", "multicore"),
+  boot_strategy = c("sequential", "multicore", "multicore"),
   boot_n_workers = NULL,
   ...
 )
@@ -37,7 +37,7 @@ Bootstrap 迭代次数。}
 If NULL (default), it uses \code{TRUE} to generate a stream of random seeds automatically.
 并行计算的随机种子。如果为 NULL，则使用 \code{TRUE} 自动生成随机种子流。}
 
-\item{boot_strategy}{character. Parallel strategy for this bootstrap run: "sequential", "multisession", or "multicore".
+\item{boot_strategy}{character. Parallel strategy for this bootstrap run: "sequential", "multicore", or "multicore".
 Note: If running inside an already parallelized loop (e.g., outer Repeated Holdout), this should typically be "sequential".
 本次 Bootstrap 的并行策略。注意：如果是在已并行的循环（如外层 RH）内部运行，此处通常应设为 "sequential"。}
 

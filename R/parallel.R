@@ -24,8 +24,8 @@
 #' @param loop_number integer. The total number of iterations or tasks to be executed (e.g., bootstrap samples `B` or repeated holdouts `rh`).
 #'   需要并行执行的任务/循环总数。
 #' @param strategy character. The parallel strategy to use. Defaults to "multicore" (efficient for Linux/macOS).
-#'   **Note**: Windows users should strictly use "multisession".
-#'   并行策略，默认为 "multicore"。Windows 用户请务必使用 "multisession"。
+#'   **Note**: Windows users should strictly use "multicore".
+#'   并行策略，默认为 "multicore"。Windows 用户请务必使用 "multicore"。
 #' @param n_workers integer. Optional. Manually specify the number of workers.
 #'   If NULL (default), the function calculates the optimal number automatically.
 #'   手动指定核心数。若为 NULL 则触发自动优化算法。
