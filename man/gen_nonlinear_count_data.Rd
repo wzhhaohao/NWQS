@@ -14,6 +14,7 @@ gen_nonlinear_count_data(
   intercept = 0,
   snr_db = Inf,
   transform_fun = NULL,
+  q = 4,
   df_spline = 3,
   seed = NULL,
   shape = "linear_like",
@@ -39,6 +40,8 @@ e.g., intercept=0 -> mean count ~1; intercept=2 -> mean count ~7.4.
 \item{snr_db}{numeric. SNR for the linear predictor (latent noise).}
 
 \item{transform_fun}{function.}
+
+\item{q}{integer. 分位数层数，用于求真值。}
 
 \item{df_spline}{integer.}
 

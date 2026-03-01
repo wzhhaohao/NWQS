@@ -1,245 +1,235 @@
 # =========================================================================
-# 蒙特卡洛模拟研究 (Monte Carlo Simulation Study)
-# 脚本名称: simulation.R
-# 目标: 模拟 100 个独立数据集，全面覆盖 连续型、二分类、计数型 结局，
-#       对比 NWQS 与 gWQS 在非线性(U型/阈值)场景下的无偏性与稳健性
+# NWQS 蒙特卡洛模拟研究: 全量基准对比引擎 (Mass Benchmark Engine)
+# 包含: NWQS, gWQS, QGcomp, Ridge, Lasso, ElasticNet, RandomForest
 # =========================================================================
 
 # -------------------------------------------------------------------------
-# 0. 环境准备与全局设置
+# 0. 全局配置与环境准备
 # -------------------------------------------------------------------------
 rm(list = ls())
 devtools::load_all() 
-library(gWQS)
 library(dplyr)
 library(tidyr)
 library(ggplot2)
+library(gWQS)
+library(qgcomp)
+library(glmnet)
+library(randomForest)
 
-N_SIMULATIONS <- 10
-RH_SIM <- 5  # 为了节约模拟时间，模拟研究中的 RH 通常设为 5-10 即可
+# 【控制开关】 
+TARGET_FAMILY <- "gaussian" 
+N_SIMULATIONS <- 100  # 蒙特卡洛外层大循环次数
+RH_SIM        <- 100  # NWQS/gWQS 的内层自举次数
 
-# 设定基础参数 
-n_vars <- 4
-mix_name <- paste0("Component", 1:n_vars)
-mu_preds <- rep(0, n_vars)
-set.seed(525) 
-sigma_preds <- generate_sigma(n_vars = n_vars, mode = "mixed", seed = 525)
-beta_preds <- c(0.1, 0.2, 0.3, 0.4)
-w_true <- c(Component1=0.1, Component2=0.2, Component3=0.3, Component4=0.4)
-beta_wqs <- 3
-transform_fun <- function(x) trans_quantile(x, q = 4)
+base_out_dir <- file.path("results", "Monte_Carlo_Results", toupper(TARGET_FAMILY))
+if (!dir.exists(base_out_dir)) dir.create(base_out_dir, recursive = TRUE)
 
-# -------------------------------------------------------------------------
-# 1. 结果存储容器初始化
-# -------------------------------------------------------------------------
-results_gauss <- list()
-results_bin   <- list()
-results_count <- list()
-temp_save_file <- "simulation_temp_results.rds"
-
-message(sprintf("=================================================="))
-message(sprintf("  开始 Monte Carlo 全场景模拟研究 (总计 %d 次)", N_SIMULATIONS))
-message(sprintf("  包含: Gaussian, Binomial, Quasi-Poisson"))
-message(sprintf("=================================================="))
-
-start_time <- Sys.time()
+message(sprintf("\n=================================================="))
+message(sprintf(" 🚀 初始化全场景模拟流水线 | 分布族: [%s]", toupper(TARGET_FAMILY)))
+message(sprintf("==================================================\n"))
 
 # -------------------------------------------------------------------------
-# 2. 开启 100 次的模拟主循环
+run_simulation_benchmark_engine <- function(family, scen_name, params) {
+  options(future.globals.maxSize = 4000 * 1024^2)
+  message(sprintf("\n▶ 正在执行: %s | 参数: N=%d, P=%d", scen_name, params$N, params$P))
+
+  n_vars <- params$P
+  mix_name <- paste0("Component", 1:n_vars)
+  mu_preds <- rep(0, n_vars)
+  sigma_preds <- generate_sigma(n_vars = n_vars, mode = params$corr, seed = 525)
+  w_true <- params$w
+  names(w_true) <- mix_name
+
+  list_dev <- list()
+  list_sae <- list()
+  list_weights <- list()
+
+  # 偏差计算器
+  calc_dev <- function(y, pred, fam) {
+    if (fam == "gaussian") return(sum((y - pred)^2))
+    if (fam == "binomial") {
+      p <- pmax(pmin(pred, 1 - 1e-7), 1e-7)
+      return(-2 * sum(y * log(p) + (1 - y) * log(1 - p)))
+    }
+    if (fam %in% c("poisson", "quasipoisson")) {
+      pred <- pmax(pred, 1e-7)
+      return(2 * sum(ifelse(y == 0, 0, y * log(y / pred)) - (y - pred)))
+    }
+  }
+
+  fam_obj_glmnet <- ifelse(family == "quasipoisson", "poisson", family)
+  fam_obj_qgcomp <- if (family == "gaussian") gaussian() else if (family == "binomial") binomial() else poisson()
+
+  start_time <- Sys.time()
+
+  for (i in 1:N_SIMULATIONS) {
+    if (i %% 10 == 0) message(sprintf("  -> 进度: %d / %d", i, N_SIMULATIONS))
+    sim_seed <- 10000 + i
+    transform_fun_sim <- function(x) trans_quantile(x, q = 4)
+
+    # 1. 数据生成
+    if (family == "gaussian") {
+      sim_data <- gen_nonlinear_data(n_obs = params$N, mu_preds = mu_preds, sigma_preds = sigma_preds, beta_preds = w_true, beta_wqs = 3, snr_db = params$snr_db, transform_fun = transform_fun_sim, q = 4, df_spline = 3, shape = params$shape, seed = sim_seed)
+    } else if (family == "binomial") {
+      sim_data <- gen_nonlinear_bio_data(n_obs = params$N, mu_preds = mu_preds, sigma_preds = sigma_preds, beta_preds = w_true, beta_wqs = 1, target_prop = 0.3, link = "logit", snr_db = params$snr_db, transform_fun = transform_fun_sim, q = 4, df_spline = 3, shape = params$shape, seed = sim_seed)
+    } else if (family == "quasipoisson") {
+      sim_data <- gen_nonlinear_count_data(n_obs = params$N, mu_preds = mu_preds, sigma_preds = sigma_preds, beta_preds = w_true, beta_wqs = 1, intercept = 0, snr_db = params$snr_db, transform_fun = transform_fun_sim, q = 4, df_spline = 3, shape = params$shape, seed = sim_seed)
+    }
+    Y_target <- sim_data$y
+
+    # 2. 拟合竞技场
+    nwqs_fit <- nwqs(data = sim_data, mix_name = mix_name, covariates = c("x_cont", "x_bin", "x_cat"), dependent_var = "y", model_func = ridge_permutation_scorer, q = 4, split_prop = 0.6, seed = sim_seed, rh = RH_SIM, family = family, plan_strategy = "multicore", n_workers = 8)
+    gwqs_fit <- suppressWarnings(gWQS::gwqs(formula = y ~ wqs + x_cont + x_bin + x_cat, data = sim_data, mix_name = mix_name, q = 4, validation = 0.6, b = 50, rh = RH_SIM, plan_strategy = "multicore", family = family, seed = sim_seed))
+    
+    data_qgcomp <- sim_data
+    data_qgcomp[mix_name] <- transform_fun_sim(data_qgcomp[mix_name])
+    qgcomp_fit <- qgcomp::qgcomp.noboot(f = y ~ ., expnms = mix_name, data = data_qgcomp[, c("y", mix_name, "x_cont", "x_bin", "x_cat")], family = fam_obj_qgcomp, q = NULL)
+
+    df_spline <- 3
+    temp_sp <- splines::ns(0:3, df = df_spline)
+    sp_mat <- wqs_nonlinear_expand(data_qgcomp, mix_name, knots = attr(temp_sp, "knots"), boundary = attr(temp_sp, "Boundary.knots"))
+    X_sp <- cbind(sp_mat, model.matrix(~ x_cont + x_bin + x_cat - 1, data = sim_data))
+
+    cv_ridge <- glmnet::cv.glmnet(X_sp, Y_target, alpha = 0, family = fam_obj_glmnet)
+    cv_lasso <- glmnet::cv.glmnet(X_sp, Y_target, alpha = 1, family = fam_obj_glmnet)
+    cv_enet  <- glmnet::cv.glmnet(X_sp, Y_target, alpha = 0.5, family = fam_obj_glmnet)
+    rf_fit <- randomForest::randomForest(x = data_qgcomp[, c(mix_name, "x_cont", "x_bin", "x_cat")], y = if (family == "binomial") as.factor(Y_target) else Y_target, importance = TRUE, ntree = 500)
+
+    # 3. 结果权重提取与标准化 (✅ 修复了 w_ridge 缺失的问题)
+    w_nwqs <- nwqs_fit$final_weights
+    w_gwqs <- gwqs_fit$final_weights$Estimate
+    names(w_gwqs) <- gwqs_fit$final_weights$mix_name
+    
+    w_qg <- qgcomp_fit$pos.weights
+    missing_names <- setdiff(mix_name, names(w_qg))
+    w_qg <- c(w_qg, setNames(rep(0, length(missing_names)), missing_names))[mix_name]
+
+    # --- 新增 Ridge 权重计算 ---
+    ridge_cf <- as.matrix(coef(cv_ridge, s = "lambda.min"))[-1, 1]
+    w_ridge <- sapply(mix_name, function(c) sum(abs(ridge_cf[grep(paste0("^", c, "_B"), names(ridge_cf))])))
+    w_ridge <- w_ridge / sum(w_ridge)
+    # ---------------------------
+
+    lasso_cf <- as.matrix(coef(cv_lasso, s = "lambda.min"))[-1, 1]
+    w_lasso <- sapply(mix_name, function(c) sum(abs(lasso_cf[grep(paste0("^", c, "_B"), names(lasso_cf))])))
+    w_lasso <- w_lasso / sum(w_lasso)
+
+    enet_cf <- as.matrix(coef(cv_enet, s = "lambda.min"))[-1, 1]
+    w_enet <- sapply(mix_name, function(c) sum(abs(enet_cf[grep(paste0("^", c, "_B"), names(enet_cf))])))
+    w_enet <- w_enet / sum(w_enet)
+
+    rf_imp <- randomForest::importance(rf_fit)[mix_name, if (family == "binomial") "MeanDecreaseGini" else "%IncMSE"]
+    w_rf <- pmax(rf_imp, 0) / sum(pmax(rf_imp, 0))
+
+    # 4. 填充数据
+    list_dev[[i]] <- data.frame(
+      Iteration  = i, NWQS = nwqs_fit$fit$deviance, gWQS = mean(gwqs_fit$fit$deviance), QG_Comp = calc_dev(Y_target, predict(qgcomp_fit), family),
+      Ridge = calc_dev(Y_target, predict(cv_ridge, X_sp, s = "lambda.min", type = "response"), family),
+      Lasso = calc_dev(Y_target, predict(cv_lasso, X_sp, s = "lambda.min", type = "response"), family),
+      ElasticNet = calc_dev(Y_target, predict(cv_enet, X_sp, s = "lambda.min", type = "response"), family),
+      RandomForest = calc_dev(Y_target, if (family == "binomial") predict(rf_fit, type = "prob")[, 2] else predict(rf_fit), family)
+    ) %>% pivot_longer(-Iteration, names_to = "Model", values_to = "Deviance")
+
+    list_sae[[i]] <- data.frame(
+      Iteration  = i, NWQS = calc_weight_error(w_nwqs, w_true)$SAE, gWQS = calc_weight_error(w_gwqs, w_true)$SAE, QG_Comp = calc_weight_error(w_qg, w_true)$SAE,
+      Ridge = calc_weight_error(w_ridge, w_true)$SAE, Lasso = calc_weight_error(w_lasso, w_true)$SAE, ElasticNet = calc_weight_error(w_enet, w_true)$SAE,
+      RandomForest = calc_weight_error(w_rf, w_true)$SAE
+    ) %>% pivot_longer(-Iteration, names_to = "Model", values_to = "SAE")
+
+    list_weights[[i]] <- data.frame(
+      Iteration  = i, Component = mix_name, True_Value = w_true, NWQS = w_nwqs[mix_name], gWQS = w_gwqs[mix_name], QG_Comp = w_qg[mix_name],
+      Ridge = w_ridge[mix_name], Lasso = w_lasso[mix_name], ElasticNet = w_enet[mix_name], RandomForest = w_rf[mix_name]
+    ) %>% pivot_longer(NWQS:RandomForest, names_to = "Model", values_to = "Estimated_Weight")
+
+    rm(sim_data, nwqs_fit, gwqs_fit, qgcomp_fit, cv_ridge, cv_lasso, cv_enet, rf_fit); gc(verbose = FALSE)
+  }
+
+  # 5. 数据保存
+  df_all_dev <- do.call(rbind, list_dev)
+  df_all_sae <- do.call(rbind, list_sae)
+  df_all_weights <- do.call(rbind, list_weights)
+
+  base_test_content <- gsub("_N[0-9]+$", "", scen_name)
+  final_out_dir <- file.path(base_out_dir, base_test_content)
+  if (!dir.exists(final_out_dir)) dir.create(final_out_dir, recursive = TRUE)
+
+  summary_all <- df_all_dev %>% group_by(Model) %>% summarize(Mean_Dev = mean(Deviance), SD_Dev = sd(Deviance)) %>%
+    left_join(df_all_sae %>% group_by(Model) %>% summarize(Mean_SAE = mean(SAE)), by = "Model")
+  write.csv(summary_all, file.path(final_out_dir, paste0("Summary_", scen_name, ".csv")), row.names = FALSE)
+
+  img_base <- file.path(final_out_dir, sprintf("MC_Benchmark_%s_%s", family, scen_name))
+  final_mc_plot <- plot_monte_carlo_benchmark(dev_data = df_all_dev, sae_data = df_all_sae, weight_data = df_all_weights, save_path = paste0(img_base, ".png"))
+  
+  dynamic_nrow <- ceiling(params$P / 7)
+  ggplot2::ggsave(filename = paste0(img_base, ".pdf"), plot = final_mc_plot, width = 16, height = 11 + (dynamic_nrow - 1) * 3.5, device = "pdf")
+
+  cat(sprintf("\n✅ 场景 %s 完成。耗时: %.2f mins\n", scen_name, as.numeric(difftime(Sys.time(), start_time, units = "mins"))))
+  return(invisible(list(plot = final_mc_plot, summary = summary_all)))
+}
+
+
+
 # -------------------------------------------------------------------------
-for (i in 1:N_SIMULATIONS) {
-  message(sprintf("\n>>> [主循环] 正在运行模拟迭代: %d / %d ...", i, N_SIMULATIONS))
-  sim_seed <- 10000 + i  # 保证每次循环数据完全独立
-  
-  # =========================================================
-  # 模块 A: 连续型 (Gaussian) - 使用 U 型效应
-  # =========================================================
-  message("    -> 正在测试 Gaussian...")
-  sim_data_gauss <- gen_nonlinear_data(
-    n_obs = 1000, mu_preds = mu_preds, sigma_preds = sigma_preds, 
-    beta_preds = beta_preds, beta_wqs = beta_wqs, snr_db = 10, 
-    transform_fun = transform_fun, df_spline = 3, shape = "u_shape", seed = sim_seed
-  )
-  
-  nwqs_gauss <- nwqs(
-    data = sim_data_gauss, mix_name = mix_name, covariates = c("x_cont", "x_bin", "x_cat"),
-    dependent_var = "y", model_func = calc_spline_wqs_weights, q = 4, split_prop = 0.6, 
-    seed = sim_seed, rh = RH_SIM, family = "gaussian", transform_fun = transform_fun, plan_strategy = "multicore", n_workers = 8
-  )
-  gwqs_gauss <- gwqs(
-    formula = y ~ wqs + x_cont + x_bin + x_cat, data = sim_data_gauss, mix_name = mix_name,
-    y = "y", q = 4, validation = 0.6, b = 100, rh = RH_SIM, plan_strategy = "multicore", family = "gaussian", seed = sim_seed
-  )
-  
-  w_gwqs_g <- gwqs_gauss$final_weights$Estimate; names(w_gwqs_g) <- gwqs_gauss$final_weights$mix_name
-  res_gauss_df <- data.frame(
-    Iteration = i, 
-    NWQS_AIC = nwqs_gauss$mean_aic, gWQS_AIC = mean(gwqs_gauss$fit$aic),
-    NWQS_Dev = nwqs_gauss$mean_res_dev, gWQS_Dev = mean(gwqs_gauss$fit$deviance),
-    NWQS_SAE = calc_weight_error(nwqs_gauss$final_weights, w_true)$SAE,
-    gWQS_SAE = calc_weight_error(w_gwqs_g, w_true)$SAE
-  )
-  w_nwqs_df_g <- as.data.frame(t(nwqs_gauss$final_weights)); colnames(w_nwqs_df_g) <- paste0("NWQS_", colnames(w_nwqs_df_g))
-  w_gwqs_df_g <- as.data.frame(t(w_gwqs_g[names(w_true)])); colnames(w_gwqs_df_g) <- paste0("gWQS_", colnames(w_gwqs_df_g))
-  results_gauss[[i]] <- cbind(res_gauss_df, w_nwqs_df_g, w_gwqs_df_g)
+# 3. 全量场景字典生成 (10大场景 x 3种样本量 = 30个组合)
+# -------------------------------------------------------------------------
+w_norm_4    <- c(0.10, 0.20, 0.30, 0.40)
+w_sparse_4  <- c(0.60, 0.40, 0.00, 0.00)
+w_norm_8    <- c(0.04, 0.06, 0.08, 0.10, 0.14, 0.16, 0.18, 0.24)
+w_norm_12   <- c(0.02, 0.03, 0.04, 0.05, 0.06, 0.08, 0.10, 0.11, 0.12, 0.13, 0.13, 0.13)
+w_sparse_12 <- c(0.40, 0.30, 0.20, 0.10, rep(0, 8))
 
-  # =========================================================
-  # 模块 B: 二分类 (Binomial) - 使用 阈值 (Threshold) 效应
-  # =========================================================
-  message("    -> 正在测试 Binomial...")
-  sim_data_bin <- gen_nonlinear_bio_data(
-    n_obs = 1000, mu_preds = mu_preds, sigma_preds = sigma_preds, 
-    beta_preds = beta_preds, beta_wqs = 1, target_prop = 0.3, link = "logit",
-    snr_db = 10, transform_fun = transform_fun, df_spline = 3, shape = "threshold", seed = sim_seed
-  )
-  
-  nwqs_bin <- nwqs(
-    data = sim_data_bin, mix_name = mix_name, covariates = c("x_cont", "x_bin", "x_cat"),
-    dependent_var = "y", model_func = calc_spline_wqs_weights, q = 4, split_prop = 0.6, 
-    seed = sim_seed, rh = RH_SIM, family = "binomial", transform_fun = transform_fun, plan_strategy = "multicore", n_workers = 8
-  )
-  gwqs_bin <- gwqs(
-    formula = y ~ wqs + x_cont + x_bin + x_cat, data = sim_data_bin, mix_name = mix_name,
-    y = "y", q = 4, validation = 0.6, b = 100, rh = RH_SIM, plan_strategy = "multicore", family = "binomial", seed = sim_seed
-  )
-  
-  w_gwqs_b <- gwqs_bin$final_weights$Estimate; names(w_gwqs_b) <- gwqs_bin$final_weights$mix_name
-  res_bin_df <- data.frame(
-    Iteration = i, 
-    NWQS_AIC = nwqs_bin$mean_aic, gWQS_AIC = mean(gwqs_bin$fit$aic),
-    NWQS_Dev = nwqs_bin$mean_res_dev, gWQS_Dev = mean(gwqs_bin$fit$deviance),
-    NWQS_SAE = calc_weight_error(nwqs_bin$final_weights, w_true)$SAE,
-    gWQS_SAE = calc_weight_error(w_gwqs_b, w_true)$SAE
-  )
-  w_nwqs_df_b <- as.data.frame(t(nwqs_bin$final_weights)); colnames(w_nwqs_df_b) <- paste0("NWQS_", colnames(w_nwqs_df_b))
-  w_gwqs_df_b <- as.data.frame(t(w_gwqs_b[names(w_true)])); colnames(w_gwqs_df_b) <- paste0("gWQS_", colnames(w_gwqs_df_b))
-  results_bin[[i]] <- cbind(res_bin_df, w_nwqs_df_b, w_gwqs_df_b)
+base_settings <- list(
+  "S1_Base"        = list(P = 4,  corr = "mixed", shape = "threshold", w = w_norm_4,   snr_db = 10),
+  "S3_Corr_Low"    = list(P = 4,  corr = "low",   shape = "threshold", w = w_norm_4,   snr_db = 10),
+  "S3_Corr_High"   = list(P = 4,  corr = "high",  shape = "threshold", w = w_norm_4,   snr_db = 10),
+  "S4_Dim_P8"      = list(P = 8,  corr = "mixed", shape = "threshold", w = w_norm_8,   snr_db = 10),
+  "S4_Dim_P12"     = list(P = 12, corr = "mixed", shape = "threshold", w = w_norm_12,  snr_db = 10),
+  "S5_Sparse_P4"   = list(P = 4,  corr = "mixed", shape = "threshold", w = w_sparse_4, snr_db = 10),
+  "S5_Sparse_P12"  = list(P = 12, corr = "high",  shape = "threshold", w = w_sparse_12,snr_db = 10),
+  "S6_Hetero_P4"   = list(P = 4,  corr = "mixed", w = w_norm_4, snr_db = 10,
+                          shape = c("threshold", "inv_threshold", "neg_linear", "pure_linear")),
+  "S7_Linear_P4"   = list(P = 4,  corr = "mixed", shape = "pure_linear", w = w_norm_4, snr_db = 10),
+  "S8_ShapeMix_P4" = list(P = 4,  corr = "mixed", w = w_norm_4, snr_db = 10,
+                          shape = c("u_shape", "threshold", "pure_linear", "s_shape"))
+)
 
-  # =========================================================
-  # 模块 C: 计数型 (Quasi-Poisson) - 使用 阈值 (Threshold) 效应
-  # =========================================================
-  message("    -> 正在测试 Quasi-Poisson...")
-  sim_data_count <- gen_nonlinear_count_data(
-    n_obs = 1000, mu_preds = mu_preds, sigma_preds = sigma_preds, 
-    beta_preds = beta_preds, beta_wqs = 1, intercept = 0, snr_db = 10, 
-    transform_fun = transform_fun, df_spline = 3, shape = "threshold", seed = sim_seed
-  )
-  
-  nwqs_count <- nwqs(
-    data = sim_data_count, mix_name = mix_name, covariates = c("x_cont", "x_bin", "x_cat"),
-    dependent_var = "y", model_func = calc_spline_wqs_weights, q = 4, split_prop = 0.6, 
-    seed = sim_seed, rh = RH_SIM, family = "quasipoisson", transform_fun = transform_fun, plan_strategy = "multicore", n_workers = 8
-  )
-  gwqs_count <- gwqs(
-    formula = y ~ wqs + x_cont + x_bin + x_cat, data = sim_data_count, mix_name = mix_name,
-    y = "y", q = 4, validation = 0.6, b = 100, rh = RH_SIM, plan_strategy = "multicore", family = "quasipoisson", seed = sim_seed
-  )
-  
-  w_gwqs_c <- gwqs_count$final_weights$Estimate; names(w_gwqs_c) <- gwqs_count$final_weights$mix_name
-  res_count_df <- data.frame(
-    Iteration = i, 
-    NWQS_AIC = NA, gWQS_AIC = NA, # Quasi-Poisson 没有真实的 AIC
-    NWQS_Dev = nwqs_count$mean_res_dev, gWQS_Dev = mean(gwqs_count$fit$deviance),
-    NWQS_SAE = calc_weight_error(nwqs_count$final_weights, w_true)$SAE,
-    gWQS_SAE = calc_weight_error(w_gwqs_c, w_true)$SAE
-  )
-  w_nwqs_df_c <- as.data.frame(t(nwqs_count$final_weights)); colnames(w_nwqs_df_c) <- paste0("NWQS_", colnames(w_nwqs_df_c))
-  w_gwqs_df_c <- as.data.frame(t(w_gwqs_c[names(w_true)])); colnames(w_gwqs_df_c) <- paste0("gWQS_", colnames(w_gwqs_df_c))
-  results_count[[i]] <- cbind(res_count_df, w_nwqs_df_c, w_gwqs_df_c)
+N_values <- c(200, 500, 1000) 
+scenarios <- list()
 
-  # =========================================================
-  # 安全机制：每 10 次存盘
-  # =========================================================
-  if (i %% 10 == 0) {
-    saveRDS(list(Gaussian = results_gauss, Binomial = results_bin, Poisson = results_count), file = temp_save_file)
-    message(sprintf("   [存盘] 已完成 %d 次，全场景中间结果已安全备份。", i))
+for (b_name in names(base_settings)) {
+  for (n in N_values) {
+    full_name <- sprintf("%s_N%d", b_name, n)
+    curr <- base_settings[[b_name]]
+    curr$N <- n
+    scenarios[[full_name]] <- curr
   }
 }
 
-future::plan(future::sequential)
-end_time <- Sys.time()
-message(sprintf("\n=================================================="))
-message(sprintf("  Monte Carlo 模拟完成！总耗时: %.2f mins", as.numeric(difftime(end_time, start_time, units="mins"))))
-message(sprintf("=================================================="))
-
-
 # -------------------------------------------------------------------------
-# 3. 汇总性能指标并绘制 100 次权重分配的并排箱线图
+# 4. 全自动化点火循环 (无人值守挂机版)
 # -------------------------------------------------------------------------
+total_tasks <- length(names(scenarios))
+current_task <- 0
 
-# 合并三个 DataFrame
-df_gauss <- do.call(rbind, results_gauss)
-df_bin   <- do.call(rbind, results_bin)
-df_count <- do.call(rbind, results_count)
+message(sprintf("\n🚀 引擎已就绪！即将执行 %d 个全量测试任务...", total_tasks))
 
-# 保存最终数据
-saveRDS(list(Gaussian = df_gauss, Binomial = df_bin, Poisson = df_count), file = "Final_Simulation_100_Runs.rds")
-
-# 提取并打印整体性能差异表格
-print_summary <- function(df, name) {
-  stats <- df %>% summarise(
-    NWQS_Dev = mean(NWQS_Dev), gWQS_Dev = mean(gWQS_Dev),
-    NWQS_SAE = mean(NWQS_SAE), gWQS_SAE = mean(gWQS_SAE)
-  )
-  cat(sprintf("\n--- %s 结局 100次平均表现 ---\n", name))
-  cat(sprintf("Deviance: NWQS = %.2f, gWQS = %.2f\n", stats$NWQS_Dev, stats$gWQS_Dev))
-  cat(sprintf("Weight SAE: NWQS = %.4f, gWQS = %.4f\n", stats$NWQS_SAE, stats$gWQS_SAE))
+for (scen_name in names(scenarios)) {
+  current_task <- current_task + 1
+  message(sprintf("\n=================================================="))
+  message(sprintf("🚀 [AUTO-PILOT] 任务 %d/%d 启动场景: %s", current_task, total_tasks, scen_name))
+  message(sprintf("=================================================="))
+  
+  tryCatch({
+    run_simulation_benchmark_engine(
+      family    = TARGET_FAMILY,
+      scen_name = scen_name,
+      params    = scenarios[[scen_name]]
+    )
+  }, error = function(e) {
+    message(sprintf("❌ 出错跳过: %s | 错误信息: %s", scen_name, e$message))
+  })
+  
+  gc(verbose = FALSE)
 }
 
-print_summary(df_gauss, "Gaussian")
-print_summary(df_bin, "Binomial")
-print_summary(df_count, "Quasi-Poisson")
-
-
-# -------------------------------------------------------------------------
-# 4. 自动化制图核心函数：绘制 100 次模拟的权重箱线图 (降维打击审稿人)
-# -------------------------------------------------------------------------
-plot_simulation_weights <- function(sim_df, title, true_w = w_true) {
-  
-  # 提取 NWQS 权重
-  nwqs_w <- sim_df %>% select(Iteration, starts_with("NWQS_Component")) %>%
-    pivot_longer(-Iteration, names_to = "Component", values_to = "Weight") %>%
-    mutate(Model = "NWQS", Component = gsub("NWQS_", "", Component))
-  
-  # 提取 gWQS 权重
-  gwqs_w <- sim_df %>% select(Iteration, starts_with("gWQS_Component")) %>%
-    pivot_longer(-Iteration, names_to = "Component", values_to = "Weight") %>%
-    mutate(Model = "gWQS", Component = gsub("gWQS_", "", Component))
-  
-  # 合并绘图数据
-  plot_df <- bind_rows(nwqs_w, gwqs_w)
-  
-  # 生成真实权重的参考数据
-  true_df <- data.frame(
-    Component = names(true_w),
-    True_Weight = as.numeric(true_w)
-  )
-  
-  # 画图
-  p <- ggplot(plot_df, aes(x = Component, y = Weight, fill = Model)) +
-    geom_boxplot(alpha = 0.8, outlier.size = 0.5, position = position_dodge(0.8)) +
-    # 添加红色虚线段代表各个成分真实的客观权重
-    geom_segment(data = true_df, aes(x = as.numeric(as.factor(Component)) - 0.4, 
-                                     xend = as.numeric(as.factor(Component)) + 0.4, 
-                                     y = True_Weight, yend = True_Weight),
-                 color = "red", linetype = "dashed", linewidth = 1, inherit.aes = FALSE) +
-    scale_fill_manual(values = c("NWQS" = "#E74C3C", "gWQS" = "#95A5A6")) +
-    theme_bw(base_size = 14) +
-    theme(legend.position = "top", legend.title = element_blank()) +
-    labs(title = title,
-         subtitle = "Red dashed lines indicate True Weight Generation Parameters",
-         y = "Estimated Weight across 100 Simulations", x = "Mixture Components")
-  
-  return(p)
-}
-
-# 批量生成三张图并保存
-p_w_gauss <- plot_simulation_weights(df_gauss, "Weight Distribution (100 Runs): Gaussian Outcome")
-p_w_bin   <- plot_simulation_weights(df_bin,   "Weight Distribution (100 Runs): Binomial Outcome")
-p_w_count <- plot_simulation_weights(df_count, "Weight Distribution (100 Runs): Quasi-Poisson Outcome")
-
-ggsave("Sim_Weights_Gaussian.png", plot = p_w_gauss, width = 10, height = 6, dpi = 300)
-ggsave("Sim_Weights_Binomial.png", plot = p_w_bin, width = 10, height = 6, dpi = 300)
-ggsave("Sim_Weights_Poisson.png", plot = p_w_count, width = 10, height = 6, dpi = 300)
-
-message("\n>>> 所有模拟结果已汇总，三张权重稳定性箱线图已自动保存至本地！")
+message("\n🎉 满配全流水线任务已收割完毕！请在 results/ 目录下查看所有 CSV 和 高清 PDF。")

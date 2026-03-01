@@ -13,6 +13,7 @@ gen_nonlinear_data(
   beta_preds,
   snr_db = 10,
   transform_fun = NULL,
+  q = 4,
   df_spline = 3,
   seed = NULL,
   shape = "linear_like",
