@@ -2,21 +2,20 @@
 % Please edit documentation in R/nwqs.R
 \name{nwqs}
 \alias{nwqs}
-\title{Repeated Holdout Non-linear / Linear WQS Regression (Dual Mode)
-重复保留非线性/线性 WQS 回归 (双模式)}
+\title{Fit Non-linear Weighted Quantile Sum (NWQS) Regression}
 \usage{
 nwqs(
   data,
   mix_name,
   covariates = NULL,
   dependent_var = "y",
-  model_func = calc_spline_wqs_weights,
+  model_func = ridge_permutation_scorer,
   q = 4,
   df_spline = 3,
   split_prop = 0.6,
   seed = 1234,
   rh = 1,
-  family = c("gaussian", "binomial", "poisson"),
+  family = c("gaussian", "binomial", "poisson", "quasipoisson"),
   transform_fun = NULL,
   plan_strategy = c("sequential", "multicore", "multicore"),
   n_workers = NULL,
@@ -25,43 +24,88 @@ nwqs(
 )
 }
 \arguments{
-\item{data}{data.frame. Full dataset.}
+\item{data}{A \code{data.frame} containing the mixture components, covariates, and outcome variable.}
 
-\item{mix_name}{character vector. Names of the mixture components.}
+\item{mix_name}{Character vector. Column names of the mixture components to be evaluated.}
 
-\item{covariates}{character vector. Covariate names to include in the model.}
+\item{covariates}{Character vector. Column names of covariates/confounders to adjust for.
+If \code{NULL}, an unadjusted model is fitted.}
 
-\item{dependent_var}{character. Name of the outcome variable. Defaults to "y".}
+\item{dependent_var}{Character. Column name of the dependent/outcome variable. Defaults to \code{"y"}.}
 
-\item{model_func}{function. Function to calculate weights (e.g., \code{calc_spline_wqs_weights}).}
+\item{model_func}{Function. The core engine used for weight and shape discovery on the training set.
+Defaults to \code{ridge_permutation_scorer}, which utilizes internal cross-validated L2 penalization.}
 
-\item{q}{integer. Number of quantiles for data transformation (default 4).}
+\item{q}{Integer. Number of quantiles used to categorize the continuous mixture components
+(e.g., 4 for quartiles, 10 for deciles). Defaults to 4.}
 
-\item{df_spline}{integer. Degrees of freedom for spline expansion (default 3).}
+\item{df_spline}{Integer. Degrees of freedom for the natural cubic splines used to model
+non-linearity. Defaults to 3.}
 
-\item{split_prop}{numeric. Proportion of data used for training/weight discovery (default 0.6).}
+\item{split_prop}{Numeric between (0, 1). The proportion of the bootstrapped dataset allocated
+to the Training set for weight/shape discovery. The remainder goes to the Validation set. Defaults to 0.6.}
 
-\item{seed}{integer. Random seed for reproducibility.}
+\item{seed}{Integer. Random seed for reproducible data splitting and bootstrap sampling.}
 
-\item{rh}{integer. Number of Repeated Holdout iterations.}
+\item{rh}{Integer. Number of Repeated Holdout (Outer Bootstrap) iterations. To obtain empirical
+confidence intervals and stable distributions, set \code{rh} to at least 100. Defaults to 1.}
 
-\item{family}{character/function. GLM family (e.g., "gaussian", "binomial").}
+\item{family}{Character or function. Specifies the GLM error distribution and link function.
+Supported options include \code{"gaussian"}, \code{"binomial"}, \code{"poisson"}, and \code{"quasipoisson"}.}
 
-\item{transform_fun}{function. Custom transformation function. If NULL, uses quantiles.}
+\item{transform_fun}{Function. A custom transformation applied to the mixture components before
+modeling. If \code{NULL}, the default quantile transformation (\code{trans_quantile}) is used.}
 
-\item{plan_strategy}{character. Parallel strategy ("sequential", "multicore", "multicore").}
+\item{plan_strategy}{Character. Strategy for parallel computation powered by the \pkg{future} package.
+Options are \code{"sequential"} or \code{"multicore"}.}
 
-\item{n_workers}{integer. Number of workers. NULL triggers auto-optimization.}
+\item{n_workers}{Integer. Number of parallel workers to use if \code{plan_strategy = "multicore"}.
+If \code{NULL}, the package automatically detects and optimizes CPU cores.}
 
-\item{B}{integer. Number of bootstrap samples inside each holdout iteration (default 100).}
+\item{B}{Integer. Number of internal permutations or bootstraps passed to \code{model_func}
+to compute the variable importance metric. Defaults to 100.}
 
-\item{...}{Additional arguments passed to \code{run_bootstrap} or \code{model_func}.}
+\item{...}{Additional arguments passed to \code{run_oob_permutation} or the selected \code{model_func}.}
 }
 \value{
-An object of class \code{nwqs_result}. Structure depends on \code{rh}.
-Includes \code{final_data} which contains the original dataset with the calculated \code{wqs_score}.
+An object of class \code{c("nwqs", "list")} containing the following key components:
+\itemize{
+\item \code{fit}: A list containing the summarized GLM object (coefficients, Deviance, AIC).
+\item \code{final_weights}: A named numeric vector of the ensemble-averaged relative weights for each mixture component.
+\item \code{mean_shapes}: A named numeric vector of the ensemble-averaged normalized spline coefficients.
+\item \code{rh_coefs}: A matrix of the global GLM coefficients across all \code{rh} iterations (used for empirical CIs).
+\item \code{rh_weights}: A matrix of the extracted weights across all \code{rh} iterations.
+\item \code{data}: The original dataset augmented with the final calculated ensemble \code{wqs_score}.
+}
 }
 \description{
-The main entry point for fitting NWQS models. It employs a "Repeated Holdout" validation framework
-to ensure robust estimates and avoid overfitting.
+The main entry point for fitting Non-linear Weighted Quantile Sum (NWQS) regression models.
+NWQS evaluates the overall joint effect and component-specific relative importance of a
+highly correlated mixture, while flexibly accommodating non-linear dose-response relationships
+(e.g., threshold effects, U-shaped curves) without suffering from shrinkage bias.
+}
+\details{
+\strong{Algorithmic Architecture:} \cr
+The \code{nwqs} function implements a robust "Repeated Holdout" (RH) framework combined with
+a shape-decoupling architecture:
+\enumerate{
+\item \strong{Outer Bootstrap & Splitting:} For each RH iteration, the data is bootstrapped
+to capture sampling variability, then strictly split into a Training set (for weight/shape
+discovery) and a Validation set (for effect estimation).
+\item \strong{Weight & Shape Discovery:} On the Training set, a penalized multi-parameter
+engine (specified by \code{model_func}) estimates the non-linear basis coefficients (shapes)
+and extracts relative importance (weights) via Out-Of-Bag (OOB) permutation.
+\item \strong{Shape Normalization:} To break the penalization paradox (shrinkage bias),
+NWQS completely decouples the spline shape from the effect magnitude. Shapes are standardized
+to have a unit variance on the predictor scale.
+\item \strong{1-DoF Effect Estimation:} The normalized shapes and weights are projected onto
+the Validation set to construct a single \code{wqs_score}. A generalized linear model (GLM)
+is then fitted to estimate the unbiased overall mixture effect and calculate nominal confidence intervals.
+}
+
+By setting \code{rh > 1}, the algorithm averages the weights, shapes, and coefficients across
+multiple random splits, producing highly stable empirical inferences.
+}
+\seealso{
+\code{\link{plot.nwqs}}, \code{\link{summary.nwqs}}, \code{\link{print.nwqs}}
 }

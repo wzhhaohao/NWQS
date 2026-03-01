@@ -16,6 +16,7 @@ gen_nonlinear_bio_data(
   link = c("logit", "probit", "cloglog"),
   snr_db = Inf,
   transform_fun = NULL,
+  q = 4,
   df_spline = 3,
   seed = NULL,
   shape = "linear_like",
@@ -42,6 +43,8 @@ gen_nonlinear_bio_data(
 \item{snr_db}{numeric. 信噪比 (添加到潜变量 eta 上)。Inf 表示无额外噪声。}
 
 \item{transform_fun}{function. 预测变量的转换函数 (如分位数转换)。}
+
+\item{q}{integer. 分位数层数，用于求真值。}
 
 \item{df_spline}{integer. 样条自由度。}
 

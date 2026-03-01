@@ -4,7 +4,13 @@
 \alias{wqs_nonlinear_expand}
 \title{Nonlinear Expansion for WQS (Natural Splines) / WQS 非线性展开 (自然样条)}
 \usage{
-wqs_nonlinear_expand(data, mix_name, df_spline = 3, q = 4)
+wqs_nonlinear_expand(
+  data,
+  mix_name,
+  df_spline = 3,
+  knots = NULL,
+  boundary = NULL
+)
 }
 \arguments{
 \item{data}{data.frame. The dataset containing the mixture variables.

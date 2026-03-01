@@ -2,7 +2,7 @@
 % Please edit documentation in R/methods.R
 \name{plot.nwqs}
 \alias{plot.nwqs}
-\title{Plot Diagnostics for NWQS}
+\title{Plot Diagnostics for Non-linear Weighted Quantile Sum (NWQS) Models}
 \usage{
 \method{plot}{nwqs}(
   x,
@@ -10,28 +10,62 @@
   y_scale = c("partial", "predicted"),
   components = NULL,
   overlay = TRUE,
-  plot_ci = TRUE,
-  base_size = 14,
+  plot_ci = FALSE,
+  base_size = 12,
+  palette = "default",
+  colorblind_friendly = FALSE,
+  top_n = NULL,
   ...
 )
 }
 \arguments{
-\item{x}{An object of class "nwqs".}
+\item{x}{An object of class \code{"nwqs"} resulting from a call to \code{\link{nwqs}}.}
 
-\item{type}{"both", "curves", 或 "weights".}
+\item{type}{Character. The type of diagnostic plot to generate. Options are
+\code{"both"} (default, combines weights and curves using \pkg{patchwork}),
+\code{"curves"} (dose-response trajectories), or \code{"weights"} (bar plot of component weights).}
 
-\item{y_scale}{"partial" (从0开始的偏效应) 或 "predicted" (加上截距的绝对预测值，让曲线悬浮).}
+\item{y_scale}{Character. The scale for the y-axis in the curve plots. Options are
+\code{"partial"} (default, shows relative effect changes like \eqn{\Delta \eta}) or
+\code{"predicted"} (shows absolute predicted values like probabilities or counts).}
 
-\item{components}{字符向量。指定要画的污染物名称。}
+\item{components}{Character vector. Specific mixture components to display in the plots.
+If \code{NULL} (default), all components are shown.}
 
-\item{overlay}{逻辑值。TRUE表示叠加，FALSE分面。}
+\item{overlay}{Logical. If \code{TRUE} (default), all component dose-response curves
+are overlaid on a single plot. If \code{FALSE}, curves are faceted by component.}
 
-\item{plot_ci}{逻辑值。是否绘制置信区间。}
+\item{plot_ci}{Logical. Whether to plot the 95\\% empirical confidence intervals
+(shaded ribbons or error bars) derived from Repeated Holdout (RH) iterations.
+Default is \code{FALSE}. Note: Requires \code{rh > 1} in the \code{nwqs} model.}
 
-\item{base_size}{Integer. Base font size for ggplot2.}
+\item{base_size}{Integer. Base font size for the \pkg{ggplot2} theme. Default is 12.}
 
-\item{...}{额外参数。}
+\item{palette}{Character. Color palette to use. Options include \code{"default"}
+(medical/epidemiology optimized), \code{"palette2"} (pastel), \code{"palette3"},
+or \code{"palette4"}.}
+
+\item{colorblind_friendly}{Logical. If \code{TRUE}, forces the use of a colorblind-safe
+palette (overrides the \code{palette} argument). Default is \code{FALSE}.}
+
+\item{top_n}{Integer. Number of top components (ranked by assigned weight) to display
+in the curve plot. If \code{NULL} (default), all specified components are shown.}
+
+\item{...}{Additional arguments passed to or from other methods.}
+}
+\value{
+A \code{ggplot} object (if \code{type} is "weights" or "curves") or a
+\code{patchwork} composite object (if \code{type = "both"}).
 }
 \description{
-Plot Diagnostics for NWQS
+Generates publication-ready diagnostic plots for \code{nwqs} objects. This function
+can produce component weight distributions and non-linear dose-response trajectories
+(partial effects or predicted values) for the overall mixture and individual components.
+}
+\details{
+The dose-response curves (when \code{type = "curves"} or \code{"both"}) map the estimated non-linear
+spline functions. When \code{y_scale = "partial"}, the curves represent the isolated effect
+of increasing exposure while holding others constant (zero-centered log-OR, log-RR, or \eqn{\Delta Y}).
+When \code{y_scale = "predicted"}, the curves show the absolute predicted scale (e.g., probabilities
+for binomial models or expected counts for Poisson models).
 }
