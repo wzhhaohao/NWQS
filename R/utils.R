@@ -174,7 +174,7 @@ nwqs_contrast <- function(model, q_target = 3, q_ref = 0) {
   cat("======================================================\n")
 
   if (rh == 1) {
-    shapes_vec <- model$shapes
+    shapes_vec <- model$mean_shapes
     weights_vec <- model$final_weights
     beta_wqs <- coef(model)["wqs_score"]
   } else {
@@ -184,7 +184,11 @@ nwqs_contrast <- function(model, q_target = 3, q_ref = 0) {
   }
 
   df_spline <- max(as.numeric(sub("^.+_B(\\d+)$", "\\1", names(shapes_vec))))
-  b_target <- splines::ns(c(q_target, q_ref), df = df_spline, intercept = FALSE)
+  b_target <- splines::ns(c(q_target, q_ref),
+    df = df_spline,
+    knots = model$spline_knots, Boundary.knots = model$spline_boundary,
+    intercept = FALSE
+  )
 
   calc_diff <- function(b_mat, w_vec, s_vec) {
     diff_val <- 0
@@ -223,6 +227,12 @@ nwqs_contrast <- function(model, q_target = 3, q_ref = 0) {
     cat(sprintf("95%% CI (\u0394 Eta)                      : [%.4f, %.4f]\n", ci_lower_eta, ci_upper_eta))
   }
 
+  is_rate_family <- if (inherits(model, "glm")) {
+    model$family$family %in% c("poisson", "quasipoisson")
+  } else {
+    model$family %in% c("poisson", "quasipoisson")
+  }
+
   if (is_binomial) {
     cat("\n----------------- Converted to Odds Ratio (OR) -----------------\n")
     cat(sprintf("Overall Joint OR :  %.4f\n", exp(delta_eta)))
@@ -231,6 +241,16 @@ nwqs_contrast <- function(model, q_target = 3, q_ref = 0) {
     }
     cat(sprintf(
       "\n[Interpretation]: When all components at Q%d vs Q%d, OR = %.4f.\n",
+      q_target + 1, q_ref + 1, exp(delta_eta)
+    ))
+  } else if (is_rate_family) {
+    cat("\n----------------- Converted to Rate Ratio (RR) -----------------\n")
+    cat(sprintf("Overall Joint RR :  %.4f\n", exp(delta_eta)))
+    if (rh > 1) {
+      cat(sprintf("95%% CI (RR)      : [%.4f, %.4f]\n", exp(ci_lower_eta), exp(ci_upper_eta)))
+    }
+    cat(sprintf(
+      "\n[Interpretation]: When all components at Q%d vs Q%d, RR = %.4f.\n",
       q_target + 1, q_ref + 1, exp(delta_eta)
     ))
   } else {
@@ -279,12 +299,15 @@ plot_nwqs_contrast_box <- function(model, exponentiate = NULL,
   is_exp_family <- model$family %in% c("binomial", "poisson", "quasipoisson")
   if (is.null(exponentiate)) exponentiate <- is_exp_family
 
-  q_level <- eval(model$call$q)
-  if (is.null(q_level)) q_level <- 4
+  q_level <- if (!is.null(model$q)) model$q else 4
 
   df_spline <- max(as.numeric(sub("^.+_B(\\d+)$", "\\1", colnames(model$rh_shapes))))
   comps <- colnames(model$rh_weights)
-  full_basis <- splines::ns(0:(q_level - 1), df = df_spline, intercept = FALSE)
+  full_basis <- splines::ns(0:(q_level - 1),
+    df = df_spline,
+    knots = model$spline_knots, Boundary.knots = model$spline_boundary,
+    intercept = FALSE
+  )
 
   results_list <- list()
 
@@ -337,8 +360,10 @@ plot_nwqs_contrast_box <- function(model, exponentiate = NULL,
   facet_scales <- ifelse(free_y, "free_y", "fixed")
 
   p <- ggplot2::ggplot(plot_df, ggplot2::aes(x = Quantile, y = Effect, fill = Quantile)) +
-    ggplot2::geom_boxplot(outlier.shape = NA, alpha = 0.6, color = "gray20",
-                          linewidth = 0.5, width = 0.5) +
+    ggplot2::geom_boxplot(
+      outlier.shape = NA, alpha = 0.6, color = "gray20",
+      linewidth = 0.5, width = 0.5
+    ) +
     ggplot2::geom_jitter(shape = 21, color = "gray30", alpha = 0.7, width = 0.2, size = 1.2) +
     ggplot2::geom_hline(yintercept = y_intercept, linetype = "dashed", color = "#2C3E50", linewidth = 0.8) +
     ggplot2::facet_wrap(~Component, scales = facet_scales, nrow = dynamic_nrow, ncol = dynamic_ncol) +
@@ -382,7 +407,7 @@ plot_nwqs_contrast_box <- function(model, exponentiate = NULL,
 #' @importFrom splines ns
 #' @export
 extract_nwqs_effects <- function(model_res, return_raw = FALSE) {
-  q_level <- ifelse(is.null(model_res$q), 4, eval(model_res$q))
+  q_level <- if (!is.null(model_res$q)) model_res$q else 4
   df_spline <- model_res$df_spline
   comps <- colnames(model_res$rh_weights)
   rh <- model_res$rh
@@ -440,53 +465,25 @@ extract_nwqs_effects <- function(model_res, return_raw = FALSE) {
 }
 
 
-
-#' Plot Component Weight Distributions for NWQS Models
-#'
-#' @description
-#' Generates a vertical boxplot displaying the distribution of estimated mixture
-#' component weights across bootstrap replicates (for \code{nwqs_boot} objects) or
-#' Repeated Holdout iterations (for \code{nwqs} objects with \code{rh > 1}). Components
-#' are ordered from highest to lowest by their point-estimate weight.
-#'
-#' @details
-#' The function automatically detects the input model type and extracts weight
-#' distributions from the appropriate source:
-#' \itemize{
-#'   \item \strong{nwqs_boot with keep_fits=TRUE}: Extracts weights from each bootstrap
-#'     replicate's fitted model. Subtitle indicates "Bootstrap weight distribution".
-#'   \item \strong{nwqs_boot with keep_fits=FALSE and rh_inner>1}: Falls back to the
-#'     inner point fit's RH weight matrix.
-#'   \item \strong{nwqs with rh>1}: Uses the RH weight matrix directly. A red caption
-#'     warns that distributions reflect data-splitting variance only.
-#' }
-#'
-#' @param model An object of class \code{"nwqs_boot"} or \code{"nwqs"}.
-#'   For \code{"nwqs_boot"}, set \code{keep_fits = TRUE} during fitting to enable
-#'   bootstrap-based weight distributions. For \code{"nwqs"}, \code{rh > 1} is required.
-#' @param base_size Integer. Base font size for the ggplot2 theme. Default is 12.
-#' @param palette Character. Color palette name. Options include \code{"default"}
-#'   and \code{"palette2"}. Default is \code{"default"}.
-#' @param ... Additional arguments (currently unused, reserved for future extensions).
-#'
-#' @return A \code{ggplot} object showing vertical boxplots of weight distributions
-#'   for each mixture component, with jittered raw points and diamond-shaped mean markers.
-#'
-#' @importFrom ggplot2 ggplot aes geom_boxplot geom_jitter stat_summary
-#'   scale_fill_manual theme_bw labs theme element_blank element_line element_text
+# -------------------------------------------------------------------------
+# plot_nwqs_weight_box 放在这里（从 FINAL_utils_weight_box.R 粘贴）
+# -------------------------------------------------------------------------
 #' @export
 plot_nwqs_weight_box <- function(model, base_size = 12,
                                  palette = "default", ...) {
-
-  .get_palette <- function(n, pal="default") {
+  .get_palette <- function(n, pal = "default") {
     cols <- list(
-      default  = c("#4A90C8","#D92828","#6EC44A","#8B6FB8","#00B4D8",
-                   "#006B3C","#A8D8EA","#F4B6B6","#5BA3D0","#E03030","#7AD450","#9B7FC0"),
-      palette2 = c("#9bbf8a","#82afda","#f79059","#e7dbd3","#c2bdde",
-                   "#8dcec8","#add3e2","#3480b8","#ffbe7a","#fa8878","#c82423","#6b5b95")
+      default = c(
+        "#4A90C8", "#D92828", "#6EC44A", "#8B6FB8", "#00B4D8",
+        "#006B3C", "#A8D8EA", "#F4B6B6", "#5BA3D0", "#E03030", "#7AD450", "#9B7FC0"
+      ),
+      palette2 = c(
+        "#9bbf8a", "#82afda", "#f79059", "#e7dbd3", "#c2bdde",
+        "#8dcec8", "#add3e2", "#3480b8", "#ffbe7a", "#fa8878", "#c82423", "#6b5b95"
+      )
     )
     p <- if (pal %in% names(cols)) cols[[pal]] else cols[["default"]]
-    rep(p, ceiling(n/length(p)))[seq_len(n)]
+    rep(p, ceiling(n / length(p)))[seq_len(n)]
   }
 
   # ── 判断输入类型并提取权重矩阵 ──
@@ -502,15 +499,17 @@ plot_nwqs_weight_box <- function(model, base_size = 12,
       if (inner_rh > 1) ci_source <- "bootstrap_with_inner_rh"
     } else {
       pf <- model$point_fit
-      if (is.null(pf$rh_weights) || pf$rh <= 1)
+      if (is.null(pf$rh_weights) || pf$rh <= 1) {
         stop("Weight boxplot requires either keep_fits=TRUE in nwqs_boot() or rh > 1 in the inner model.")
+      }
       w_mat <- pf$rh_weights
       ci_source <- "rh_splitting"
       n_iter <- pf$rh
     }
   } else if (inherits(model, "nwqs")) {
-    if (is.null(model$rh_weights) || model$rh <= 1)
+    if (is.null(model$rh_weights) || model$rh <= 1) {
       stop("Weight boxplot requires rh > 1.")
+    }
     w_mat <- model$rh_weights
     ci_source <- "rh_splitting"
     n_iter <- model$rh
@@ -520,10 +519,13 @@ plot_nwqs_weight_box <- function(model, base_size = 12,
 
   # ── 提取点估计权重用于排序 ──
   mix_names <- colnames(w_mat)
-  n_comps   <- length(mix_names)
+  n_comps <- length(mix_names)
 
-  if (inherits(model, "nwqs_boot")) point_w <- model$final_weights
-  else point_w <- model$final_weights
+  if (inherits(model, "nwqs_boot")) {
+    point_w <- model$final_weights
+  } else {
+    point_w <- model$final_weights
+  }
 
   # 按点估计权重从高到低排序
   ordered_names <- names(sort(point_w, decreasing = TRUE))
@@ -557,24 +559,40 @@ plot_nwqs_weight_box <- function(model, base_size = 12,
     ggplot2::scale_fill_manual(values = colors, guide = "none") +
     ggplot2::theme_bw(base_size = base_size) +
     ggplot2::labs(
-      title    = "Component Weight Distribution",
+      title = "Component Weight Distribution",
       subtitle = subtitle_text,
       x = NULL, y = "Weight"
     ) +
     ggplot2::theme(
       panel.grid.major.x = ggplot2::element_blank(),
-      panel.grid.minor   = ggplot2::element_blank(),
-      axis.line     = ggplot2::element_line(color = "#2C3E50", linewidth = 0.5),
-      plot.title    = ggplot2::element_text(hjust = 0.5, face = "bold", size = base_size + 1),
+      panel.grid.minor = ggplot2::element_blank(),
+      axis.line = ggplot2::element_line(color = "#2C3E50", linewidth = 0.5),
+      plot.title = ggplot2::element_text(hjust = 0.5, face = "bold", size = base_size + 1),
       plot.subtitle = ggplot2::element_text(hjust = 0.5, size = base_size - 1, color = "#7F8C8D"),
-      axis.text.x   = ggplot2::element_text(face = "bold", angle = 45, hjust = 1)
+      axis.text.x = ggplot2::element_text(face = "bold", angle = 45, hjust = 1)
     )
 
   # ── caption 警告 (仅 RH 模式) ──
-  if (!is.null(caption_text))
+  if (!is.null(caption_text)) {
     p <- p + ggplot2::labs(caption = caption_text) +
       ggplot2::theme(plot.caption = ggplot2::element_text(
-        face = "italic", color = "red3", size = base_size - 3, hjust = 0))
+        face = "italic", color = "red3", size = base_size - 3, hjust = 0
+      ))
+  }
 
   return(p)
+}
+
+
+safe_mean <- function(x) {
+  if (all(is.na(x))) NA_real_ else mean(x, na.rm = TRUE)
+}
+
+safe_sd <- function(x) {
+  n <- sum(!is.na(x))
+  if (n <= 1) NA_real_ else sd(x, na.rm = TRUE)
+}
+
+safe_prop_ge <- function(x, cutoff) {
+  if (all(is.na(x))) NA_real_ else mean(x >= cutoff, na.rm = TRUE)
 }

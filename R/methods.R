@@ -206,7 +206,7 @@ plot.nwqs <- function(x, type = c("both", "curves", "weights"),
 
   # -- Curves panel ------------------------------------------------------------
   if (type %in% c("curves", "both")) {
-    q_level <- if (!is.null(x$call$q)) x$call$q else 4
+    q_level <- if (!is.null(x$q)) x$q else 4
     x_seq <- seq(0, q_level - 1, length.out = 100)
     shape_names <- names(x$mean_shapes)
 
@@ -397,7 +397,7 @@ print.nwqs <- function(x, digits = max(3L, getOption("digits") - 3L), ...) {
   p_wqs <- p_values["wqs_score"]
   p_wqs_str <- ifelse(p_wqs < 0.001, "<0.001", sprintf("%.3f", p_wqs))
 
-  q_level <- ifelse(is.null(x$q), 4, eval(x$q))
+  q_level <- if (!is.null(x$q)) x$q else 4
   df_spline <- x$df_spline
   full_basis <- splines::ns(0:(q_level - 1),
     df = df_spline, knots = x$spline_knots,

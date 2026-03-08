@@ -131,8 +131,8 @@ summary_table <- df_all %>%
     SD_SAE        = sd(SAE, na.rm = TRUE),
     Mean_Pearson  = mean(Pearson, na.rm = TRUE),
     Mean_Spearman = mean(Spearman, na.rm = TRUE),
-    Pearson_GE08  = mean(Pearson >= 0.8, na.rm = TRUE),
-    Spearman_GE08 = mean(Spearman >= 0.8, na.rm = TRUE),
+    Pearson_GE08  = mean(Pearson >= 0.95, na.rm = TRUE),
+    Spearman_GE08 = mean(Spearman >= 0.95, na.rm = TRUE),
     Mean_R2       = mean(R2, na.rm = TRUE),
     SD_R2         = sd(R2, na.rm = TRUE),
     Mean_RMSE     = mean(RMSE, na.rm = TRUE),
@@ -224,7 +224,7 @@ p_r2 <- ggplot(df_plot, aes(x = split_label, y = R2)) +
 # ── Figure S1c: Pearson ─────────────────────────────────────────────────
 p_pear <- ggplot(df_plot, aes(x = split_label, y = Pearson)) +
   geom_boxplot(fill = "#D92828", alpha = 0.7, outlier.size = 0.3, width = 0.6) +
-  geom_hline(yintercept = 0.8, linetype = "dashed", color = "black", linewidth = 0.4) +
+  geom_hline(yintercept = 0.95, linetype = "dashed", color = "black", linewidth = 0.4) +
   facet_grid(Scenario ~ N_label, scales = "free_y") +
   theme_bw(base_size = 11) +
   theme(panel.grid.minor = element_blank(),
@@ -232,7 +232,7 @@ p_pear <- ggplot(df_plot, aes(x = split_label, y = Pearson)) +
         strip.text = element_text(face = "bold"),
         axis.text.x = element_text(angle = 45, hjust = 1, size = 8)) +
   labs(title = "C. Weight-Truth Pearson Correlation",
-       subtitle = "Dashed line: r = 0.8 threshold",
+       subtitle = "Dashed line: r = 0.95 threshold",
        x = "Train / Validate (%)", y = "Pearson r")
 
 # ── Figure S1d: β stability ─────────────────────────────────────────────
