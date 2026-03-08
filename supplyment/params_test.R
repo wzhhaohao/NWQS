@@ -201,9 +201,9 @@ summary_df <- final_df %>%
     Mean_R2       = mean(R2, na.rm = TRUE),
     SD_R2         = sd(R2, na.rm = TRUE),
     Mean_Pearson  = mean(Pearson, na.rm = TRUE),
-    Pearson_Pass  = mean(Pearson >= 0.8, na.rm = TRUE),
+    Pearson_Pass  = mean(Pearson >= 0.95, na.rm = TRUE),
     Mean_Spearman = mean(Spearman, na.rm = TRUE),
-    Spearman_Pass = mean(Spearman >= 0.8, na.rm = TRUE),
+    Spearman_Pass = mean(Spearman >= 0.95, na.rm = TRUE),
     Mean_Beta     = mean(Beta_WQS, na.rm = TRUE),
     SD_Beta       = sd(Beta_WQS, na.rm = TRUE),
     Coverage      = mean(Covered, na.rm = TRUE),
@@ -266,7 +266,7 @@ p2_sae <- ggplot(plot_df, aes(x = P_label, y = SAE, fill = N_label)) +
 
 p2_pearson <- ggplot(plot_df, aes(x = P_label, y = Pearson, fill = N_label)) +
   geom_boxplot(position = position_dodge(0.75), alpha = 0.6, outlier.size = 0.5) +
-  geom_hline(yintercept = 0.8, linetype = "dashed", linewidth = 0.4) +
+  geom_hline(yintercept = 0.95, linetype = "dashed", linewidth = 0.4) +
   facet_wrap(~SNR_label) + scale_fill_manual(values = pal_N) + base_theme +
   labs(title = "B. Weight-Truth Pearson Correlation by Dimensionality",
        x = "Dimensionality (P)", y = "Pearson r", fill = "Sample Size")
