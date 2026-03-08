@@ -23,9 +23,9 @@
 #'
 #' @param loop_number integer. The total number of iterations or tasks to be executed (e.g., bootstrap samples `B` or repeated holdouts `rh`).
 #'   需要并行执行的任务/循环总数。
-#' @param strategy character. The parallel strategy to use. Defaults to "multicore" (efficient for Linux/macOS).
-#'   **Note**: Windows users should strictly use "multicore".
-#'   并行策略，默认为 "multicore"。Windows 用户请务必使用 "multicore"。
+#' @param strategy character. The parallel strategy to use. Defaults to "multisession" (efficient for Windows).
+#'   **Note**: Linux/macOS users may use "multicore" for better performance.
+#'   并行策略，默认为 "multisession"。Linux/macOS 用户可使用 "multicore" 以获得更好性能。
 #' @param n_workers integer. Optional. Manually specify the number of workers.
 #'   If NULL (default), the function calculates the optimal number automatically.
 #'   手动指定核心数。若为 NULL 则触发自动优化算法。
@@ -38,51 +38,51 @@
 #'
 #' @importFrom future plan availableCores
 #' @export
-configure_parallel_plan = function(loop_number, strategy = "multicore", n_workers = NULL, reserve_cpu = 0.2, ...) {
-    
+configure_parallel_plan <- function(loop_number, strategy = "multisession", n_workers = NULL, reserve_cpu = 0.2, ...) {
     # 0. 获取当前计划
-    current_plan = future::plan()
-    is_already_parallel = !inherits(current_plan, "sequential")
-    
+    current_plan <- future::plan()
+    is_already_parallel <- !inherits(current_plan, "sequential")
+
     # A. 如果外部已经设置了并行，则不做干扰
     if (is_already_parallel) {
         return(invisible(current_plan))
     }
-    
+
     # B. 如果策略是串行，或者任务数只有 1，直接设为串行
     if (strategy == "sequential" || loop_number <= 1) {
-        old_plan = future::plan("sequential")
+        old_plan <- future::plan("sequential")
         return(invisible(old_plan))
     }
-    
+
     # C. 智能核心数计算 (Smart Load Balancing)
     if (is.null(n_workers)) {
         # 1. 获取物理核心总数
-        total_cores = future::availableCores()
-        
+        total_cores <- future::availableCores()
+
         # 2. 计算安全上限
-        safe_limit = floor(total_cores * (1 - reserve_cpu))
-        if (safe_limit < 1) safe_limit = 1L
-        
+        safe_limit <- floor(total_cores * (1 - reserve_cpu))
+        if (safe_limit < 1) safe_limit <- 1L
+
         # 3. 负载均衡算法
         # 计算跑完所有循环所需的最少轮次 (Batches)
-        # 这里用 loop_number 
-        min_batches = ceiling(loop_number / safe_limit)      
-        
+        # 这里用 loop_number
+        min_batches <- ceiling(loop_number / safe_limit)
+
         # 倒推该轮次下的均摊核心数
-        workers_final = ceiling(loop_number / min_batches)   
-        workers_final = as.integer(workers_final)
-        
-        message(sprintf("Auto-Parallel: %d Cores Available (Limit %d). %d Loops split into %d rounds x %d workers.", 
-                        total_cores, safe_limit, loop_number, min_batches, workers_final))
-        
+        workers_final <- ceiling(loop_number / min_batches)
+        workers_final <- as.integer(workers_final)
+
+        message(sprintf(
+            "Auto-Parallel: %d Cores Available (Limit %d). %d Loops split into %d rounds x %d workers.",
+            total_cores, safe_limit, loop_number, min_batches, workers_final
+        ))
     } else {
         # 用户强制指定
-        workers_final = max(1L, as.integer(n_workers))
+        workers_final <- max(1L, as.integer(n_workers))
     }
-    
+
     # D. 应用新计划并返回旧计划
-    old_plan = future::plan(strategy, workers = workers_final)
-    
+    old_plan <- future::plan(strategy, workers = workers_final)
+
     return(invisible(old_plan))
 }

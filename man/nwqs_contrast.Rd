@@ -2,19 +2,25 @@
 % Please edit documentation in R/utils.R
 \name{nwqs_contrast}
 \alias{nwqs_contrast}
-\title{Calculate NWQS Joint Exposure Quantile Contrast and Overall Significance}
+\title{Compute NWQS Joint Exposure Quantile Contrast}
 \usage{
 nwqs_contrast(model, q_target = 3, q_ref = 0)
 }
 \arguments{
-\item{model}{An object of class "nwqs" or "nwqs_result".}
+\item{model}{An object of class \code{"nwqs"}.}
 
-\item{q_target}{Integer. Target quantile index (e.g., 3 represents the 4th quartile, Q4).}
+\item{q_target}{Integer. Target quantile index (0-based). E.g., 3 represents Q4.
+Defaults to 3.}
 
-\item{q_ref}{Integer. Reference quantile index (default is 0, representing Q1).}
+\item{q_ref}{Integer. Reference quantile index (0-based). Defaults to 0 (Q1).}
+}
+\value{
+Invisibly returns a list with \code{delta_eta}, \code{lower}, and
+\code{upper} (the latter two are \code{NA} when \code{rh = 1}).
 }
 \description{
 Computes the overall significance of the non-linear mixture effect and evaluates
-the joint exposure quantile contrast (e.g., comparing all exposures at Q4 vs Q1).
-Automatically converts to Odds Ratios (OR) for binomial models.
+joint exposure quantile contrasts (e.g., all components at Q4 vs all at Q1).
+Automatically converts to Odds Ratios (OR) for binomial models and Rate Ratios
+(RR) for Poisson models.
 }

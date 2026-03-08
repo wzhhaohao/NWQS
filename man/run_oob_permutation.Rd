@@ -7,9 +7,9 @@
 run_oob_permutation(
   data,
   mix_name,
-  dependent_var = "y",
-  model_func = ridge_permutation_scorer,
-  B = 100,
+  outcome = "y",
+  weight_engine = permutation_scorer,
+  n_permutation = 100,
   seed = NULL,
   boot_strategy = c("sequential", "multicore", "multisession"),
   boot_n_workers = NULL,
@@ -17,63 +17,61 @@ run_oob_permutation(
 )
 }
 \arguments{
-\item{data}{data.frame. The original dataset containing mixture and covariates.
-包含混合物和协变量的原始数据框。}
+\item{data}{data.frame. The original dataset containing mixture and
+covariates.}
 
-\item{mix_name}{character vector. Names of the mixture components.
-混合物组分的变量名向量。}
+\item{mix_name}{character vector. Names of the mixture components.}
 
-\item{dependent_var}{character. Name of the outcome variable. Defaults to "y".
-因变量（结局变量）名称。默认为 "y"。}
+\item{outcome}{character. Name of the outcome variable.
+Defaults to "y".}
 
-\item{model_func}{function. The internal modeling function to be executed for each bootstrap sample.
-Defaults to \code{ridge_permutation_scorer}.
-针对每个 Bootstrap 样本执行的内部模型函数。默认为 \code{ridge_permutation_scorer}。}
-
-\item{B}{integer. Number of bootstrap iterations. Default is 100.
-Bootstrap 迭代次数。}
+\item{weight_engine}{function. The internal modeling function to be
+executed for each bootstrap sample. Defaults to
+\code{permutation_scorer}.}
 
 \item{seed}{integer/logical. Random seed for parallel reproducibility.
-If NULL (default), it uses \code{TRUE} to generate a stream of random seeds automatically.
-并行计算的随机种子。如果为 NULL，则使用 \code{TRUE} 自动生成随机种子流。}
+If NULL (default), it uses \code{TRUE} to generate a stream of random
+seeds automatically.}
 
-\item{boot_strategy}{character. Parallel strategy for this bootstrap run: "sequential", "multicore", or "multicore".
-Note: If running inside an already parallelized loop (e.g., outer Repeated Holdout), this should typically be "sequential".
-本次 Bootstrap 的并行策略。注意：如果是在已并行的循环（如外层 RH）内部运行，此处通常应设为 "sequential"。}
+\item{boot_strategy}{character. Parallel strategy for this bootstrap
+run: "sequential", "multicore", or "multisession".
+If running inside an already parallelized outer RH loop, this should
+typically be "sequential".}
 
 \item{boot_n_workers}{integer. Number of cores/workers to use.
-If NULL, the optimal number is calculated by \code{configure_parallel_plan}.
-使用的核心数。如果为 NULL，由 \code{configure_parallel_plan} 自动计算最优数量。}
+If NULL, the optimal number is calculated by
+\code{configure_parallel_plan}.}
 
-\item{...}{Additional arguments passed directly to \code{model_func}.
-Examples include \code{df_spline}, \code{shuffle}, \code{transform_fun}, etc.
-直接传递给 \code{model_func} 的额外参数。例如 \code{df_spline}, \code{shuffle}, \code{transform_fun} 等。}
+\item{...}{Additional arguments passed directly to \code{weight_engine}.}
+
+\item{B}{integer. Number of bootstrap iterations. Default is 100.}
 }
 \value{
-list. A named list of length \code{B} containing results from all iterations.
-Failed iterations contain \code{NULL}.
-返回一个长度为 \code{B} 的命名列表，包含所有迭代的结果。失败的迭代包含 \code{NULL}。
+list. A named list of length \code{B} containing results from all
+iterations. Failed iterations contain \code{NULL}.
 }
 \description{
-Orchestrates the parallel execution of the bootstrap process for WQS regression.
-It automatically handles data resampling, parallel environment configuration (via \code{configure_parallel_plan}),
-and error handling for each iteration.
+Orchestrates repeated bootstrap / OOB-based internal model fitting for
+NWQS regression. It automatically handles parallel environment
+configuration (via \code{configure_parallel_plan}) and error handling for
+each iteration.
 \cr
-协调 WQS 回归 Bootstrap 过程的并行执行。
-它自动处理数据重抽样、并行环境配置（通过 \code{configure_parallel_plan}）以及每次迭代的错误处理。
+协调 NWQS 回归内部 Bootstrap / OOB 过程的并行执行。
+它自动处理并行环境配置（通过 \code{configure_parallel_plan}）
+以及每次迭代的错误处理。
 }
 \details{
 This function acts as a high-level wrapper that:
 \enumerate{
-\item \strong{Configures Parallelism}: Calls \code{configure_parallel_plan} to set up an optimal \code{future} plan based on the number of bootstrap samples (\code{B}) and available cores. It ensures that any temporary parallel plan is restored to the previous state upon exit.
-\item \strong{Executes Bootstrap}: Runs \code{B} iterations using \code{future_lapply}. Inside each iteration, the \code{model_func} is called on the full dataset (resampling logic is typically handled within \code{model_func}, e.g., \code{ridge_permutation_scorer}).
-\item \strong{Handles Errors}: Uses \code{tryCatch} to ensure that a failure in a single iteration does not crash the entire process. Failed iterations return \code{NULL} with a warning.
-}
-\cr
-该函数作为一个高级封装器，执行以下操作：
-\enumerate{
-\item \strong{配置并行}：调用 \code{configure_parallel_plan}，根据 Bootstrap 样本数 (\code{B}) 和可用核心设置最优的 \code{future} 计划。它确保任何临时并行计划在退出时恢复到之前的状态。
-\item \strong{执行 Bootstrap}：使用 \code{future_lapply} 运行 \code{B} 次迭代。在每次迭代中，调用 \code{model_func}（重抽样逻辑通常在 \code{model_func} 内部处理，例如 \code{ridge_permutation_scorer}）。
-\item \strong{错误处理}：使用 \code{tryCatch} 确保单次迭代失败不会导致整个进程崩溃。失败的迭代将返回 \code{NULL} 并伴随警告。
+\item Configures parallelism for the internal bootstrap loop.
+\item Pre-computes the spline-expanded design matrix once, using the
+globally fixed spline knots and boundaries passed from the
+outer \code{nwqs()} routine.
+\item Executes \code{B} iterations using \code{future_lapply}. Inside each
+iteration, the \code{weight_engine} is called on the full precomputed
+design matrix, while resampling logic is handled inside
+\code{weight_engine} (e.g., \code{permutation_scorer}).
+\item Uses \code{tryCatch} so that a failure in a single iteration does
+not crash the entire process.
 }
 }

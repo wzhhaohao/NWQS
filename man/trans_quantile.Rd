@@ -7,22 +7,29 @@
 trans_quantile(data, method = c("quantile", "percentile"), q = 4)
 }
 \arguments{
-\item{data}{data.frame. Input data. / 输入数据。}
+\item{data}{A \code{data.frame} of mixture variables to transform.}
 
-\item{method}{character. "quantile" (default) or "percentile". / 变换方法。}
+\item{method}{Character. Transformation method: \code{"quantile"} (default)
+or \code{"percentile"}.}
 
-\item{q}{integer. Number of quantiles (only used if method = "quantile"). / 分位数数量。}
+\item{q}{Integer. Number of quantile bins (only used when
+\code{method = "quantile"}). Defaults to 4 (quartiles).}
 }
 \value{
-data.frame. Transformed data. / 变换后的数据。
+A \code{data.frame} with the same column names, containing
+transformed values.
 }
 \description{
-A hybrid function combining flexible ranking methods:
-\enumerate{
-\item "quantile": gWQS-style integer binning (handles ties and boundaries robustly).
-\item "percentile": Continuous percentile ranking (0 to 1).
-这是一个融合函数，结合了灵活的排名方法：
-\item "quantile": gWQS 风格的整数分箱（稳健处理重复值和边界）。
-\item "percentile": 连续百分位数排名（0 到 1）。
+Transforms continuous mixture variables into discrete quantile bins or
+continuous percentile ranks.
+}
+\details{
+Two methods are available:
+\describe{
+\item{\code{"quantile"}}{gWQS-style integer binning into \code{q} groups
+(0 to \code{q-1}). Handles ties and boundary values robustly using
+\code{-Inf}/\code{Inf} endpoints.}
+\item{\code{"percentile"}}{Continuous percentile ranking scaled to (0, 1)
+using \code{rank(x) / (n + 1)}.}
 }
 }

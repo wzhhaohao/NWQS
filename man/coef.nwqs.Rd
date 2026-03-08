@@ -2,20 +2,18 @@
 % Please edit documentation in R/methods.R
 \name{coef.nwqs}
 \alias{coef.nwqs}
-\title{Extract Global Coefficients from NWQS Objects}
+\title{Extract Coefficients from NWQS Objects}
 \usage{
 \method{coef}{nwqs}(object, ...)
 }
 \arguments{
 \item{object}{An object of class \code{"nwqs"}.}
 
-\item{...}{Additional arguments passed to or from other methods.}
+\item{...}{Additional arguments.}
 }
 \value{
-A named numeric vector of the averaged global coefficients.
+A named numeric vector of averaged global coefficients.
 }
 \description{
-Extracts the averaged global regression coefficients (intercept, overall \code{wqs_score}
-effect, and covariates) from the fitted NWQS model. These coefficients represent the
-ensemble average across all Repeated Holdout (RH) or Bootstrap iterations.
+Extract Coefficients from NWQS Objects
 }
