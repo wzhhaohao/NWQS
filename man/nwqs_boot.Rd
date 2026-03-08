@@ -15,7 +15,7 @@ nwqs_boot(
   conf_level = 0.95,
   seed = 1234,
   keep_fits = FALSE,
-  plan_strategy = c("sequential", "multicore", "multisession"),
+  plan_strategy = c("sequential", "multisession", "multicore"),
   n_workers = NULL,
   ...
 )

@@ -54,7 +54,12 @@ gen_nonlinear_bio_data(
 
 \item{...}{传递给 generate_covariates 的参数。}
 }
+\value{
+data.frame. Contains Y (binary), predictors, covariates.
+Attributes include true_effect_mat, true_prob, spline_knots, spline_boundary.
+}
 \description{
-Generate Non-linear Binary Model Data (Auto-Balanced)
-生成基于自然样条的非线性二分类数据 (支持自动平衡 0/1 比例)
+Generates predictors (multivariate normal), transforms them (optional),
+expands them using natural splines, adds covariates, and generates Y with SNR-based noise.
+生成预测变量，进行变换（可选），使用自然样条扩展，加入协变量，并根据信噪比生成 Y。
 }

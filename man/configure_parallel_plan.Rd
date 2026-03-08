@@ -6,7 +6,7 @@
 \usage{
 configure_parallel_plan(
   loop_number,
-  strategy = "multicore",
+  strategy = "multisession",
   n_workers = NULL,
   reserve_cpu = 0.2,
   ...
@@ -16,9 +16,9 @@ configure_parallel_plan(
 \item{loop_number}{integer. The total number of iterations or tasks to be executed (e.g., bootstrap samples \code{B} or repeated holdouts \code{rh}).
 需要并行执行的任务/循环总数。}
 
-\item{strategy}{character. The parallel strategy to use. Defaults to "multicore" (efficient for Linux/macOS).
-\strong{Note}: Windows users should strictly use "multicore".
-并行策略，默认为 "multicore"。Windows 用户请务必使用 "multicore"。}
+\item{strategy}{character. The parallel strategy to use. Defaults to "multisession" (efficient for Windows).
+\strong{Note}: Linux/macOS users may use "multicore" for better performance.
+并行策略，默认为 "multisession"。Linux/macOS 用户可使用 "multicore" 以获得更好性能。}
 
 \item{n_workers}{integer. Optional. Manually specify the number of workers.
 If NULL (default), the function calculates the optimal number automatically.
