@@ -29,6 +29,8 @@ Defaults to "y".}
 executed for each bootstrap sample. Defaults to
 \code{permutation_scorer}.}
 
+\item{n_permutation}{integer. Number of permutation iterations. Default is 100.}
+
 \item{seed}{integer/logical. Random seed for parallel reproducibility.
 If NULL (default), it uses \code{TRUE} to generate a stream of random
 seeds automatically.}
@@ -43,8 +45,6 @@ If NULL, the optimal number is calculated by
 \code{configure_parallel_plan}.}
 
 \item{...}{Additional arguments passed directly to \code{weight_engine}.}
-
-\item{B}{integer. Number of bootstrap iterations. Default is 100.}
 }
 \value{
 list. A named list of length \code{B} containing results from all

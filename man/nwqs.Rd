@@ -18,7 +18,7 @@ nwqs(
   seed = 1234,
   n_permutation = 30,
   family = c("gaussian", "binomial", "poisson", "quasipoisson"),
-  plan_strategy = c("sequential", "multicore", "multisession"),
+  plan_strategy = c("sequential", "multisession", "multicore"),
   n_workers = NULL,
   quiet = FALSE,
   ...

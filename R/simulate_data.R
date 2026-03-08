@@ -369,7 +369,10 @@ gen_nonlinear_data <- function(n_obs = 1000,
 #' Generate Non-linear Binary Model Data (Auto-Balanced)
 #' 生成基于自然样条的非线性二分类数据 (支持自动平衡 0/1 比例)
 #'
-#' @description
+#' @description 
+#' Generates predictors (multivariate normal), transforms them (optional),
+#' expands them using natural splines, adds covariates, and generates Y with SNR-based noise.
+#' 生成预测变量，进行变换（可选），使用自然样条扩展，加入协变量，并根据信噪比生成 Y。
 #' @param n_obs integer. 样本量。
 #' @param mu_preds numeric vector. 预测变量均值。
 #' @param sigma_preds matrix. 预测变量协方差矩阵。
