@@ -1,2 +1,7 @@
 ^NWQS\.Rproj$
 ^\.Rproj\.user$
+^generate_mc_datasets\.R$
+^Monte_Carlo_Simulation_Study\.R$
+^sigma_generate\.R$
+^man/figures$
+^params_test\.R$

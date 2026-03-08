@@ -14,11 +14,11 @@
 #' @param snr_db numeric. Target SNR in decibels (e.g., 0, 5, 10, 20). / 目标信噪比 (dB)。
 #' @return numeric vector. The noisy signal. / 添加噪音后的信号。
 #' @export
-add_noise_by_snr = function(signal_vec, snr_db) {
+add_noise_by_snr <- function(signal_vec, snr_db) {
     stopifnot(is.numeric(signal_vec), length(signal_vec) > 1)
 
     # Calculate signal power: P_signal = E[(x - mu)^2]
-    power_signal = mean((signal_vec - mean(signal_vec))^2)
+    power_signal <- mean((signal_vec - mean(signal_vec))^2)
 
     if (power_signal == 0) {
         return(signal_vec)
@@ -26,9 +26,9 @@ add_noise_by_snr = function(signal_vec, snr_db) {
 
     # Calculate noise standard deviation based on SNR formula
     # SNR_dB = 10 * log10(P_signal / P_noise)
-    sigma_noise = sqrt(power_signal / 10^(snr_db / 10))
+    sigma_noise <- sqrt(power_signal / 10^(snr_db / 10))
 
-    noise_vec = rnorm(length(signal_vec), mean = 0, sd = sigma_noise)
+    noise_vec <- rnorm(length(signal_vec), mean = 0, sd = sigma_noise)
 
     return(signal_vec + noise_vec)
 }
@@ -48,57 +48,57 @@ add_noise_by_snr = function(signal_vec, snr_db) {
 #' @param seed integer. Random seed for reproducibility. / 随机种子。
 #' @return matrix. Correlation matrix. / 相关系数矩阵。
 #' @export
-generate_sigma = function(n_vars, mode = c("medium", "low", "high", "mixed"), rho = 0.7, seed = NULL) {
-    mode = match.arg(mode)
+generate_sigma <- function(n_vars, mode = c("medium", "low", "high", "mixed"), rho = 0.7, seed = NULL) {
+    mode <- match.arg(mode)
     if (!is.null(seed)) set.seed(seed)
 
     if (mode == "low") {
         # Identity matrix + small noise
-        A = diag(n_vars) + matrix(runif(n_vars^2, -0.1, 0.1), nrow = n_vars)
-        sigma = cov2cor(t(A) %*% A)
+        A <- diag(n_vars) + matrix(runif(n_vars^2, -0.1, 0.1), nrow = n_vars)
+        sigma <- cov2cor(t(A) %*% A)
     } else if (mode == "medium") {
         # Random Gram matrix
-        A = matrix(runif(n_vars^2, -1, 1), ncol = n_vars)
-        sigma = cov2cor(t(A) %*% A)
+        A <- matrix(runif(n_vars^2, -1, 1), ncol = n_vars)
+        sigma <- cov2cor(t(A) %*% A)
     } else if (mode == "high") {
         # Factor model structure
-        sigma = matrix(rho, nrow = n_vars, ncol = n_vars)
-        diag(sigma) = 1
+        sigma <- matrix(rho, nrow = n_vars, ncol = n_vars)
+        diag(sigma) <- 1
 
         # Add jitter
-        noise = matrix(runif(n_vars^2, -0.05, 0.05), nrow = n_vars)
-        sigma = sigma + (noise + t(noise)) / 2
+        noise <- matrix(runif(n_vars^2, -0.05, 0.05), nrow = n_vars)
+        sigma <- sigma + (noise + t(noise)) / 2
 
         # Repair eigenvalues to ensure positive definiteness
-        eig = eigen(sigma)
-        val = pmax(eig$values, 0.01)
-        sigma = cov2cor(eig$vectors %*% diag(val) %*% t(eig$vectors))
+        eig <- eigen(sigma)
+        val <- pmax(eig$values, 0.01)
+        sigma <- cov2cor(eig$vectors %*% diag(val) %*% t(eig$vectors))
     } else if (mode == "mixed") {
         # Block diagonal structure
-        split_idx = floor(n_vars / 2)
-        s1 = split_idx
-        s2 = n_vars - split_idx
+        split_idx <- floor(n_vars / 2)
+        s1 <- split_idx
+        s2 <- n_vars - split_idx
 
         # Block 1: High correlation
-        B1 = matrix(0.8, nrow = s1, ncol = s1)
-        diag(B1) = 1
+        B1 <- matrix(0.8, nrow = s1, ncol = s1)
+        diag(B1) <- 1
 
         # Block 2: Medium correlation (Random)
-        A2 = matrix(runif(s2^2, -1, 1), ncol = s2)
-        B2 = cov2cor(t(A2) %*% A2)
+        A2 <- matrix(runif(s2^2, -1, 1), ncol = s2)
+        B2 <- cov2cor(t(A2) %*% A2)
 
         # Combine blocks
-        sigma = matrix(0, nrow = n_vars, ncol = n_vars)
-        sigma[1:s1, 1:s1] = B1
-        sigma[(s1 + 1):n_vars, (s1 + 1):n_vars] = B2
+        sigma <- matrix(0, nrow = n_vars, ncol = n_vars)
+        sigma[1:s1, 1:s1] <- B1
+        sigma[(s1 + 1):n_vars, (s1 + 1):n_vars] <- B2
 
         # Add noise and repair eigenvalues
-        noise = matrix(runif(n_vars^2, -0.1, 0.1), nrow = n_vars)
-        sigma = sigma + (noise + t(noise)) / 2
+        noise <- matrix(runif(n_vars^2, -0.1, 0.1), nrow = n_vars)
+        sigma <- sigma + (noise + t(noise)) / 2
 
-        eig = eigen(sigma)
-        val = pmax(eig$values, 0.01)
-        sigma = cov2cor(eig$vectors %*% diag(val) %*% t(eig$vectors))
+        eig <- eigen(sigma)
+        val <- pmax(eig$values, 0.01)
+        sigma <- cov2cor(eig$vectors %*% diag(val) %*% t(eig$vectors))
     }
 
     return(sigma)
@@ -121,27 +121,27 @@ generate_sigma = function(n_vars, mode = c("medium", "low", "high", "mixed"), rh
 #' @param prob_cat numeric vector. Probabilities for categorical levels. / 分类变量各水平概率。
 #' @return list. Model matrix, raw data, and linear effects. / 包含模型矩阵、原始数据和线性效应。
 #' @export
-generate_covariates = function(n_obs = 1000,
+generate_covariates <- function(n_obs = 1000,
                                 beta_cont = 0.5,
                                 beta_bin = -0.8,
                                 beta_cat = c(0, -0.5, 0.7),
                                 prob_bin = 0.5,
                                 prob_cat = c(1 / 3, 1 / 3, 1 / 3),
                                 Intercept = 0) {
-    x_cont = rnorm(n_obs, 0, 1)
-    x_bin_raw = rbinom(n_obs, 1, prob_bin)
-    x_cat_raw = sample(1:3, n_obs, replace = TRUE, prob = prob_cat)
+    x_cont <- rnorm(n_obs, 0, 1)
+    x_bin_raw <- rbinom(n_obs, 1, prob_bin)
+    x_cat_raw <- sample(1:3, n_obs, replace = TRUE, prob = prob_cat)
 
-    x_bin = factor(x_bin_raw, levels = c(0, 1))
-    x_cat = factor(x_cat_raw, levels = 1:3)
+    x_bin <- factor(x_bin_raw, levels = c(0, 1))
+    x_cat <- factor(x_cat_raw, levels = 1:3)
 
     # Calculate linear predictor: eta = X * beta
-    eta_cov = beta_cont * x_cont + beta_bin * x_bin_raw + beta_cat[x_cat_raw] + Intercept
+    eta_cov <- beta_cont * x_cont + beta_bin * x_bin_raw + beta_cat[x_cat_raw] + Intercept
 
-    df_raw = data.frame(x_cont, x_bin, x_cat)
+    df_raw <- data.frame(x_cont, x_bin, x_cat)
     # mat_model = model.matrix(~ x_cont + x_bin + x_cat, data = df_raw)[, -1, drop = FALSE]
 
-    df_result = as.data.frame(cbind(eta_cov = eta_cov, df_raw))
+    df_result <- as.data.frame(cbind(eta_cov = eta_cov, df_raw))
 
     list(mm = df_result, original = df_raw, eta_cov = eta_cov)
 }
@@ -165,7 +165,7 @@ generate_covariates = function(n_obs = 1000,
 #' @param ... arguments passed to generate_covariates. 传递给 generate_covariates 的参数。
 #' @return data.frame. The final synthetic dataset. / 最终合成数据。
 #' @export
-generate_linear_data = function(n_obs = 1000,
+generate_linear_data <- function(n_obs = 1000,
                                  mu_preds,
                                  sigma_preds,
                                  beta_wqs = 1,
@@ -175,35 +175,38 @@ generate_linear_data = function(n_obs = 1000,
                                  seed = NULL,
                                  ...) {
     if (!is.null(seed)) set.seed(seed)
-    if (!requireNamespace("MASS", quietly = TRUE)) stop("Package 'MASS' required")
-
-    # Generate Components
-    preds_raw = MASS::mvrnorm(n_obs, mu = mu_preds, Sigma = sigma_preds)
-    preds_scaled = as.data.frame(scale(preds_raw))
-
-    # Quantile/Percentile Transformation
-    if (!is.null(transform_fun) && is.function(transform_fun)) {
-        preds_final = transform_fun(preds_scaled)
-    } else {
-        preds_final = preds_scaled
+    if (!requireNamespace("MASS", quietly = TRUE)) {
+        stop("Package 'MASS' required")
     }
 
-    names(preds_scaled) = paste0("Component", 1:ncol(preds_scaled))
+    preds_raw <- MASS::mvrnorm(
+        n_obs,
+        mu = mu_preds,
+        Sigma = sigma_preds
+    )
 
-    # Generate Background Covariates (passing '...')
-    cov_list = generate_covariates(n_obs = n_obs, ...)
+    preds_scaled <- as.data.frame(scale(preds_raw))
+    names(preds_scaled) <- paste0("Component", seq_len(ncol(preds_scaled)))
 
-    beta_preds = beta_wqs * beta_preds
+    if (!is.null(transform_fun) && is.function(transform_fun)) {
+        preds_final <- transform_fun(preds_scaled)
+    } else {
+        preds_final <- preds_scaled
+    }
 
-    # Calculate Clean Signal (Y = X * beta + cov_eta)
-    y_clean = as.matrix(preds_final) %*% beta_preds + cov_list$eta_cov
+    preds_final <- as.data.frame(preds_final)
+    names(preds_final) <- names(preds_scaled)
 
-    # Add SNR noise
-    y_observed = add_noise_by_snr(as.vector(y_clean), snr_db = snr_db)
+    cov_list <- generate_covariates(n_obs = n_obs, ...)
 
-    # Combine Results
-    cols_cov = setdiff(names(cov_list$mm), "eta_cov")
-    final_df = cbind(
+    beta_preds <- beta_wqs * beta_preds
+
+    y_clean <- as.matrix(preds_final) %*% beta_preds + cov_list$eta_cov
+    y_observed <- add_noise_by_snr(as.vector(y_clean), snr_db = snr_db)
+
+    cols_cov <- setdiff(names(cov_list$mm), "eta_cov")
+
+    final_df <- cbind(
         y = y_observed,
         preds_scaled,
         cov_list$mm[, cols_cov, drop = FALSE]
@@ -238,7 +241,7 @@ generate_linear_data = function(n_obs = 1000,
 #'
 #' @return data.frame. Contains Y, transformed predictors (before spline expansion), and covariates.
 #' @export
-gen_nonlinear_data = function(n_obs = 1000,
+gen_nonlinear_data <- function(n_obs = 1000,
                                mu_preds,
                                sigma_preds,
                                beta_wqs = 1,
@@ -254,119 +257,111 @@ gen_nonlinear_data = function(n_obs = 1000,
     if (!requireNamespace("MASS", quietly = TRUE)) stop("Package 'MASS' required")
     if (!is.null(seed)) set.seed(seed)
 
-    preds_raw = MASS::mvrnorm(n_obs, mu = mu_preds, Sigma = sigma_preds)
-    preds_scaled = as.data.frame(scale(preds_raw))
-    n_vars = ncol(preds_scaled)
-    names(preds_scaled) = paste0("Component", 1:n_vars)
+    preds_raw <- MASS::mvrnorm(n_obs, mu = mu_preds, Sigma = sigma_preds)
+    preds_scaled <- as.data.frame(scale(preds_raw))
+    n_vars <- ncol(preds_scaled)
+    names(preds_scaled) <- paste0("Component", 1:n_vars)
 
     if (!is.null(transform_fun) && is.function(transform_fun)) {
-        preds_trans = transform_fun(preds_scaled)
+        preds_trans <- transform_fun(preds_scaled)
     } else {
-        preds_trans = preds_scaled
+        preds_trans <- preds_scaled
     }
 
-    mat_spline_list = lapply(preds_trans, function(x) splines::ns(x, df = df_spline))
+    mat_spline_list <- lapply(preds_trans, function(x) splines::ns(x, df = df_spline))
 
     if (length(beta_preds) != n_vars) stop("Length of 'beta_preds' must match n_vars.")
 
-    cov_list = generate_covariates(n_obs = n_obs, ...)
+    cov_list <- generate_covariates(n_obs = n_obs, ...)
 
     # -----------------------------------------------------------
     # [架构升级]: 完美混合 纯线性(pure_linear) 与 非线性样条
     # -----------------------------------------------------------
 
     # 动态推导并锁定节点 (保证数据生成和模型拟合的尺子绝对一致)
-    eval_pts = 0:(q - 1)
+    eval_pts <- 0:(q - 1)
 
     # 利用 splines 内部算法自动计算最合理的 knots (支持任意的 q)
-    temp_spline = splines::ns(eval_pts, df = df_spline)
-    global_knots = attr(temp_spline, "knots")
-    global_boundary = attr(temp_spline, "Boundary.knots")
+    temp_spline <- splines::ns(eval_pts, df = df_spline)
+    global_knots <- attr(temp_spline, "knots")
+    global_boundary <- attr(temp_spline, "Boundary.knots")
 
     # 打印出来看看，如果是 q=4，它会自动算出 1 和 2 (极度聪明)
     # print(global_knots)
 
     # 数据生成侧：强制使用这把尺子
-    mat_spline_list = lapply(preds_trans, function(x) {
+    mat_spline_list <- lapply(preds_trans, function(x) {
         splines::ns(x, df = df_spline, knots = global_knots, Boundary.knots = global_boundary)
     })
 
     # 真值计算侧：也强制使用这把尺子 (无截距版)
-    basis_std_true = splines::ns(eval_pts, df = df_spline, knots = global_knots, Boundary.knots = global_boundary, intercept = FALSE)
+    basis_std_true <- splines::ns(eval_pts, df = df_spline, knots = global_knots, Boundary.knots = global_boundary, intercept = FALSE)
 
-    if (length(shape) == 1) shape = rep(shape, n_vars)
+    if (length(shape) == 1) shape <- rep(shape, n_vars)
 
-    eta_components_raw = matrix(0, nrow = n_obs, ncol = n_vars)
-    baseline_components = numeric(n_vars)
+    eta_components_raw <- matrix(0, nrow = n_obs, ncol = n_vars)
+    baseline_components <- numeric(n_vars)
 
-    true_eff_mat = matrix(0, nrow = n_vars + 1, ncol = q - 1)
-    rownames(true_eff_mat) = c("Overall", names(preds_scaled))
-    colnames(true_eff_mat) = paste0("Q", 2:q, "_vs_Q1")
+    true_eff_mat <- matrix(0, nrow = n_vars + 1, ncol = q - 1)
+    rownames(true_eff_mat) <- c("Overall", names(preds_scaled))
+    colnames(true_eff_mat) <- paste0("Q", 2:q, "_vs_Q1")
 
     for (i in 1:n_vars) {
-        current_shape = shape[i]
-        b = beta_preds[i] * beta_wqs
-        min_x = min(preds_trans[, i])
+        current_shape <- shape[i]
+        b <- beta_preds[i] * beta_wqs
+        min_x <- min(preds_trans[, i])
 
-        if (current_shape == "pure_linear") {
-            eta_components_raw[, i] = preds_trans[, i] * b
-            baseline_components[i] = min_x * b
-            for (k in 2:q) {
-                true_eff_mat[i + 1, k - 1] = (eval_pts[k] - eval_pts[1]) * b
-            }
+        if (current_shape == "linear_like") {
+            pattern <- c(1, 2, 3)
+        } else if (current_shape == "neg_linear") {
+            pattern <- c(-1, -2, -3)
+        } else if (current_shape == "u_shape") {
+            pattern <- c(1.5, -3.0, 1.5)
+        } else if (current_shape == "inv_u_shape") {
+            pattern <- c(-1.5, 3.0, -1.5)
+        } else if (current_shape == "s_shape") {
+            pattern <- c(1, -1, 1)
+        } else if (current_shape == "threshold") {
+            pattern <- c(0, 0.5, 4.0)
+        } else if (current_shape == "inv_threshold") {
+            pattern <- c(0, -0.5, -4.0)
         } else {
-            if (current_shape == "linear_like") {
-                pattern = c(1, 2, 3)
-            } else if (current_shape == "neg_linear") {
-                pattern = c(-1, -2, -3)
-            } else if (current_shape == "u_shape") {
-                pattern = c(1.5, -3.0, 1.5)
-            } else if (current_shape == "inv_u_shape") {
-                pattern = c(-1.5, 3.0, -1.5)
-            } else if (current_shape == "s_shape") {
-                pattern = c(1, -1, 1)
-            } else if (current_shape == "threshold") {
-                pattern = c(0, 0.5, 4.0)
-            } else if (current_shape == "inv_threshold") {
-                pattern = c(0, -0.5, -4.0)
-            } else {
-                pattern = rep(1, df_spline)
-            }
+            pattern <- rep(1, df_spline)
+        }
 
-            comp_beta = b * pattern
-            eta_components_raw[, i] = as.vector(mat_spline_list[[i]] %*% comp_beta)
-            baseline_components[i] = as.vector(predict(mat_spline_list[[i]], newx = min_x) %*% comp_beta)
+        comp_beta <- b * pattern
+        eta_components_raw[, i] <- as.vector(mat_spline_list[[i]] %*% comp_beta)
+        baseline_components[i] <- as.vector(predict(mat_spline_list[[i]], newx = min_x) %*% comp_beta)
 
-            # [精准匹配计算真理值]：使用同一套 basis_std_true 计算
-            for (k in 2:q) {
-                b_diff = basis_std_true[k, ] - basis_std_true[1, ]
-                true_eff_mat[i + 1, k - 1] = sum(b_diff * comp_beta)
-            }
+        # [精准匹配计算真理值]：使用同一套 basis_std_true 计算
+        for (k in 2:q) {
+            b_diff <- basis_std_true[k, ] - basis_std_true[1, ]
+            true_eff_mat[i + 1, k - 1] <- sum(b_diff * comp_beta)
         }
     }
 
     # 合并 Overall 真理值
     for (k in 2:q) {
-        true_eff_mat[1, k - 1] = sum(true_eff_mat[2:(n_vars + 1), k - 1])
+        true_eff_mat[1, k - 1] <- sum(true_eff_mat[2:(n_vars + 1), k - 1])
     }
 
     # -----------------------------------------------------------
     # 汇总计算最终偏效应 (Anchoring to 0) 并生成 Y
     # -----------------------------------------------------------
-    eta_spline_raw = rowSums(eta_components_raw)
-    baseline_effect = sum(baseline_components)
+    eta_spline_raw <- rowSums(eta_components_raw)
+    baseline_effect <- sum(baseline_components)
 
-    eta_spline_adjusted = eta_spline_raw - baseline_effect
-    y_clean = eta_spline_adjusted + cov_list$eta_cov
+    eta_spline_adjusted <- eta_spline_raw - baseline_effect
+    y_clean <- eta_spline_adjusted + cov_list$eta_cov
 
-    y_observed = add_noise_by_snr(as.vector(y_clean), snr_db = snr_db)
+    y_observed <- add_noise_by_snr(as.vector(y_clean), snr_db = snr_db)
 
-    cols_cov = setdiff(names(cov_list$mm), "eta_cov")
-    final_df = cbind(y = y_observed, preds_scaled, cov_list$mm[, cols_cov, drop = FALSE])
+    cols_cov <- setdiff(names(cov_list$mm), "eta_cov")
+    final_df <- cbind(y = y_observed, preds_scaled, cov_list$mm[, cols_cov, drop = FALSE])
 
-    attr(final_df, "true_effect_mat") = true_eff_mat
-    attr(final_df, "spline_knots") = global_knots # <--- 存起来
-    attr(final_df, "spline_boundary") = global_boundary # <--- 存起来
+    attr(final_df, "true_effect_mat") <- true_eff_mat
+    attr(final_df, "spline_knots") <- global_knots # <--- 存起来
+    attr(final_df, "spline_boundary") <- global_boundary # <--- 存起来
 
     return(as.data.frame(final_df))
 }
@@ -374,6 +369,7 @@ gen_nonlinear_data = function(n_obs = 1000,
 #' Generate Non-linear Binary Model Data (Auto-Balanced)
 #' 生成基于自然样条的非线性二分类数据 (支持自动平衡 0/1 比例)
 #'
+#' @description
 #' @param n_obs integer. 样本量。
 #' @param mu_preds numeric vector. 预测变量均值。
 #' @param sigma_preds matrix. 预测变量协方差矩阵。
@@ -389,158 +385,160 @@ gen_nonlinear_data = function(n_obs = 1000,
 #' @param seed integer. 随机种子。
 #' @param shape character. 混合物的非线性形状模式 ("linear_like", "u_shape", "s_shape")。
 #' @param ... 传递给 generate_covariates 的参数。
+#' @return data.frame. Contains Y (binary), predictors, covariates.
+#' Attributes include true_effect_mat, true_prob, spline_knots, spline_boundary.
 #' @export
-gen_nonlinear_bio_data = function(n_obs = 1000, mu_preds, sigma_preds, beta_wqs = 1, beta_preds,
+gen_nonlinear_bio_data <- function(n_obs = 1000, mu_preds, sigma_preds, beta_wqs = 1, beta_preds,
                                    intercept = 0, target_prop = NULL, link = c("logit", "probit", "cloglog"),
                                    snr_db = Inf, transform_fun = NULL, q = 4, df_spline = 3, seed = NULL,
                                    shape = "linear_like", ...) {
     if (!requireNamespace("splines", quietly = TRUE)) stop("Package 'splines' required")
     if (!requireNamespace("MASS", quietly = TRUE)) stop("Package 'MASS' required")
 
-    link = match.arg(link)
+    link <- match.arg(link)
     if (!is.null(seed)) set.seed(seed)
 
-    preds_raw = MASS::mvrnorm(n_obs, mu = mu_preds, Sigma = sigma_preds)
-    preds_scaled = as.data.frame(scale(preds_raw))
-    n_vars = ncol(preds_scaled)
-    names(preds_scaled) = paste0("Component", 1:ncol(preds_scaled))
+    preds_raw <- MASS::mvrnorm(n_obs, mu = mu_preds, Sigma = sigma_preds)
+    preds_scaled <- as.data.frame(scale(preds_raw))
+    n_vars <- ncol(preds_scaled)
+    names(preds_scaled) <- paste0("Component", 1:ncol(preds_scaled))
 
     if (!is.null(transform_fun) && is.function(transform_fun)) {
-        preds_trans = transform_fun(preds_scaled)
+        preds_trans <- transform_fun(preds_scaled)
     } else {
-        preds_trans = preds_scaled
+        preds_trans <- preds_scaled
     }
 
     if (length(beta_preds) != n_vars) stop("Length of 'beta_preds' must match n_vars.")
 
-    cov_list = generate_covariates(n_obs = n_obs, ...)
+    cov_list <- generate_covariates(n_obs = n_obs, ...)
 
     # -----------------------------------------------------------
     # [架构升级]: 动态推导并锁定节点 (保证数据生成和模型拟合的尺子绝对一致)
     # -----------------------------------------------------------
-    eval_pts = 0:(q - 1)
-    temp_spline = splines::ns(eval_pts, df = df_spline)
-    global_knots = attr(temp_spline, "knots")
-    global_boundary = attr(temp_spline, "Boundary.knots")
+    eval_pts <- 0:(q - 1)
+    temp_spline <- splines::ns(eval_pts, df = df_spline)
+    global_knots <- attr(temp_spline, "knots")
+    global_boundary <- attr(temp_spline, "Boundary.knots")
 
     # 数据生成侧：强制使用这把尺子
-    mat_spline_list = lapply(preds_trans, function(x) {
+    mat_spline_list <- lapply(preds_trans, function(x) {
         splines::ns(x, df = df_spline, knots = global_knots, Boundary.knots = global_boundary)
     })
 
     # 真值计算侧：也强制使用这把尺子 (无截距版)
-    basis_std_true = splines::ns(eval_pts, df = df_spline, knots = global_knots, Boundary.knots = global_boundary, intercept = FALSE)
+    basis_std_true <- splines::ns(eval_pts, df = df_spline, knots = global_knots, Boundary.knots = global_boundary, intercept = FALSE)
 
-    if (length(shape) == 1) shape = rep(shape, n_vars)
+    if (length(shape) == 1) shape <- rep(shape, n_vars)
 
-    eta_components_raw = matrix(0, nrow = n_obs, ncol = n_vars)
-    baseline_components = numeric(n_vars)
+    eta_components_raw <- matrix(0, nrow = n_obs, ncol = n_vars)
+    baseline_components <- numeric(n_vars)
 
-    true_eff_mat = matrix(0, nrow = n_vars + 1, ncol = q - 1)
-    rownames(true_eff_mat) = c("Overall", names(preds_scaled))
-    colnames(true_eff_mat) = paste0("Q", 2:q, "_vs_Q1")
+    true_eff_mat <- matrix(0, nrow = n_vars + 1, ncol = q - 1)
+    rownames(true_eff_mat) <- c("Overall", names(preds_scaled))
+    colnames(true_eff_mat) <- paste0("Q", 2:q, "_vs_Q1")
 
     for (i in 1:n_vars) {
-        current_shape = shape[i]
-        b = beta_preds[i] * beta_wqs
-        min_x = min(preds_trans[, i])
+        current_shape <- shape[i]
+        b <- beta_preds[i] * beta_wqs
+        min_x <- min(preds_trans[, i])
 
         if (current_shape == "pure_linear") {
             # 纯粹线性效应 (Log-OR 尺度)
-            eta_components_raw[, i] = preds_trans[, i] * b
-            baseline_components[i] = min_x * b
+            eta_components_raw[, i] <- preds_trans[, i] * b
+            baseline_components[i] <- min_x * b
 
             for (k in 2:q) {
-                true_eff_mat[i + 1, k - 1] = (eval_pts[k] - eval_pts[1]) * b
+                true_eff_mat[i + 1, k - 1] <- (eval_pts[k] - eval_pts[1]) * b
             }
         } else {
             # 样条非线性效应
             if (current_shape == "linear_like") {
-                pattern = c(1, 2, 3)
+                pattern <- c(1, 2, 3)
             } else if (current_shape == "neg_linear") {
-                pattern = c(-1, -2, -3)
+                pattern <- c(-1, -2, -3)
             } else if (current_shape == "u_shape") {
-                pattern = c(1.5, -3.0, 1.5)
+                pattern <- c(1.5, -3.0, 1.5)
             } else if (current_shape == "inv_u_shape") {
-                pattern = c(-1.5, 3.0, -1.5)
+                pattern <- c(-1.5, 3.0, -1.5)
             } else if (current_shape == "s_shape") {
-                pattern = c(1, -1, 1)
+                pattern <- c(1, -1, 1)
             } else if (current_shape == "threshold") {
-                pattern = c(0, 0.5, 4.0)
+                pattern <- c(0, 0.5, 4.0)
             } else if (current_shape == "inv_threshold") {
-                pattern = c(0, -0.5, -4.0)
+                pattern <- c(0, -0.5, -4.0)
             } else {
-                pattern = rep(1, df_spline)
+                pattern <- rep(1, df_spline)
             }
 
-            comp_beta = b * pattern
+            comp_beta <- b * pattern
 
-            eta_components_raw[, i] = as.vector(mat_spline_list[[i]] %*% comp_beta)
-            baseline_components[i] = as.vector(predict(mat_spline_list[[i]], newx = min_x) %*% comp_beta)
+            eta_components_raw[, i] <- as.vector(mat_spline_list[[i]] %*% comp_beta)
+            baseline_components[i] <- as.vector(predict(mat_spline_list[[i]], newx = min_x) %*% comp_beta)
 
             # [精准匹配计算真理值]：使用同一套 basis_std_true 计算
             for (k in 2:q) {
-                b_diff = basis_std_true[k, ] - basis_std_true[1, ]
-                true_eff_mat[i + 1, k - 1] = sum(b_diff * comp_beta)
+                b_diff <- basis_std_true[k, ] - basis_std_true[1, ]
+                true_eff_mat[i + 1, k - 1] <- sum(b_diff * comp_beta)
             }
         }
     }
 
     for (k in 2:q) {
-        true_eff_mat[1, k - 1] = sum(true_eff_mat[2:(n_vars + 1), k - 1])
+        true_eff_mat[1, k - 1] <- sum(true_eff_mat[2:(n_vars + 1), k - 1])
     }
 
     # -----------------------------------------------------------
     # 汇总计算最终偏效应 (Anchoring to 0) 并生成 Binary Y
     # -----------------------------------------------------------
-    eta_spline_raw = rowSums(eta_components_raw)
-    baseline_effect = sum(baseline_components)
+    eta_spline_raw <- rowSums(eta_components_raw)
+    baseline_effect <- sum(baseline_components)
 
-    eta_spline_adjusted = eta_spline_raw - baseline_effect
-    eta_partial = eta_spline_adjusted + cov_list$eta_cov
+    eta_spline_adjusted <- eta_spline_raw - baseline_effect
+    eta_partial <- eta_spline_adjusted + cov_list$eta_cov
 
     if (!is.null(snr_db) && is.finite(snr_db)) {
-        eta_noisy_partial = add_noise_by_snr(eta_partial, snr_db)
+        eta_noisy_partial <- add_noise_by_snr(eta_partial, snr_db)
     } else {
-        eta_noisy_partial = eta_partial
+        eta_noisy_partial <- eta_partial
     }
 
-    final_intercept = intercept
+    final_intercept <- intercept
     if (!is.null(target_prop)) {
-        calc_mean_prob_diff = function(b0) {
-            eta_temp = b0 + eta_noisy_partial
+        calc_mean_prob_diff <- function(b0) {
+            eta_temp <- b0 + eta_noisy_partial
             if (link == "logit") {
-                p = 1 / (1 + exp(-eta_temp))
+                p <- 1 / (1 + exp(-eta_temp))
             } else if (link == "probit") {
-                p = pnorm(eta_temp)
-            } else if (link == "cloglog") p = 1 - exp(-exp(eta_temp))
+                p <- pnorm(eta_temp)
+            } else if (link == "cloglog") p <- 1 - exp(-exp(eta_temp))
             return(mean(p) - target_prop)
         }
         tryCatch(
             {
-                final_intercept = uniroot(calc_mean_prob_diff, interval = c(-50, 50))$root
+                final_intercept <- uniroot(calc_mean_prob_diff, interval = c(-50, 50))$root
             },
             error = function(e) {}
         )
     }
 
-    eta_final = final_intercept + eta_noisy_partial
+    eta_final <- final_intercept + eta_noisy_partial
 
     if (link == "logit") {
-        probs = 1 / (1 + exp(-eta_final))
+        probs <- 1 / (1 + exp(-eta_final))
     } else if (link == "probit") {
-        probs = pnorm(eta_final)
-    } else if (link == "cloglog") probs = 1 - exp(-exp(eta_final))
+        probs <- pnorm(eta_final)
+    } else if (link == "cloglog") probs <- 1 - exp(-exp(eta_final))
 
-    y_binary = rbinom(n_obs, size = 1, prob = probs)
+    y_binary <- rbinom(n_obs, size = 1, prob = probs)
 
-    cols_cov = setdiff(names(cov_list$mm), "eta_cov")
-    final_df = cbind(y = y_binary, preds_scaled, cov_list$mm[, cols_cov, drop = FALSE])
+    cols_cov <- setdiff(names(cov_list$mm), "eta_cov")
+    final_df <- cbind(y = y_binary, preds_scaled, cov_list$mm[, cols_cov, drop = FALSE])
 
-    attr(final_df, "true_effect_mat") = true_eff_mat # Log-OR 尺度真值
-    attr(final_df, "true_prob") = probs
-    attr(final_df, "spline_knots") = global_knots # <--- 存起来
-    attr(final_df, "spline_boundary") = global_boundary # <--- 存起来
+    attr(final_df, "true_effect_mat") <- true_eff_mat # Log-OR 尺度真值
+    attr(final_df, "true_prob") <- probs
+    attr(final_df, "spline_knots") <- global_knots # <--- 存起来
+    attr(final_df, "spline_boundary") <- global_boundary # <--- 存起来
     return(as.data.frame(final_df))
 }
 
@@ -572,130 +570,130 @@ gen_nonlinear_bio_data = function(n_obs = 1000, mu_preds, sigma_preds, beta_wqs 
 #'
 #' @return data.frame. Contains Y (count), predictors, covariates.
 #' @export
-gen_nonlinear_count_data = function(n_obs = 1000, mu_preds, sigma_preds, beta_wqs = 1, beta_preds,
+gen_nonlinear_count_data <- function(n_obs = 1000, mu_preds, sigma_preds, beta_wqs = 1, beta_preds,
                                      intercept = 0, snr_db = Inf, transform_fun = NULL, q = 4, df_spline = 3,
                                      seed = NULL, shape = "linear_like", ...) {
     if (!requireNamespace("splines", quietly = TRUE)) stop("Package 'splines' required")
     if (!requireNamespace("MASS", quietly = TRUE)) stop("Package 'MASS' required")
     if (!is.null(seed)) set.seed(seed)
 
-    preds_raw = MASS::mvrnorm(n_obs, mu = mu_preds, Sigma = sigma_preds)
-    preds_scaled = as.data.frame(scale(preds_raw))
-    n_vars = ncol(preds_scaled)
-    names(preds_scaled) = paste0("Component", 1:n_vars)
+    preds_raw <- MASS::mvrnorm(n_obs, mu = mu_preds, Sigma = sigma_preds)
+    preds_scaled <- as.data.frame(scale(preds_raw))
+    n_vars <- ncol(preds_scaled)
+    names(preds_scaled) <- paste0("Component", 1:n_vars)
 
     if (!is.null(transform_fun) && is.function(transform_fun)) {
-        preds_trans = transform_fun(preds_scaled)
+        preds_trans <- transform_fun(preds_scaled)
     } else {
-        preds_trans = preds_scaled
+        preds_trans <- preds_scaled
     }
 
     if (length(beta_preds) != n_vars) stop("Length of 'beta_preds' must match n_vars.")
 
-    cov_list = generate_covariates(n_obs = n_obs, ...)
+    cov_list <- generate_covariates(n_obs = n_obs, ...)
 
     # -----------------------------------------------------------
     # [架构升级]: 动态推导并锁定节点 (保证数据生成和模型拟合的尺子绝对一致)
     # -----------------------------------------------------------
-    eval_pts = 0:(q - 1)
-    temp_spline = splines::ns(eval_pts, df = df_spline)
-    global_knots = attr(temp_spline, "knots")
-    global_boundary = attr(temp_spline, "Boundary.knots")
+    eval_pts <- 0:(q - 1)
+    temp_spline <- splines::ns(eval_pts, df = df_spline)
+    global_knots <- attr(temp_spline, "knots")
+    global_boundary <- attr(temp_spline, "Boundary.knots")
 
     # 数据生成侧：强制使用这把尺子
-    mat_spline_list = lapply(preds_trans, function(x) {
+    mat_spline_list <- lapply(preds_trans, function(x) {
         splines::ns(x, df = df_spline, knots = global_knots, Boundary.knots = global_boundary)
     })
 
     # 真值计算侧：也强制使用这把尺子 (无截距版)
-    basis_std_true = splines::ns(eval_pts, df = df_spline, knots = global_knots, Boundary.knots = global_boundary, intercept = FALSE)
+    basis_std_true <- splines::ns(eval_pts, df = df_spline, knots = global_knots, Boundary.knots = global_boundary, intercept = FALSE)
 
-    if (length(shape) == 1) shape = rep(shape, n_vars)
+    if (length(shape) == 1) shape <- rep(shape, n_vars)
 
-    eta_components_raw = matrix(0, nrow = n_obs, ncol = n_vars)
-    baseline_components = numeric(n_vars)
+    eta_components_raw <- matrix(0, nrow = n_obs, ncol = n_vars)
+    baseline_components <- numeric(n_vars)
 
-    true_eff_mat = matrix(0, nrow = n_vars + 1, ncol = q - 1)
-    rownames(true_eff_mat) = c("Overall", names(preds_scaled))
-    colnames(true_eff_mat) = paste0("Q", 2:q, "_vs_Q1")
+    true_eff_mat <- matrix(0, nrow = n_vars + 1, ncol = q - 1)
+    rownames(true_eff_mat) <- c("Overall", names(preds_scaled))
+    colnames(true_eff_mat) <- paste0("Q", 2:q, "_vs_Q1")
 
     for (i in 1:n_vars) {
-        current_shape = shape[i]
-        b = beta_preds[i] * beta_wqs
-        min_x = min(preds_trans[, i])
+        current_shape <- shape[i]
+        b <- beta_preds[i] * beta_wqs
+        min_x <- min(preds_trans[, i])
 
         if (current_shape == "pure_linear") {
             # 纯粹线性效应 (Log-RR 尺度)
-            eta_components_raw[, i] = preds_trans[, i] * b
-            baseline_components[i] = min_x * b
+            eta_components_raw[, i] <- preds_trans[, i] * b
+            baseline_components[i] <- min_x * b
 
             for (k in 2:q) {
-                true_eff_mat[i + 1, k - 1] = (eval_pts[k] - eval_pts[1]) * b
+                true_eff_mat[i + 1, k - 1] <- (eval_pts[k] - eval_pts[1]) * b
             }
         } else {
             # 样条非线性效应
             if (current_shape == "linear_like") {
-                pattern = c(1, 2, 3)
+                pattern <- c(1, 2, 3)
             } else if (current_shape == "neg_linear") {
-                pattern = c(-1, -2, -3)
+                pattern <- c(-1, -2, -3)
             } else if (current_shape == "u_shape") {
-                pattern = c(1.5, -3.0, 1.5)
+                pattern <- c(1.5, -3.0, 1.5)
             } else if (current_shape == "inv_u_shape") {
-                pattern = c(-1.5, 3.0, -1.5)
+                pattern <- c(-1.5, 3.0, -1.5)
             } else if (current_shape == "s_shape") {
-                pattern = c(1, -1, 1)
+                pattern <- c(1, -1, 1)
             } else if (current_shape == "threshold") {
-                pattern = c(0, 0.5, 4.0)
+                pattern <- c(0, 0.5, 4.0)
             } else if (current_shape == "inv_threshold") {
-                pattern = c(0, -0.5, -4.0)
+                pattern <- c(0, -0.5, -4.0)
             } else {
-                pattern = rep(1, df_spline)
+                pattern <- rep(1, df_spline)
             }
 
-            comp_beta = b * pattern
+            comp_beta <- b * pattern
 
-            eta_components_raw[, i] = as.vector(mat_spline_list[[i]] %*% comp_beta)
-            baseline_components[i] = as.vector(predict(mat_spline_list[[i]], newx = min_x) %*% comp_beta)
+            eta_components_raw[, i] <- as.vector(mat_spline_list[[i]] %*% comp_beta)
+            baseline_components[i] <- as.vector(predict(mat_spline_list[[i]], newx = min_x) %*% comp_beta)
 
             # [精准匹配计算真理值]：使用同一套 basis_std_true 计算
             for (k in 2:q) {
-                b_diff = basis_std_true[k, ] - basis_std_true[1, ]
-                true_eff_mat[i + 1, k - 1] = sum(b_diff * comp_beta)
+                b_diff <- basis_std_true[k, ] - basis_std_true[1, ]
+                true_eff_mat[i + 1, k - 1] <- sum(b_diff * comp_beta)
             }
         }
     }
 
     for (k in 2:q) {
-        true_eff_mat[1, k - 1] = sum(true_eff_mat[2:(n_vars + 1), k - 1])
+        true_eff_mat[1, k - 1] <- sum(true_eff_mat[2:(n_vars + 1), k - 1])
     }
 
     # -----------------------------------------------------------
     # 汇总计算最终偏效应 (Anchoring to 0) 并生成 Count Y
     # -----------------------------------------------------------
-    eta_spline_raw = rowSums(eta_components_raw)
-    baseline_effect = sum(baseline_components)
+    eta_spline_raw <- rowSums(eta_components_raw)
+    baseline_effect <- sum(baseline_components)
 
-    eta_spline_adjusted = eta_spline_raw - baseline_effect
-    eta_partial = eta_spline_adjusted + cov_list$eta_cov
+    eta_spline_adjusted <- eta_spline_raw - baseline_effect
+    eta_partial <- eta_spline_adjusted + cov_list$eta_cov
 
     if (!is.null(snr_db) && is.finite(snr_db)) {
-        eta_noisy_partial = add_noise_by_snr(eta_partial, snr_db)
+        eta_noisy_partial <- add_noise_by_snr(eta_partial, snr_db)
     } else {
-        eta_noisy_partial = eta_partial
+        eta_noisy_partial <- eta_partial
     }
 
-    eta_final = intercept + eta_noisy_partial
-    lambda = exp(eta_final)
+    eta_final <- intercept + eta_noisy_partial
+    lambda <- exp(eta_final)
 
     if (any(lambda > 10000)) warning("Extremely high lambda values.")
 
-    y_count = rpois(n_obs, lambda = lambda)
+    y_count <- rpois(n_obs, lambda = lambda)
 
-    cols_cov = setdiff(names(cov_list$mm), "eta_cov")
-    final_df = cbind(y = y_count, preds_scaled, cov_list$mm[, cols_cov, drop = FALSE])
+    cols_cov <- setdiff(names(cov_list$mm), "eta_cov")
+    final_df <- cbind(y = y_count, preds_scaled, cov_list$mm[, cols_cov, drop = FALSE])
 
-    attr(final_df, "true_effect_mat") = true_eff_mat # Log-RR 尺度真值
-    attr(final_df, "spline_knots") = global_knots # <--- 存起来
-    attr(final_df, "spline_boundary") = global_boundary # <--- 存起来
+    attr(final_df, "true_effect_mat") <- true_eff_mat # Log-RR 尺度真值
+    attr(final_df, "spline_knots") <- global_knots # <--- 存起来
+    attr(final_df, "spline_boundary") <- global_boundary # <--- 存起来
     return(as.data.frame(final_df))
 }

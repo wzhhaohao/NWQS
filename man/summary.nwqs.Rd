@@ -18,6 +18,6 @@ Invisibly returns the original \code{"nwqs"} object.
 }
 \description{
 Provides a detailed statistical summary of the NWQS model, including the global
-regression coefficients, empirical standard errors (derived from outer bootstrap
-or repeated holdout iterations), Z-statistics, P-values, and deviance metrics.
+regression coefficients, empirical standard errors, Z-statistics, P-values,
+and deviance metrics.
 }

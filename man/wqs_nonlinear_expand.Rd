@@ -2,7 +2,7 @@
 % Please edit documentation in R/utils.R
 \name{wqs_nonlinear_expand}
 \alias{wqs_nonlinear_expand}
-\title{Nonlinear Expansion for WQS (Natural Splines) / WQS 非线性展开 (自然样条)}
+\title{Nonlinear Spline Expansion for WQS Mixture Components}
 \usage{
 wqs_nonlinear_expand(
   data,
@@ -13,31 +13,23 @@ wqs_nonlinear_expand(
 )
 }
 \arguments{
-\item{data}{data.frame. The dataset containing the mixture variables.
-包含混合物变量的数据集。}
+\item{data}{A \code{data.frame} containing the mixture variables (already transformed).}
 
-\item{mix_name}{character vector. Names of the mixture components to be expanded.
-需要展开的混合物组分名称。}
+\item{mix_name}{Character vector. Column names of the mixture components to expand.}
 
-\item{df_spline}{integer. Degrees of freedom for the natural spline. Default is 3.
-自然样条的自由度。默认为 3。}
+\item{df_spline}{Integer. Degrees of freedom for the natural spline. Defaults to 3.}
 
-\item{transform_fun}{function. Optional custom transformation function applied before spline expansion.
-If NULL, applies a default quantile transformation (q=4).
-可选的自定义转换函数。如果为 NULL，则应用默认的四分位数转换。}
+\item{knots}{Numeric vector. Internal knot positions. Must be provided to ensure
+global scale alignment.}
+
+\item{boundary}{Numeric vector of length 2. Boundary knot positions. Must be provided.}
 }
 \value{
-matrix. A matrix containing the spline basis functions for all mixture components.
-Column names are formatted as \verb{\{Component\}_B\{BasisIndex\}}.
-返回包含所有混合物组分样条基函数的矩阵。
+A numeric matrix with columns named \code{{Component}_B{BasisIndex}}
+(e.g., \code{Component1_B1}, \code{Component1_B2}, ...).
 }
 \description{
-Transforms mixture variables into natural cubic spline bases to capture nonlinear effects.
-将混合物变量转换为自然三次样条基函数，以捕捉非线性效应。
-}
-\details{
-By default, this function performs a quantile transformation (quartiles) before spline expansion
-if no \code{transform_fun} is provided. It uses \code{splines::ns} for the basis expansion.
-默认情况下，如果未提供 \code{transform_fun}，该函数会在样条展开前执行四分位数转换。
-它使用 \code{splines::ns} 生成样条基底。
+Transforms (already quantile-transformed) mixture variables into natural cubic
+spline basis matrices using globally fixed knots and boundary knots. This ensures
+consistent basis alignment across training, validation, and bootstrap datasets.
 }

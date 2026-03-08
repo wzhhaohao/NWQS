@@ -2,8 +2,7 @@
 % Please edit documentation in R/utils.R
 \name{plot_nwqs_contrast_box}
 \alias{plot_nwqs_contrast_box}
-\title{Plot Faceted Boxplot for NWQS Quantile Contrasts (Faceted by Component, with Scatter)
-绘制 NWQS 剂量反应轨迹：按组分分面的分组箱线图 (带散点叠加、高对比配色、独立 Y 轴)}
+\title{Plot Faceted Boxplot for NWQS Quantile Contrasts}
 \usage{
 plot_nwqs_contrast_box(
   model,
@@ -14,15 +13,23 @@ plot_nwqs_contrast_box(
 )
 }
 \arguments{
-\item{model}{nwqs 模型结果对象 (必须是 rh > 1 的结果)}
+\item{model}{An object of class \code{"nwqs"} with \code{rh > 1}.}
 
-\item{exponentiate}{logical. 是否转换为 OR/RR 值 (默认为 NULL, 若为 binomial/poisson/quasipoisson 自动转换)}
+\item{exponentiate}{Logical or NULL. If \code{TRUE}, effects are exponentiated
+to OR/RR scale. If \code{NULL} (default), automatically set to \code{TRUE}
+for binomial/Poisson/quasi-Poisson families.}
 
-\item{free_y}{logical. 各个分面的 Y 轴是否自由缩放。默认为 TRUE。}
+\item{free_y}{Logical. Whether each facet has independent y-axis scaling.
+Defaults to \code{TRUE}.}
 
-\item{custom_colors}{字符向量. 自定义配色板。默认提取了高对比度的绿、蓝、黄配色。}
+\item{custom_colors}{Character vector. Color palette for quantile groups.}
+}
+\value{
+A \code{ggplot} object.
 }
 \description{
-Plot Faceted Boxplot for NWQS Quantile Contrasts (Faceted by Component, with Scatter)
-绘制 NWQS 剂量反应轨迹：按组分分面的分组箱线图 (带散点叠加、高对比配色、独立 Y 轴)
+Generates a faceted boxplot showing the distribution of component-specific
+dose-response effects across Repeated Holdout iterations. Each facet represents
+one mixture component (plus an "Overall" panel), with separate boxplots for
+each quantile contrast (e.g., Q2, Q3, Q4 vs Q1 baseline).
 }

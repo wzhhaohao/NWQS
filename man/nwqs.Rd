@@ -8,18 +8,19 @@ nwqs(
   data,
   mix_name,
   covariates = NULL,
-  dependent_var = "y",
-  model_func = ridge_permutation_scorer,
+  outcome = "y",
+  weight_engine = permutation_scorer,
   q = 4,
   df_spline = 3,
-  split_prop = 0.6,
-  seed = 1234,
-  rh = 1,
-  family = c("gaussian", "binomial", "poisson", "quasipoisson"),
   transform_fun = NULL,
-  plan_strategy = c("sequential", "multicore", "multicore"),
+  split_prop = 0.6,
+  rh = 1,
+  seed = 1234,
+  n_permutation = 30,
+  family = c("gaussian", "binomial", "poisson", "quasipoisson"),
+  plan_strategy = c("sequential", "multicore", "multisession"),
   n_workers = NULL,
-  B = 100,
+  quiet = FALSE,
   ...
 )
 }
@@ -28,13 +29,13 @@ nwqs(
 
 \item{mix_name}{Character vector. Column names of the mixture components to be evaluated.}
 
-\item{covariates}{Character vector. Column names of covariates/confounders to adjust for.
-If \code{NULL}, an unadjusted model is fitted.}
+\item{covariates}{Character vector. Column names of covariates/confounders to adjust for. If
+\code{NULL}, an unadjusted model is fitted.}
 
-\item{dependent_var}{Character. Column name of the dependent/outcome variable. Defaults to \code{"y"}.}
+\item{outcome}{Character. Column name of the dependent/outcome variable. Defaults to \code{"y"}.}
 
-\item{model_func}{Function. The core engine used for weight and shape discovery on the training set.
-Defaults to \code{ridge_permutation_scorer}, which utilizes internal cross-validated L2 penalization.}
+\item{weight_engine}{Function. The core engine used for weight and shape discovery on the training
+set. Defaults to \code{permutation_scorer}.}
 
 \item{q}{Integer. Number of quantiles used to categorize the continuous mixture components
 (e.g., 4 for quartiles, 10 for deciles). Defaults to 4.}
@@ -42,70 +43,74 @@ Defaults to \code{ridge_permutation_scorer}, which utilizes internal cross-valid
 \item{df_spline}{Integer. Degrees of freedom for the natural cubic splines used to model
 non-linearity. Defaults to 3.}
 
-\item{split_prop}{Numeric between (0, 1). The proportion of the bootstrapped dataset allocated
-to the Training set for weight/shape discovery. The remainder goes to the Validation set. Defaults to 0.6.}
+\item{transform_fun}{Function. A custom transformation applied to the mixture components before
+modeling. If \code{NULL}, the default quantile transformation (\code{trans_quantile}) is used.}
 
-\item{seed}{Integer. Random seed for reproducible data splitting and bootstrap sampling.}
+\item{split_prop}{Numeric between (0, 1). The proportion of the full dataset allocated to the
+Training set for weight/shape discovery in each RH iteration. Defaults to 0.6.}
 
-\item{rh}{Integer. Number of Repeated Holdout (Outer Bootstrap) iterations. To obtain empirical
-confidence intervals and stable distributions, set \code{rh} to at least 100. Defaults to 1.}
+\item{rh}{Integer. Number of Repeated Holdout iterations. To obtain stable distributions, set
+\code{rh} to at least 100. Defaults to 1.}
+
+\item{seed}{Integer. Random seed for reproducible repeated holdout splitting. Defaults to 1234.}
+
+\item{n_permutation}{Integer. Number of internal permutations or bootstraps passed to
+\code{weight_engine} to compute the variable importance metric. Defaults to 30.}
 
 \item{family}{Character or function. Specifies the GLM error distribution and link function.
 Supported options include \code{"gaussian"}, \code{"binomial"}, \code{"poisson"}, and \code{"quasipoisson"}.}
 
-\item{transform_fun}{Function. A custom transformation applied to the mixture components before
-modeling. If \code{NULL}, the default quantile transformation (\code{trans_quantile}) is used.}
+\item{plan_strategy}{Character. Strategy for parallel computation powered by the \pkg{future}
+package. Options are \code{"sequential"}, \code{"multicore"}, or \code{"multisession"}.}
 
-\item{plan_strategy}{Character. Strategy for parallel computation powered by the \pkg{future} package.
-Options are \code{"sequential"} or \code{"multicore"}.}
-
-\item{n_workers}{Integer. Number of parallel workers to use if \code{plan_strategy = "multicore"}.
+\item{n_workers}{Integer. Number of parallel workers to use if \code{plan_strategy != "sequential"}.
 If \code{NULL}, the package automatically detects and optimizes CPU cores.}
 
-\item{B}{Integer. Number of internal permutations or bootstraps passed to \code{model_func}
-to compute the variable importance metric. Defaults to 100.}
+\item{quiet}{Logical. If \code{TRUE}, suppress the warning about RH-based standard errors
+when \code{rh > 1}. Useful when called internally by \code{nwqs_boot()}. Defaults to \code{FALSE}.}
 
-\item{...}{Additional arguments passed to \code{run_oob_permutation} or the selected \code{model_func}.}
+\item{...}{Additional arguments passed to \code{run_oob_permutation} or the selected \code{weight_engine}.}
 }
 \value{
 An object of class \code{c("nwqs", "list")} containing the following key components:
 \itemize{
 \item \code{fit}: A list containing the summarized GLM object (coefficients, Deviance, AIC).
-\item \code{final_weights}: A named numeric vector of the ensemble-averaged relative weights for each mixture component.
+\item \code{final_weights}: A named numeric vector of the ensemble-averaged relative weights.
 \item \code{mean_shapes}: A named numeric vector of the ensemble-averaged normalized spline coefficients.
-\item \code{rh_coefs}: A matrix of the global GLM coefficients across all \code{rh} iterations (used for empirical CIs).
+\item \code{rh_coefs}: A matrix of the global GLM coefficients across all \code{rh} iterations.
 \item \code{rh_weights}: A matrix of the extracted weights across all \code{rh} iterations.
 \item \code{data}: The original dataset augmented with the final calculated ensemble \code{wqs_score}.
 }
 }
 \description{
 The main entry point for fitting Non-linear Weighted Quantile Sum (NWQS) regression models.
-NWQS evaluates the overall joint effect and component-specific relative importance of a
-highly correlated mixture, while flexibly accommodating non-linear dose-response relationships
-(e.g., threshold effects, U-shaped curves) without suffering from shrinkage bias.
+NWQS evaluates the overall joint effect and component-specific relative importance of a highly
+correlated mixture, while flexibly accommodating non-linear dose-response relationships (e.g.,
+threshold effects, U-shaped curves). The method separates penalized representation learning
+from unpenalized final-stage effect estimation.
 }
 \details{
 \strong{Algorithmic Architecture:} \cr
-The \code{nwqs} function implements a robust "Repeated Holdout" (RH) framework combined with
-a shape-decoupling architecture:
+The \code{nwqs} function implements a robust "Repeated Holdout" (RH) framework combined with a
+shape-decoupling architecture:
 \enumerate{
-\item \strong{Outer Bootstrap & Splitting:} For each RH iteration, the data is bootstrapped
-to capture sampling variability, then strictly split into a Training set (for weight/shape
-discovery) and a Validation set (for effect estimation).
-\item \strong{Weight & Shape Discovery:} On the Training set, a penalized multi-parameter
-engine (specified by \code{model_func}) estimates the non-linear basis coefficients (shapes)
-and extracts relative importance (weights) via Out-Of-Bag (OOB) permutation.
-\item \strong{Shape Normalization:} To break the penalization paradox (shrinkage bias),
-NWQS completely decouples the spline shape from the effect magnitude. Shapes are standardized
-to have a unit variance on the predictor scale.
+\item \strong{Outer Repeated Holdout Splitting:} For each RH iteration, the data are randomly
+split into a Training set (for weight/shape discovery) and a Validation set (for effect estimation).
+\item \strong{Weight & Shape Discovery:} On the Training set, a multi-parameter engine
+(specified by \code{weight_engine}) estimates the non-linear basis coefficients (shapes) and
+extracts relative importance (weights) via Out-Of-Bag (OOB) permutation.
+\item \strong{Shape Normalization:} To weaken the coupling between spline shape and effect
+magnitude, shapes are standardized to have a unit variance on the predictor scale using the Training set.
 \item \strong{1-DoF Effect Estimation:} The normalized shapes and weights are projected onto
 the Validation set to construct a single \code{wqs_score}. A generalized linear model (GLM)
-is then fitted to estimate the unbiased overall mixture effect and calculate nominal confidence intervals.
+is then fitted to estimate the overall mixture effect without directly penalizing the final effect.
 }
 
 By setting \code{rh > 1}, the algorithm averages the weights, shapes, and coefficients across
-multiple random splits, producing highly stable empirical inferences.
+multiple random splits, producing stable empirical inferences. Note that the standard errors
+and confidence intervals generated from RH iterations reflect data-splitting variance, not true
+sampling variance. For robust statistical inference, use \code{nwqs_boot()}.
 }
 \seealso{
-\code{\link{plot.nwqs}}, \code{\link{summary.nwqs}}, \code{\link{print.nwqs}}
+\code{\link{nwqs_boot}}, \code{\link{plot.nwqs}}, \code{\link{summary.nwqs}}
 }

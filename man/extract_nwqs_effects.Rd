@@ -2,10 +2,21 @@
 % Please edit documentation in R/utils.R
 \name{extract_nwqs_effects}
 \alias{extract_nwqs_effects}
-\title{Extract Effects and Empirical Bootstrap CI from NWQS Object (真·全局经验分位数版)}
+\title{Extract Effects from NWQS Object}
 \usage{
 extract_nwqs_effects(model_res, return_raw = FALSE)
 }
+\arguments{
+\item{model_res}{An object of class \code{"nwqs"}.}
+
+\item{return_raw}{Logical. Currently unused. Reserved for future use.}
+}
+\value{
+A \code{data.frame} with columns: Target, Term, Estimate, SE,
+Wald_CI_Lower, Wald_CI_Upper, Empirical_CI_Lower, Empirical_CI_Upper.
+}
 \description{
-Extract Effects and Empirical Bootstrap CI from NWQS Object (真·全局经验分位数版)
+Computes all quantile contrast effects (e.g., Q2 vs Q1, Q3 vs Q1, Q4 vs Q1)
+for each mixture component and the overall mixture, along with standard errors
+and empirical confidence intervals derived from Repeated Holdout iterations.
 }
