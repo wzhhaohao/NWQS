@@ -2,7 +2,7 @@
 % Please edit documentation in R/simulate_data.R
 \name{generate_covariates}
 \alias{generate_covariates}
-\title{Generate Covariates}
+\title{生成流行病学测量的混杂因素集 (Generate Covariates)}
 \usage{
 generate_covariates(
   n_obs = 1000,
@@ -15,22 +15,28 @@ generate_covariates(
 )
 }
 \arguments{
-\item{n_obs}{integer. Sample size. / 样本量。}
+\item{n_obs}{Integer。模拟队列的样本量。}
 
-\item{beta_cont}{numeric. Coefficient for continuous variable. / 连续变量系数。}
+\item{beta_cont}{Numeric。连续型变量（如年龄的标准化值）的真实回归系数。}
 
-\item{beta_bin}{numeric. Coefficient for binary variable. / 二值变量系数。}
+\item{beta_bin}{Numeric。二分类变量（如性别）的真实回归系数。}
 
-\item{beta_cat}{numeric vector. Coefficients for categorical variable. / 分类变量系数。}
+\item{beta_cat}{Numeric vector。多分类变量（如吸烟状态类别）的真实回归系数向量。}
 
-\item{prob_bin}{numeric. Probability for binary variable. / 二值变量概率。}
+\item{prob_bin}{Numeric。二分类变量发生率。}
 
-\item{prob_cat}{numeric vector. Probabilities for categorical levels. / 分类变量各水平概率。}
+\item{prob_cat}{Numeric vector。多分类变量各水平的分布概率。}
+
+\item{Intercept}{Numeric。基线截距。}
 }
 \value{
-list. Model matrix, raw data, and linear effects. / 包含模型矩阵、原始数据和线性效应。
+List。包含生成的协变量数据框 \code{original}、设计矩阵形式的 \code{mm}，以及真实的线性预测子贡献 \code{eta_cov}。
 }
 \description{
-Generates data with continuous, binary, and categorical variables and their linear effects.
-生成包含连续、二值和分类变量的数据及其线性效应。
+随机生成包含连续型、二分类和多分类变量的混杂因素数据集，并计算它们的真实线性效应。
+}
+\details{
+此函数用于模拟流行病学研究中常规收集的、需要被模型控制的协变量（如年龄、性别、BMI 分组或吸烟状态）。
+将这些协变量注入生成数据，旨在验证模型在存在可测量混杂 (Measured Confounding) 时，
+对混合物主效应进行无偏估计 (Unbiased Estimation) 的能力。
 }

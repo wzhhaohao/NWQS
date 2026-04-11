@@ -2,23 +2,21 @@
 % Please edit documentation in R/methods.R
 \name{print.nwqs}
 \alias{print.nwqs}
-\title{Print Method for NWQS Objects}
+\title{打印 NWQS 模型摘要 (基于数据拆分经验推断)}
 \usage{
 \method{print}{nwqs}(x, digits = max(3L, getOption("digits") - 3L), ...)
 }
 \arguments{
-\item{x}{An object of class \code{"nwqs"}.}
+\item{x}{\code{"nwqs"} 类的对象。}
 
-\item{digits}{Integer. Number of significant digits to print.}
+\item{digits}{Integer。需打印的有效数字位数。}
 
-\item{...}{Additional arguments passed to or from other methods.}
+\item{...}{传递给其他方法的额外参数。}
 }
 \value{
-Invisibly returns the original \code{"nwqs"} object.
+隐式返回原始的 \code{"nwqs"} 对象。
 }
 \description{
-Prints a concise, publication-style summary of the Non-linear Weighted Quantile Sum (NWQS)
-model fit. It dynamically formats and outputs the overall mixture effect, component-specific
-relative weights, and absolute effect contrasts (e.g., Q4 vs Q1) along with their 95\\%
-empirical confidence intervals.
+打印非线性加权分位数和 (NWQS) 模型的简洁出版级摘要。
+自动格式化并输出整体混合物效应、特定组分的相对权重以及绝对效应对比（如最高分位数 Q4 vs 最低分位数 Q1）的 95\\% 经验置信区间。
 }

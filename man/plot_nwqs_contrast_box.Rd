@@ -2,34 +2,57 @@
 % Please edit documentation in R/utils.R
 \name{plot_nwqs_contrast_box}
 \alias{plot_nwqs_contrast_box}
-\title{Plot Faceted Boxplot for NWQS Quantile Contrasts}
+\title{绘制 NWQS 组分特异性对比箱线图 (Bootstrap 分布图)}
 \usage{
-plot_nwqs_contrast_box(
+\method{plot}{nwqs_boot}(
   model,
   exponentiate = NULL,
   free_y = TRUE,
-  custom_colors = c("#7DB97F", "#82B0D2", "#D92828", "#F2C05D", "#8B6FB8", "#00B4D8",
-    "#006B3C", "#F4B6B6", "#5BA3D0", "#E03030", "#7AD450", "#9B7FC0")
+  base_size = 12,
+  fill_alpha = 0.16,
+  palette = "default",
+  components = NULL,
+  top_n = NULL,
+  ylim = NULL,
+  y_step = NULL
 )
 }
 \arguments{
-\item{model}{An object of class \code{"nwqs"} with \code{rh > 1}.}
+\item{model}{\code{"nwqs_boot"} 类的对象。}
 
-\item{exponentiate}{Logical or NULL. If \code{TRUE}, effects are exponentiated
-to OR/RR scale. If \code{NULL} (default), automatically set to \code{TRUE}
-for binomial/Poisson/quasi-Poisson families.}
+\item{exponentiate}{Logical 或 \code{NULL}。是否对 Y 轴效应量进行指数化以显示为 OR 或 RR。若为 \code{NULL}，将自动根据误差分布族判断。}
 
-\item{free_y}{Logical. Whether each facet has independent y-axis scaling.
-Defaults to \code{TRUE}.}
+\item{free_y}{Logical。若为 \code{TRUE}（默认），各个组分分面的 Y 轴尺度将自由适配，方便观察效应极小的组分分布。}
 
-\item{custom_colors}{Character vector. Color palette for quantile groups.}
+\item{base_size}{Integer。图表基础字体大小，默认 12，适合大多数学术出版的 A4 排版。}
+
+\item{fill_alpha}{Numeric。箱体填充的透明度，默认为 0.16，以确保底层抖动点清晰可见。}
+
+\item{palette}{Character。离散调色板，默认为 \code{"default"}。}
+
+\item{components}{Character vector。指定需要绘制的特定组分。}
+
+\item{top_n}{Integer 或 \code{NULL}。按权重降序排列，仅显示前 \code{top_n} 个最重要的组分。}
+
+\item{ylim}{Numeric vector (长度为 2)。强行限制 Y 轴范围（如截断极端 Bootstrap 离群值影响视觉比例时使用）。}
+
+\item{y_step}{Numeric。强制指定 Y 轴的刻度间距。}
 }
 \value{
-A \code{ggplot} object.
+一个具备学术出版质量的 \code{ggplot} 分面箱线图对象。
 }
 \description{
-Generates a faceted boxplot showing the distribution of component-specific
-dose-response effects across Repeated Holdout iterations. Each facet represents
-one mixture component (plus an "Overall" panel), with separate boxplots for
-each quantile contrast (e.g., Q2, Q3, Q4 vs Q1 baseline).
+专为医学与流行病学顶级期刊设计的高质量诊断图。此函数不仅展示效应的点估计，
+而是通过箱线图加抖动点 (Jitter) 的形式，全景展示各暴露组分在不同 Bootstrap 样本中的效应量分布。
+}
+\details{
+\strong{可视化透明度与科学价值:} \cr
+环境暴露数据通常伴随极高的多重共线性 (Multicollinearity)。单纯依赖点估计与标准误容易掩盖
+权重分配的不稳定性。通过将 Bootstrap 集成过程中的每一次迭代可视化：
+\itemize{
+\item 若箱体极宽或分布呈现双峰，高度提示该组分的效应受到共线性干扰或严重依赖特定的极端抽样 (Extreme Samples)。
+\item 图中的横线代表零效应（线性回归为 0，指数族回归为 1）。只有当箱体的绝大部分（如 95\% 区间）
+远离该基线时，我们才能对该特定组分的相对贡献抱有高度的统计信心。
+}
+绘图严格遵循 \pkg{ggplot2} 的无冗余设计哲学（清晰的主题、明确的坐标轴标签及对比度良好的颜色比例）。
 }

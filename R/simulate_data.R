@@ -1,18 +1,18 @@
-#' Add Gaussian noise given target SNR
+#' @title 基于目标信噪比注入高斯白噪声 (Add Gaussian Noise given Target SNR)
 #'
 #' @description
-#' Calculates signal power and adds white noise based on target SNR (dB).
-#' 计算信号功率并根据目标信噪比（dB）添加白噪声。
+#' 计算纯净信号的功率，并根据指定的目标信噪比 (Signal-to-Noise Ratio, SNR) 注入正态分布的白噪声。
 #'
 #' @details
-#' Signal-to-Noise Ratio (SNR) formula: SNR = P_signal / P_noise
-#' SNR_dB = 10 * log10(SNR)
-#' Higher SNR indicates better signal quality relative to noise.
-#' 信噪比越高，表示信号相对于噪声越强，信号质量越好。
+#' \strong{流行病学模拟意义:} \cr
+#' 在方法学研究中，该函数用于模拟**未测量的混杂因素 (Unmeasured Confounding)** 或 **暴露评估的测量误差 (Measurement Error)**。
+#' 信噪比的计算公式为：
+#' $$SNR_{dB} = 10 \log_{10}\left(\frac{P_{signal}}{P_{noise}}\right)$$
+#' \code{snr_db} 越低，表明临床或环境数据中的噪声占比越大，这被用来严苛地测试 NWQS 在低信噪比下提取真实暴露权重的稳健性。
 #'
-#' @param signal_vec numeric vector. The clean signal vector. / 原始纯净信号。
-#' @param snr_db numeric. Target SNR in decibels (e.g., 0, 5, 10, 20). / 目标信噪比 (dB)。
-#' @return numeric vector. The noisy signal. / 添加噪音后的信号。
+#' @param signal_vec Numeric vector。无噪声的纯净信号（如真实的潜在线性预测子 \eqn{\eta}）。
+#' @param snr_db Numeric。目标信噪比 (dB)。值越大代表信号质量越好，\code{Inf} 代表不添加噪声。
+#' @return Numeric vector。叠加了测量误差/环境噪声后的观测信号。
 #' @export
 add_noise_by_snr <- function(signal_vec, snr_db) {
     stopifnot(is.numeric(signal_vec), length(signal_vec) > 1)
@@ -33,20 +33,26 @@ add_noise_by_snr <- function(signal_vec, snr_db) {
     return(signal_vec + noise_vec)
 }
 
-# -------------------------------------------------------------------------
-# -------------------------------------------------------------------------
-
-#' Generate Covariance/Correlation Matrix / 生成不同类型的协方差/相关矩阵
+#' @title 生成具有特定相关性结构的协方差矩阵 (Generate Covariance Matrix)
 #'
 #' @description
-#' Generates a positive-definite symmetric covariance matrix based on the specified mode.
-#' 根据指定模式生成正定对称的协方差矩阵。
+#' 根据指定的模式生成正定对称的相关系数/协方差矩阵，专为模拟高维共线性暴露数据而设计。
 #'
-#' @param n_vars integer. Number of variables. / 变量数量。
-#' @param mode character. Correlation mode: "low", "medium", "high", "mixed". / 相关性模式。
-#' @param rho numeric. Base correlation strength (optional). / 基础相关系数强度。
-#' @param seed integer. Random seed for reproducibility. / 随机种子。
-#' @return matrix. Correlation matrix. / 相关系数矩阵。
+#' @details
+#' \strong{环境暴露多重共线性模拟:} \cr
+#' 公共卫生领域中的混合物数据（如全氟化合物 PFAS、多环芳烃 PAHs）通常具有高度相关性。
+#' 此函数提供的模式完美契合不同的暴露场景：
+#' \itemize{
+#'   \item \code{"high"}: 模拟同源暴露（如同一污染源排放的多种同系物），所有变量间具有高强度基础相关性。
+#'   \item \code{"mixed"}: 模拟真实世界中具有“区块对角 (Block Diagonal)”特征的暴露族群（部分高度相关，部分独立）。
+#' }
+#' 算法内部强制进行特征值修复 (Eigenvalue Repair)，确保生成的矩阵在数学上绝对正定 (Positive-Definite)。
+#'
+#' @param n_vars Integer。混合物组分（变量）的数量。
+#' @param mode Character。相关性模式，可选 \code{"low"}, \code{"medium"}, \code{"high"}, \code{"mixed"}。
+#' @param rho Numeric。基础相关系数强度（仅针对特定模式生效），默认为 0.7。
+#' @param seed Integer 或 \code{NULL}。随机种子，用于控制 Monte Carlo 模拟的可重复性。
+#' @return Matrix。正定对称的相关系数矩阵。
 #' @export
 generate_sigma <- function(n_vars, mode = c("medium", "low", "high", "mixed"), rho = 0.7, seed = NULL) {
     mode <- match.arg(mode)
@@ -104,22 +110,24 @@ generate_sigma <- function(n_vars, mode = c("medium", "low", "high", "mixed"), r
     return(sigma)
 }
 
-# -------------------------------------------------------------------------
-# -------------------------------------------------------------------------
-
-#' Generate Covariates
+#' @title 生成流行病学测量的混杂因素集 (Generate Covariates)
 #'
 #' @description
-#' Generates data with continuous, binary, and categorical variables and their linear effects.
-#' 生成包含连续、二值和分类变量的数据及其线性效应。
+#' 随机生成包含连续型、二分类和多分类变量的混杂因素数据集，并计算它们的真实线性效应。
 #'
-#' @param n_obs integer. Sample size. / 样本量。
-#' @param beta_cont numeric. Coefficient for continuous variable. / 连续变量系数。
-#' @param beta_bin numeric. Coefficient for binary variable. / 二值变量系数。
-#' @param beta_cat numeric vector. Coefficients for categorical variable. / 分类变量系数。
-#' @param prob_bin numeric. Probability for binary variable. / 二值变量概率。
-#' @param prob_cat numeric vector. Probabilities for categorical levels. / 分类变量各水平概率。
-#' @return list. Model matrix, raw data, and linear effects. / 包含模型矩阵、原始数据和线性效应。
+#' @details
+#' 此函数用于模拟流行病学研究中常规收集的、需要被模型控制的协变量（如年龄、性别、BMI 分组或吸烟状态）。
+#' 将这些协变量注入生成数据，旨在验证模型在存在可测量混杂 (Measured Confounding) 时，
+#' 对混合物主效应进行无偏估计 (Unbiased Estimation) 的能力。
+#'
+#' @param n_obs Integer。模拟队列的样本量。
+#' @param beta_cont Numeric。连续型变量（如年龄的标准化值）的真实回归系数。
+#' @param beta_bin Numeric。二分类变量（如性别）的真实回归系数。
+#' @param beta_cat Numeric vector。多分类变量（如吸烟状态类别）的真实回归系数向量。
+#' @param prob_bin Numeric。二分类变量发生率。
+#' @param prob_cat Numeric vector。多分类变量各水平的分布概率。
+#' @param Intercept Numeric。基线截距。
+#' @return List。包含生成的协变量数据框 \code{original}、设计矩阵形式的 \code{mm}，以及真实的线性预测子贡献 \code{eta_cov}。
 #' @export
 generate_covariates <- function(n_obs = 1000,
                                 beta_cont = 0.5,
@@ -149,21 +157,12 @@ generate_covariates <- function(n_obs = 1000,
 # -------------------------------------------------------------------------
 # -------------------------------------------------------------------------
 
-#' Generate Linear Model Data
+#' @title 生成线性混合物效应的连续型数据 (Generate Linear Model Data)
 #'
 #' @description
-#' Generates main predictors (multivariate normal) and covariates, adding noise based on SNR.
-#' 生成主预测变量（多元正态）和协变量，并基于SNR添加噪音。
+#' 为 Monte Carlo 模拟生成标准线性响应数据。暴露组分通过多元正态分布生成，
+#' 可选经过分位数转换，最后与协变量的线性预测子组合，并根据信噪比引入测量误差。
 #'
-#' @param n_obs integer. Sample size. / 样本量。
-#' @param mu_preds numeric vector. Mean vector for predictors. / 预测变量均值。
-#' @param sigma_preds matrix. Covariance matrix for predictors. / 预测变量协方差矩阵。
-#' @param beta_wqs numeric. Weight for predictor coefficients. / 预测变量系数的权重，默认为1，不做缩放。
-#' @param beta_preds numeric vector. Coefficients for predictors. / 预测变量回归系数。
-#' @param snr_db numeric. Signal-to-Noise Ratio (dB). / 信噪比。
-#' @param transform_fun function. Optional transformation function. / 可选的数据变换函数。
-#' @param ... arguments passed to generate_covariates. 传递给 generate_covariates 的参数。
-#' @return data.frame. The final synthetic dataset. / 最终合成数据。
 #' @export
 generate_linear_data <- function(n_obs = 1000,
                                  mu_preds,
@@ -218,28 +217,22 @@ generate_linear_data <- function(n_obs = 1000,
 # -------------------------------------------------------------------------
 # -------------------------------------------------------------------------
 
-#' Generate Non-linear Model Data with Splines
-#' 生成基于自然样条(Natural Splines)的非线性模型数据
+#' @title 生成非线性自然样条的连续型剂量反应数据 (Generate Non-linear Data)
 #'
 #' @description
-#' Generates predictors (multivariate normal), transforms them (optional),
-#' expands them using natural splines, adds covariates, and generates Y with SNR-based noise.
-#' 生成预测变量，进行变换（可选），使用自然样条扩展，加入协变量，并根据信噪比生成 Y。
+#' 高级数据生成函数。此机制允许为每种暴露成分设定特定的非线性剂量反应轨迹（如 U 型、S 型或阈值效应），
+#' 随后利用自然三次样条 (Natural Cubic Splines) 精确映射这些形状，并合成最终的连续型结局变量。
 #'
-#' @param n_obs integer. Sample size. / 样本量。
-#' @param mu_preds numeric vector. Mean vector for predictors. / 预测变量均值。
-#' @param sigma_preds matrix. Covariance matrix for predictors. / 预测变量协方差矩阵。
-#' @param beta_wqs numeric. Scaling factor for coefficients (default 1). / 系数缩放因子。
-#' @param beta_preds numeric vector. Coefficients for the predictors.
-#'   Length must equal n_vars. / 预测变量的系数向量，长度必须等于变量数。
-#'   Note: This coefficient is broadcasted to all spline basis functions of the variable.
-#' @param snr_db numeric. Signal-to-Noise Ratio (dB). / 信噪比。
-#' @param transform_fun function. Function to transform predictors (e.g., quantile binning). / 变换函数。 默认分位数转化
-#' @param df_spline integer. Degrees of freedom for natural splines (default 3). / 自然样条自由度。
-#' @param seed integer. Random seed. / 随机种子。
-#' @param ... arguments passed to generate_covariates. 传递给 generate_covariates 的参数。
+#' @details
+#' \strong{因果结构与基准事实 (Ground Truth) 的严格对齐:} \cr
+#' 为了在 Monte Carlo 模拟中严谨地评估 NWQS 方法捕捉非线性的能力，本函数在生成数据时直接在底层推导出
+#' 样条的基础节点 (\code{knots})，并将其作为\strong{不可变的度量尺}贯穿始终。函数同时会在属性 \code{true_effect_mat}
+#' 中输出真正的偏效应对比值（如真正的 Q4 vs Q1 效应量）。这种将“因果形状生成”与“理论效应量计算”完美绑定的设计，
+#' 彻底消除了评估模型性能时的基准误差。
 #'
-#' @return data.frame. Contains Y, transformed predictors (before spline expansion), and covariates.
+#' @param shape Character 或 Character vector。控制各组分真实因果关系曲线的形态。
+#'   可选 \code{"linear_like"}（准线性）, \code{"u_shape"}（非单调 U 型）, \code{"inv_u_shape"}（倒 U 型）,
+#'   \code{"s_shape"}（S 型阈值）或 \code{"threshold"}（硬阈值安全水平）。
 #' @export
 gen_nonlinear_data <- function(n_obs = 1000,
                                mu_preds,
@@ -366,30 +359,19 @@ gen_nonlinear_data <- function(n_obs = 1000,
     return(as.data.frame(final_df))
 }
 
-#' Generate Non-linear Binary Model Data (Auto-Balanced)
-#' 生成基于自然样条的非线性二分类数据 (支持自动平衡 0/1 比例)
+#' @title 生成非线性剂量反应的二分类结局数据 (Generate Non-linear Binary Data)
 #'
-#' @description 
-#' Generates predictors (multivariate normal), transforms them (optional),
-#' expands them using natural splines, adds covariates, and generates Y with SNR-based noise.
-#' 生成预测变量，进行变换（可选），使用自然样条扩展，加入协变量，并根据信噪比生成 Y。
-#' @param n_obs integer. 样本量。
-#' @param mu_preds numeric vector. 预测变量均值。
-#' @param sigma_preds matrix. 预测变量协方差矩阵。
-#' @param beta_wqs numeric. 混合物整体效应杠杆系数。
-#' @param beta_preds numeric vector. 各物质权重分配的基础系数。
-#' @param intercept numeric. 基础截距。如果 target_prop 不为 NULL，此参数将被覆盖。
-#' @param target_prop numeric. 目标事件发生率 (如 0.5)。自动计算让 Y=1 比例达到目标的截距。
-#' @param link character. 连接函数 ("logit", "probit", "cloglog")。
-#' @param snr_db numeric. 信噪比 (添加到潜变量 eta 上)。Inf 表示无额外噪声。
-#' @param transform_fun function. 预测变量的转换函数 (如分位数转换)。
-#' @param q integer. 分位数层数，用于求真值。
-#' @param df_spline integer. 样条自由度。
-#' @param seed integer. 随机种子。
-#' @param shape character. 混合物的非线性形状模式 ("linear_like", "u_shape", "s_shape")。
-#' @param ... 传递给 generate_covariates 的参数。
-#' @return data.frame. Contains Y (binary), predictors, covariates.
-#' Attributes include true_effect_mat, true_prob, spline_knots, spline_boundary.
+#' @description
+#' 基于特定连接函数（Logit, Probit 或 Cloglog）生成非线性二分类结局数据，支持自动截距校准以控制罕见事件发生率。
+#'
+#' @details
+#' \strong{罕见病与基线风险校准 (Auto-Balanced Incidence Rate):} \cr
+#' 在病例对照研究模拟中，任意设置回归系数会导致合成队列中事件发生率（Incidence Rate）极端失衡（如全为 0 或全为 1）。
+#' 如果提供了 \code{target_prop}（例如 0.05 代表 5\% 罕见病），算法将通过 \code{uniroot} 动态逆向求解截距，
+#' 确保最终生成的二分类响应精确匹配目标疾病流行率。属性 \code{true_effect_mat} 中保存的即为真实的**对数比值比 (Log-OR)**。
+#'
+#' @param target_prop Numeric (0, 1) 或 \code{NULL}。目标疾病发生率。若提供，算法将自动搜索截距以平衡队列中病例的比例。
+#' @param link Character。广义线性模型的连接函数，可选 \code{"logit"}（对应 OR）, \code{"probit"}, 或 \code{"cloglog"}。
 #' @export
 gen_nonlinear_bio_data <- function(n_obs = 1000, mu_preds, sigma_preds, beta_wqs = 1, beta_preds,
                                    intercept = 0, target_prop = NULL, link = c("logit", "probit", "cloglog"),
@@ -546,32 +528,18 @@ gen_nonlinear_bio_data <- function(n_obs = 1000, mu_preds, sigma_preds, beta_wqs
 }
 
 
-#' Generate Non-linear Count Model Data (Poisson)
-#' 生成基于自然样条的非线性计数数据 (Poisson Regression)
+#' @title 生成非线性暴露的计数结局数据 (Generate Non-linear Poisson Count Data)
 #'
 #' @description
-#' Generates predictors, expands using splines, adds covariates, calculates expected counts (lambda)
-#' via log-link, and samples count Y from Poisson distribution. Support explicit shape control.
-#' 生成预测变量，使用样条扩展，加入协变量，通过对数连接函数计算期望次数，并从泊松分布中生成计数 Y。支持明确的非线性形状控制。
+#' 通过对数连接 (Log-link) 将混合物的非线性样条特征映射为事件发生的期望发生率 (\eqn{\lambda})，
+#' 并从泊松过程 (Poisson Process) 中生成离散的计数结局。
 #'
-#' @param n_obs integer. Sample size. / 样本量。
-#' @param mu_preds numeric vector. Mean vector for predictors.
-#' @param sigma_preds matrix. Covariance matrix.
-#' @param beta_wqs numeric. Scaling factor.
-#' @param beta_preds numeric vector. Coefficients.
-#' @param intercept numeric. Intercept (log-scale).
-#'   Controls the baseline event rate.
-#'   e.g., intercept=0 -> mean count ~1; intercept=2 -> mean count ~7.4.
-#'   / 模型截距（对数尺度）。控制基线事件发生率。
-#' @param snr_db numeric. SNR for the linear predictor (latent noise).
-#' @param transform_fun function.
-#' @param q integer. 分位数层数，用于求真值。
-#' @param df_spline integer.
-#' @param seed integer.
-#' @param shape character. 混合物的非线性形状模式 ("linear_like", "u_shape", "s_shape", "threshold")。
-#' @param ... arguments passed to generate_covariates.
+#' @details
+#' \strong{截距与泊松基线风险:} \cr
+#' 截距参数在对数尺度上直接控制基线事件发生率。例如 \code{intercept=0} 意味着协变量和暴露处于基准时，期望计数约为 1；
+#' 而 \code{intercept=2} 则期望计数提升至 \eqn{e^2 \approx 7.4}。属性 \code{true_effect_mat} 提供的是纯正的**对数相对危险度 (Log-RR)**。
 #'
-#' @return data.frame. Contains Y (count), predictors, covariates.
+#' @param intercept Numeric。模型截距（对数尺度），直接控制泊松过程的基础 \eqn{\lambda}。
 #' @export
 gen_nonlinear_count_data <- function(n_obs = 1000, mu_preds, sigma_preds, beta_wqs = 1, beta_preds,
                                      intercept = 0, snr_db = Inf, transform_fun = NULL, q = 4, df_spline = 3,

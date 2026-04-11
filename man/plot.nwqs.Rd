@@ -2,7 +2,7 @@
 % Please edit documentation in R/methods.R
 \name{plot.nwqs}
 \alias{plot.nwqs}
-\title{Plot Diagnostics for Non-linear Weighted Quantile Sum (NWQS) Models}
+\title{绘制非线性加权分位数和 (NWQS) 模型的诊断与剂量反应图}
 \usage{
 \method{plot}{nwqs}(
   x,
@@ -19,59 +19,50 @@
 )
 }
 \arguments{
-\item{x}{An object of class \code{"nwqs"} resulting from a call to \code{\link{nwqs}}.}
+\item{x}{\code{"nwqs"} 类的对象，由 \code{\link{nwqs}} 函数拟合产生。}
 
-\item{type}{Character. Plot type: \code{"both"} (default, combines weights and curves
-via \pkg{patchwork}), \code{"curves"} (dose-response trajectories), or
-\code{"weights"} (bar plot of component weights).}
+\item{type}{Character。绘图类型：\code{"both"}（默认，使用 \pkg{patchwork} 拼接权重与曲线）、\code{"curves"}（非线性剂量反应曲线）或 \code{"weights"}（组分权重条形图）。}
 
-\item{y_scale}{Character. Y-axis scale for curves: \code{"partial"} (default, relative
-effect changes) or \code{"predicted"} (absolute predicted values).}
+\item{y_scale}{Character。曲线的 Y 轴尺度：\code{"partial"}（默认，相对偏效应）或 \code{"predicted"}（绝对预测值）。}
 
-\item{components}{Character vector. Specific mixture components to display. If
-\code{NULL} (default), all components are shown.}
+\item{components}{Character vector。需要显示的特定混合物组分名称。若为 \code{NULL}（默认），则显示所有组分。}
 
-\item{overlay}{Logical. If \code{TRUE} (default), all component curves are overlaid
-on a single plot. If \code{FALSE}, curves are faceted by component.}
+\item{overlay}{Logical。若为 \code{TRUE}（默认），所有组分的曲线将叠加在同一图层中。若为 \code{FALSE}，则按组分进行分面 (Faceted) 绘图。}
 
-\item{plot_ci}{Logical. Whether to plot 95\\% empirical confidence intervals from
-Repeated Holdout iterations. Default is \code{FALSE}. Requires \code{rh > 1}.}
+\item{plot_ci}{Logical。是否绘制来自 Repeated Holdout 迭代的 95\\% 经验置信带。默认为 \code{FALSE}。需要 \code{rh > 1}。}
 
-\item{base_size}{Integer. Base font size for the \pkg{ggplot2} theme. Default is 12.}
+\item{base_size}{Integer。\pkg{ggplot2} 主题的基础字体大小，默认为 12。}
 
-\item{palette}{Character. Color palette: \code{"default"}, \code{"palette2"},
-\code{"palette3"}, or \code{"palette4"}.}
+\item{palette}{Character。配色方案，可选：\code{"default"}, \code{"palette2"}, \code{"palette3"}, 或 \code{"palette4"}。}
 
-\item{colorblind_friendly}{Logical. If \code{TRUE}, forces a colorblind-safe palette.
-Default is \code{FALSE}.}
+\item{colorblind_friendly}{Logical。若为 \code{TRUE}，则强制使用对色盲友好的调色板，默认为 \code{FALSE}。}
 
-\item{top_n}{Integer or NULL. Number of top components (by weight) to display.}
+\item{top_n}{Integer 或 \code{NULL}。按权重降序排列，仅显示前 \code{top_n} 个最重要的组分。}
 
-\item{...}{Additional arguments passed to or from other methods.}
+\item{...}{传递给其他方法的额外参数。}
 }
 \value{
-A \code{ggplot} object (for \code{"weights"} or \code{"curves"}) or a
-\code{patchwork} composite (for \code{"both"}).
+返回一个 \code{ggplot} 对象（当 \code{type} 为 \code{"weights"} 或 \code{"curves"} 时），
+或一个 \pkg{patchwork} 复合拼接对象（当 \code{type = "both"} 时）。
 }
 \description{
-Generates publication-ready diagnostic plots for \code{nwqs} objects. This function
-can produce component weight distributions and non-linear dose-response trajectories
-(partial effects or predicted values) for the overall mixture and individual components.
+为 \code{nwqs} 对象生成达到出版标准的诊断图。该函数能够可视化混合物各组分的权重分布，
+以及整体混合物或单个组分的非线性剂量反应轨迹（部分效应或预测绝对值）。
 }
 \details{
-The dose-response curves (when \code{type = "curves"} or \code{"both"}) map the estimated
-non-linear spline functions. When \code{y_scale = "partial"}, the curves represent the
-isolated effect of increasing exposure while holding others constant (zero-centered
-log-OR, log-RR, or \eqn{\Delta Y}). When \code{y_scale = "predicted"}, the curves show
-the absolute predicted scale (e.g., probabilities for binomial models).
+\strong{剂量反应曲线解读:} \cr
+当设置 \code{type = "curves"} 或 \code{"both"} 时，函数将映射估计的非线性样条曲线。
+\itemize{
+\item 若 \code{y_scale = "partial"}：曲线代表在保持其他变量不变的情况下，暴露水平增加的独立相对效应
+（例如：零中心化的对数比值比 Log-OR、对数相对危险度 Log-RR 或连续型结局的变化量 \eqn{\Delta Y}）。
+\item 若 \code{y_scale = "predicted"}：曲线展示绝对预测尺度（例如：二分类模型的绝对预测概率）。
+}
 
-When \code{plot_ci = TRUE} and \code{rh > 1}, 95\\% empirical confidence ribbons
-are drawn from the Repeated Holdout iterations. \strong{Important}: These ribbons
-reflect data-splitting (algorithmic) variance only and are NOT valid for statistical
-inference. A warning caption is automatically appended to the plot. Use
-\code{\link{nwqs_boot}} with \code{keep_fits = TRUE} for valid bootstrap confidence
-intervals.
+\strong{关于置信带 (Confidence Ribbons) 的严正警告:} \cr
+当 \code{plot_ci = TRUE} 且 \code{rh > 1} 时，图中的 95\\% 经验置信带来源于重复保留 (Repeated Holdout) 迭代。
+请务必注意：\strong{这些置信带仅反映了数据拆分带来的算法方差 (Algorithmic Variance)，绝对不能用于正式的统计推断或假设检验。}
+它们通常比真实的置信带更窄。若需发表具备统计学效力的带有真实置信区间的图表，请务必使用 \code{\link{plot.nwqs_boot}}。
 }
 \seealso{
-\code{\link{plot.nwqs_boot}} for bootstrap-based plots with valid CIs.
+\code{\link{plot.nwqs_boot}} 以获取基于 Bootstrap 的具有真实统计学效力的诊断图。
 }
