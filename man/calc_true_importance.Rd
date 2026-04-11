@@ -2,23 +2,27 @@
 % Please edit documentation in R/monte_carlo.R
 \name{calc_true_importance}
 \alias{calc_true_importance}
-\title{Derive True Importance Weights from Ground-Truth Effect Matrix}
+\title{从真实效应矩阵推导相对重要性基准权重 (Derive True Importance Weights)}
 \usage{
-calc_true_importance(true_effect_mat, mix_name, method = "q4q1_abs")
+calc_true_importance(true_effect_mat, mix_name, method = "max_range")
 }
 \arguments{
-\item{true_effect_mat}{Matrix. The true effect matrix (from data generation attributes).}
+\item{true_effect_mat}{Matrix。包含真实效应的矩阵。}
 
-\item{mix_name}{Character vector. Names of mixture components (must match rownames).}
+\item{mix_name}{Character vector。混合物组分的名称列表。}
 
-\item{method}{Character. Method for deriving importance. Currently only
-\code{"q4q1_abs"} (absolute Q4 vs Q1 contrast) is supported.}
+\item{method}{Character。重要性推导方法。可选 \code{"q4q1_abs"}（仅适用单调线性场景）或 \code{"max_range"}（适用复杂非线性场景，默认）。}
 }
 \value{
-A named numeric vector of true importance weights summing to 1.
+命名数值向量。代表各个组分的真实相对重要性基准，总和为 1。
 }
 \description{
-Converts the absolute component-specific effects (e.g., Q4 vs Q1 contrast)
-from the true effect matrix into normalized importance weights, serving as
-the gold standard for weight recovery benchmarking.
+将成分特定的绝对偏效应（从真实生成矩阵中提取）转换为归一化的、和为 1 的相对重要性权重。
+}
+\details{
+\strong{非线性权重的合理定义:} \cr
+在纯线性模型中，权重通常可以直接基于真实斜率（系数）的绝对值分配（即 \code{method = "q4q1_abs"}）。
+但当涉及非单调剂量反应曲线（如 U 型、倒 U 型）时，最高分位数与最低分位数的对比（Q4 vs Q1）可能正好抵消为 0。
+为此，\code{method = "max_range"} 提取各个分位数节点处的效应极大值与极小值之差（极差），
+以此作为衡量该暴露组分在整个分布范围内对结局产生的最大变异贡献，从而科学地定义非线性场景下的“真实权重”。
 }

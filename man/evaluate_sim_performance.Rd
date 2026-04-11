@@ -2,7 +2,7 @@
 % Please edit documentation in R/monte_carlo.R
 \name{evaluate_sim_performance}
 \alias{evaluate_sim_performance}
-\title{Evaluate Monte Carlo Simulation Performance (Macro-level Metrics)}
+\title{评估 Monte Carlo 模拟的宏观统计性能 (Evaluate Macro-level Performance)}
 \usage{
 evaluate_sim_performance(
   sim_weight_df,
@@ -13,31 +13,32 @@ evaluate_sim_performance(
 )
 }
 \arguments{
-\item{sim_weight_df}{A \code{data.frame} with one row per simulation, containing
-columns named \code{NWQS_{Component}} for estimated weights and \code{NWQS_SAE}.}
+\item{sim_weight_df}{\code{data.frame}。多次模拟权重的汇总表，每行代表一次模拟。}
 
-\item{sim_effect_df}{A \code{data.frame} with columns: Sim_ID, Target, Term,
-Estimate, Wald_CI_Lower, Wald_CI_Upper, Empirical_CI_Lower, Empirical_CI_Upper.}
+\item{sim_effect_df}{\code{data.frame}。多次模拟效应估计的汇总表。}
 
-\item{true_w}{Named numeric vector. True weight allocation.}
+\item{true_w}{Named numeric vector。基准真实权重向量。}
 
-\item{true_eff_mat}{Matrix. True effect values from data generation.}
+\item{true_eff_mat}{Matrix。数据生成时的真实效应矩阵。}
 
-\item{w_threshold}{Numeric. Threshold for classifying a weight as "detected".
-Defaults to 0.01.}
+\item{w_threshold}{Numeric。将估计权重判定为“有效检测出信号”的硬阈值，默认为 0.01。}
 }
 \value{
-A list with:
+一个包含两部分的列表：
 \describe{
-\item{Weight_Metrics}{A one-row \code{data.frame} with Mean_SAE, Sensitivity,
-and Specificity.}
-\item{Effect_Metrics}{A \code{data.frame} with per-Target/Term metrics including
-True_Value, Mean_Est, Mean_Bias, RB_pct, RMSE, CP_Wald, CP_Empirical,
-Reject_H0, and Metric_Type.}
+\item{\code{Weight_Metrics}}{权重分配的宏观性能（平均 SAE、敏感度、特异度）。}
+\item{\code{Effect_Metrics}}{按变量和对比目标汇总的效应估计性能（包含 Mean_Bias, RMSE, 覆盖概率 CP, 拒绝零假设率 Reject_H0 等）。}
 }
 }
 \description{
-Aggregates results across multiple simulation replicates to compute macro-level
-performance metrics: coverage probability, bias, RMSE, statistical power / Type I
-error, and weight recovery accuracy (sensitivity/specificity).
+跨越多次模拟迭代汇总结果，计算宏观层面的统计性能指标。涵盖区间覆盖概率、平均偏差、均方根误差 (RMSE)、
+统计效能 (Power) / 第一类错误率 (Type I Error)，以及变量选择的敏感性与特异性。
+}
+\details{
+\strong{核心统计学评价维度:}
+\itemize{
+\item \strong{Type I Error (假阳性率):} 当真实效应为 0 时，置信区间未覆盖 0 的模拟比例。控制在 $\alpha = 0.05$ 附近是模型稳健性的底线。
+\item \strong{Power (检验效能):} 当真实效应不为 0 时，模型成功拒绝零假设的比例。反映了模型在给定样本量和信噪比下发现真实关联的能力。
+\item \strong{敏感性/特异性 (Sensitivity/Specificity):} 评估权重分配的特征选择能力（基于设定的 \code{w_threshold}）。
+}
 }

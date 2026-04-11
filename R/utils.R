@@ -1,34 +1,30 @@
 # ==============================================================================
 # utils.R — NWQS 模型核心工具函数（清理版）
-# 移除了所有 Monte Carlo 专用函数，这些已迁移至 monte_carlo.R
-# 移除了重复定义的 evaluate_sim_performance (旧版多模型版本)
 # ==============================================================================
 
-
-#' Quantile or Percentile Transformation
+#' @title 分位数或百分位数数据转换 (Quantile or Percentile Transformation)
 #'
 #' @description
-#' Transforms continuous mixture variables into discrete quantile bins or
-#' continuous percentile ranks.
+#' 将连续的混合物暴露变量转换为离散的分位数区间 (Quantile Bins) 或连续的百分位秩 (Percentile Ranks)。
+#' 这一步是加权分位数和 (WQS) 及其扩展方法标准化不同量纲暴露特征的基石。
 #'
 #' @details
-#' Two methods are available:
+#' \strong{方法学考量与潜在偏倚风险:}
 #' \describe{
-#'   \item{\code{"quantile"}}{gWQS-style integer binning into \code{q} groups
-#'     (0 to \code{q-1}). Handles ties and boundary values robustly using
-#'     \code{-Inf}/\code{Inf} endpoints.}
-#'   \item{\code{"percentile"}}{Continuous percentile ranking scaled to (0, 1)
-#'     using \code{rank(x) / (n + 1)}.}
+#'   \item{\code{"quantile"}}{经典的 gWQS 分箱逻辑，将数据划分为 \code{q} 个组（如 0 到 \code{q-1}）。
+#'     内部通过指定 \code{-Inf} 和 \code{Inf} 作为边界，极大地增强了对极端异常值 (Outliers) 的稳健性。
+#'     *流行病学警示:* 虽然分箱能抵抗异常值，但如果真实的剂量反应关系在某个分箱内部存在急剧的非线性变化，
+#'     分类操作可能引入一定程度的残余混杂 (Residual Confounding)。此外，分位点的确定高度依赖于当前样本，
+#'     若样本存在选择偏倚 (Selection Bias)，则截断点可能无法代表目标人群的真实暴露水平。}
+#'   \item{\code{"percentile"}}{通过 \eqn{rank(x) / (n + 1)} 将连续变量映射到 (0, 1) 区间。保留了比分类更多的
+#'     等级信息，适用于样本量较小或需要精细平滑非线性曲线的场景。}
 #' }
 #'
-#' @param data A \code{data.frame} of mixture variables to transform.
-#' @param method Character. Transformation method: \code{"quantile"} (default)
-#'   or \code{"percentile"}.
-#' @param q Integer. Number of quantile bins (only used when
-#'   \code{method = "quantile"}). Defaults to 4 (quartiles).
+#' @param data \code{data.frame}。包含需要转换的混合物变量的数据框。
+#' @param method Character。转换方法：\code{"quantile"}（默认分位数）或 \code{"percentile"}（百分位秩）。
+#' @param q Integer。分位数的分箱数量（仅在 \code{method = "quantile"} 时生效）。默认为 4（四分位数）。
 #'
-#' @return A \code{data.frame} with the same column names, containing
-#'   transformed values.
+#' @return 返回一个与输入同维度和同列名的 \code{data.frame}，包含转换后的无量纲数值。
 #'
 #' @importFrom stats quantile
 #' @export
@@ -65,22 +61,27 @@ trans_quantile <- function(data, method = c("quantile", "percentile"), q = 4) {
 
 # -------------------------------------------------------------------------
 
-#' Nonlinear Spline Expansion for WQS Mixture Components
+#' @title WQS 混合物组分的非线性样条扩展
 #'
 #' @description
-#' Transforms (already quantile-transformed) mixture variables into natural cubic
-#' spline basis matrices using globally fixed knots and boundary knots. This ensures
-#' consistent basis alignment across training, validation, and bootstrap datasets.
+#' 使用全局固定的内部节点 (Knots) 和边界节点 (Boundary Knots)，将（已完成分位数转换的）混合物变量
+#' 转换为自然三次样条 (Natural Cubic Splines) 基矩阵。
 #'
-#' @param data A \code{data.frame} containing the mixture variables (already transformed).
-#' @param mix_name Character vector. Column names of the mixture components to expand.
-#' @param df_spline Integer. Degrees of freedom for the natural spline. Defaults to 3.
-#' @param knots Numeric vector. Internal knot positions. Must be provided to ensure
-#'   global scale alignment.
-#' @param boundary Numeric vector of length 2. Boundary knot positions. Must be provided.
+#' @details
+#' \strong{严谨性说明 (基函数对齐):} \cr
+#' 在机器学习和统计建模结合的架构中（如 NWQS 采用的 Repeated Holdout 或 Bootstrap），
+#' 绝不能在不同的子样本中动态计算样条节点。此函数强制要求传入预先在全样本上确定的 \code{knots}
+#' 和 \code{boundary}，这确保了训练集、验证集和重抽样集之间基函数的绝对对齐。若不进行这种全局约束，
+#' 极易引发空间漂移偏倚 (Spatial Drift Bias)，导致交叉验证中提取的形状系数在验证集上失效。
 #'
-#' @return A numeric matrix with columns named \code{{Component}_B{BasisIndex}}
-#'   (e.g., \code{Component1_B1}, \code{Component1_B2}, ...).
+#' @param data \code{data.frame}。包含混合物变量（通常已经过转换）的数据框。
+#' @param mix_name Character vector。需要进行样条扩展的混合物组分列名。
+#' @param df_spline Integer。自然样条的自由度，默认为 3。
+#' @param knots Numeric vector。内部节点位置。为了确保全局尺度对齐，必须显式提供。
+#' @param boundary Numeric vector (长度为 2)。边界节点位置。必须显式提供以固定外推边界。
+#'
+#' @return 一个数值型矩阵，列名格式为 \code{{Component}_B{BasisIndex}}
+#'   （例如，\code{Component1_B1}, \code{Component1_B2}）。
 #'
 #' @importFrom splines ns
 #' @export
@@ -110,26 +111,29 @@ wqs_nonlinear_expand <- function(data, mix_name, df_spline = 3,
 
 # -------------------------------------------------------------------------
 
-#' Compute NWQS Joint Exposure Quantile Contrast
+#' @title 计算 NWQS 联合暴露分位数对比效应
 #'
 #' @description
-#' Computes the overall significance of the non-linear mixture effect and evaluates
-#' joint exposure quantile contrasts (e.g., all components at Q4 vs all at Q1).
-#' Automatically converts to Odds Ratios (OR) for binomial models and Rate Ratios
-#' (RR) for Poisson models.
+#' 计算整体混合物非线性效应的全局显著性，并评估联合暴露的分位数对比
+#' （例如：所有暴露组分同时处于最高分位数 Q4 相较于均处于最低分位数 Q1 时的效应变化）。
+#' 对于逻辑回归和泊松回归，函数会自动将其转换为临床易解的比值比 (OR) 和相对危险度 (RR)。
 #'
-#' @param model An object of class \code{"nwqs"}.
-#' @param q_target Integer. Target quantile index (0-based). E.g., 3 represents Q4.
-#'   Defaults to 3.
-#' @param q_ref Integer. Reference quantile index (0-based). Defaults to 0 (Q1).
+#' @param model \code{"nwqs"} 类的对象。
+#' @param q_target Integer。目标分位数索引（基于 0 起始）。例如，3 代表 Q4。若为 \code{NULL}，将自动推断为最大分位数。
+#' @param q_ref Integer。参考分位数索引（基于 0 起始）。默认为 0 (Q1)。
 #'
-#' @return Invisibly returns a list with \code{delta_eta}, \code{lower}, and
-#'   \code{upper} (the latter two are \code{NA} when \code{rh = 1}).
+#' @return 隐式返回一个列表，包含计算的绝对偏效应变化 \code{delta_eta} 以及置信区间上下限 \code{lower} 和 \code{upper}。
+#'   （注意：当 \code{rh = 1} 时，由于无法估计变异，上下限返回 \code{NA}）。
 #'
 #' @importFrom splines ns
 #' @importFrom stats quantile coef
 #' @export
-nwqs_contrast <- function(model, q_target = 3, q_ref = 0) {
+nwqs_contrast <- function(model, q_target = NULL, q_ref = 0) {
+  # 【修改核心】：动态获取模型的最大分位数，不再写死 Q4(3)
+  if (is.null(q_target)) {
+    q_target <- if (!is.null(model$q)) model$q - 1 else 3
+  }
+
   is_binomial <- FALSE
   if (inherits(model, "glm")) {
     is_binomial <- model$family$family == "binomial"
@@ -144,7 +148,7 @@ nwqs_contrast <- function(model, q_target = 3, q_ref = 0) {
   cat("======================================================\n")
 
   if (rh == 1) {
-    wqs_sum <- summary(model)$coefficients["wqs_score", , drop = FALSE]
+    wqs_sum <- summary(model)$coefficients["nwqs", , drop = FALSE]
     print(round(wqs_sum, 4))
     if (wqs_sum[1, 4] < 0.05) {
       cat("\nConclusion: The overall NWQS latent risk score has a significant joint effect on the outcome (P < 0.05).\n")
@@ -152,17 +156,26 @@ nwqs_contrast <- function(model, q_target = 3, q_ref = 0) {
       cat("\nConclusion: The overall NWQS latent risk score does not have a significant joint effect on the outcome (P >= 0.05).\n")
     }
   } else {
-    wqs_betas <- model$rh_coefs[, "wqs_score"]
+    wqs_betas <- model$rh_coefs[, "nwqs"]
+    wqs_betas <- wqs_betas[is.finite(wqs_betas)]
+
+    if (length(wqs_betas) == 0) {
+      stop("All RH 'nwqs' coefficients are NA/NaN/Inf; cannot compute overall mixture significance.")
+    }
+
     mean_beta <- mean(wqs_betas, na.rm = TRUE)
     ci_lower <- quantile(wqs_betas, 0.025, na.rm = TRUE)
     ci_upper <- quantile(wqs_betas, 0.975, na.rm = TRUE)
-    p_val_emp <- 2 * min(mean(wqs_betas > 0), mean(wqs_betas < 0))
+    p_val_emp <- 2 * min(
+      mean(wqs_betas > 0, na.rm = TRUE),
+      mean(wqs_betas < 0, na.rm = TRUE)
+    )
 
     cat(sprintf("Mean Beta across RH iterations :  %.4f\n", mean_beta))
     cat(sprintf("Empirical 95%% CI             : [%.4f, %.4f]\n", ci_lower, ci_upper))
     cat(sprintf("Empirical P-value            :  %.4f\n", p_val_emp))
 
-    if (ci_lower > 0 || ci_upper < 0) {
+    if (isTRUE(ci_lower > 0 || ci_upper < 0)) {
       cat("\nConclusion: The overall joint mixture effect is significant (95% CI excludes 0).\n")
     } else {
       cat("\nConclusion: The overall joint mixture effect is NOT significant (95% CI includes 0).\n")
@@ -176,11 +189,11 @@ nwqs_contrast <- function(model, q_target = 3, q_ref = 0) {
   if (rh == 1) {
     shapes_vec <- model$mean_shapes
     weights_vec <- model$final_weights
-    beta_wqs <- coef(model)["wqs_score"]
+    beta_wqs <- coef(model)["nwqs"]
   } else {
     shapes_vec <- model$mean_shapes
     weights_vec <- model$final_weights
-    beta_wqs <- model$mean_coefs["wqs_score"]
+    beta_wqs <- model$mean_coefs["nwqs"]
   }
 
   df_spline <- max(as.numeric(sub("^.+_B(\\d+)$", "\\1", names(shapes_vec))))
@@ -206,7 +219,7 @@ nwqs_contrast <- function(model, q_target = 3, q_ref = 0) {
   if (rh > 1) {
     diff_list <- numeric(rh)
     for (i in 1:rh) {
-      beta_i <- model$rh_coefs[i, "wqs_score"]
+      beta_i <- model$rh_coefs[i, "nwqs"]
       shape_i <- model$rh_shapes[i, ]
       weight_i <- model$rh_weights[i, ]
       score_diff_i <- calc_diff(b_target, weight_i, shape_i)
@@ -263,146 +276,19 @@ nwqs_contrast <- function(model, q_target = 3, q_ref = 0) {
 
 # -------------------------------------------------------------------------
 
-#' Plot Faceted Boxplot for NWQS Quantile Contrasts
+#' @title 提取 NWQS 模型的详细分位数对比效应
 #'
 #' @description
-#' Generates a faceted boxplot showing the distribution of component-specific
-#' dose-response effects across Repeated Holdout iterations. Each facet represents
-#' one mixture component (plus an "Overall" panel), with separate boxplots for
-#' each quantile contrast (e.g., Q2, Q3, Q4 vs Q1 baseline).
+#' 计算所有可能的分位数对比效应（例如 Q2 vs Q1，Q3 vs Q1，Q4 vs Q1）。
+#' 函数不仅会输出整体混合物的效应，还会将整体效应分解至每个单独的混合物组分，
+#' 并从 Repeated Holdout 迭代中提取标准误 (SE) 和经验置信区间。
 #'
-#' @param model An object of class \code{"nwqs"} with \code{rh > 1}.
-#' @param exponentiate Logical or NULL. If \code{TRUE}, effects are exponentiated
-#'   to OR/RR scale. If \code{NULL} (default), automatically set to \code{TRUE}
-#'   for binomial/Poisson/quasi-Poisson families.
-#' @param free_y Logical. Whether each facet has independent y-axis scaling.
-#'   Defaults to \code{TRUE}.
-#' @param custom_colors Character vector. Color palette for quantile groups.
+#' @param model_res \code{"nwqs"} 类的对象。
+#' @param return_raw Logical。当前未使用，为未来扩展保留。
 #'
-#' @return A \code{ggplot} object.
-#'
-#' @importFrom splines ns
-#' @importFrom ggplot2 ggplot aes geom_boxplot geom_jitter geom_hline facet_wrap
-#'   scale_fill_manual theme_bw labs theme element_text element_blank element_rect
-#' @export
-plot_nwqs_contrast_box <- function(model, exponentiate = NULL,
-                                   free_y = TRUE,
-                                   custom_colors = c(
-                                     "#7DB97F", "#82B0D2", "#D92828", "#F2C05D", "#8B6FB8",
-                                     "#00B4D8", "#006B3C", "#F4B6B6", "#5BA3D0", "#E03030",
-                                     "#7AD450", "#9B7FC0"
-                                   )) {
-  if (model$rh < 2) {
-    stop("This plot requires rh > 1 (Repeated Holdout iterations) to generate boxplots.")
-  }
-
-  is_exp_family <- model$family %in% c("binomial", "poisson", "quasipoisson")
-  if (is.null(exponentiate)) exponentiate <- is_exp_family
-
-  q_level <- if (!is.null(model$q)) model$q else 4
-
-  df_spline <- max(as.numeric(sub("^.+_B(\\d+)$", "\\1", colnames(model$rh_shapes))))
-  comps <- colnames(model$rh_weights)
-  full_basis <- splines::ns(0:(q_level - 1),
-    df = df_spline,
-    knots = model$spline_knots, Boundary.knots = model$spline_boundary,
-    intercept = FALSE
-  )
-
-  results_list <- list()
-
-  for (i in 1:model$rh) {
-    beta_i <- model$rh_coefs[i, "wqs_score"]
-
-    for (q_tgt in 1:(q_level - 1)) {
-      b_diff <- full_basis[q_tgt + 1, ] - full_basis[1, ]
-
-      current_comp_effects <- numeric(length(comps))
-      names(current_comp_effects) <- comps
-
-      for (comp in comps) {
-        theta_comp <- model$rh_shapes[i, paste0(comp, "_B", 1:df_spline)]
-        w_comp <- model$rh_weights[i, comp]
-
-        comp_effect <- beta_i * w_comp * sum(b_diff * theta_comp)
-        current_comp_effects[comp] <- comp_effect
-
-        results_list[[length(results_list) + 1]] <- data.frame(
-          Iteration = i, Component = comp,
-          Quantile = paste0("Q", q_tgt + 1), Effect = comp_effect
-        )
-      }
-
-      results_list[[length(results_list) + 1]] <- data.frame(
-        Iteration = i, Component = "Overall",
-        Quantile = paste0("Q", q_tgt + 1), Effect = sum(current_comp_effects)
-      )
-    }
-  }
-
-  plot_df <- do.call(rbind, results_list)
-  plot_df$Component <- factor(plot_df$Component, levels = c("Overall", comps))
-  plot_df$Quantile <- factor(plot_df$Quantile, levels = paste0("Q", 2:q_level))
-
-  if (exponentiate) {
-    plot_df$Effect <- exp(plot_df$Effect)
-    y_label <- if (model$family == "binomial") "Odds Ratio (OR)" else "Rate Ratio (RR)"
-    y_intercept <- 1
-  } else {
-    y_label <- "Absolute Effect Change (\u0394 Eta)"
-    y_intercept <- 0
-  }
-
-  n_facets <- length(unique(plot_df$Component))
-  dynamic_nrow <- ceiling(n_facets / 7)
-  dynamic_ncol <- ceiling(n_facets / dynamic_nrow)
-  plot_colors <- rep(custom_colors, length.out = q_level - 1)
-  facet_scales <- ifelse(free_y, "free_y", "fixed")
-
-  p <- ggplot2::ggplot(plot_df, ggplot2::aes(x = Quantile, y = Effect, fill = Quantile)) +
-    ggplot2::geom_boxplot(
-      outlier.shape = NA, alpha = 0.6, color = "gray20",
-      linewidth = 0.5, width = 0.5
-    ) +
-    ggplot2::geom_jitter(shape = 21, color = "gray30", alpha = 0.7, width = 0.2, size = 1.2) +
-    ggplot2::geom_hline(yintercept = y_intercept, linetype = "dashed", color = "#2C3E50", linewidth = 0.8) +
-    ggplot2::facet_wrap(~Component, scales = facet_scales, nrow = dynamic_nrow, ncol = dynamic_ncol) +
-    ggplot2::scale_fill_manual(values = plot_colors) +
-    ggplot2::theme_bw(base_size = 14) +
-    ggplot2::theme(
-      legend.position = "none",
-      axis.text.x = ggplot2::element_text(angle = 0, face = "bold", size = 11),
-      panel.grid.major.x = ggplot2::element_blank(),
-      panel.grid.minor = ggplot2::element_blank(),
-      strip.background = ggplot2::element_rect(fill = "#ECF0F1"),
-      strip.text = ggplot2::element_text(face = "bold", size = 12),
-      plot.caption = ggplot2::element_text(face = "italic", color = "gray40", size = 10, hjust = 0)
-    ) +
-    ggplot2::labs(
-      title = "Component-Specific Dose-Response Trajectories",
-      subtitle = paste("Based on", model$rh, "Repeated Holdout Iterations"),
-      caption = "* Note: All effects are relative to the Q1 baseline.",
-      x = "Exposure Quantiles", y = y_label
-    )
-
-  return(p)
-}
-
-
-# -------------------------------------------------------------------------
-
-#' Extract Effects from NWQS Object
-#'
-#' @description
-#' Computes all quantile contrast effects (e.g., Q2 vs Q1, Q3 vs Q1, Q4 vs Q1)
-#' for each mixture component and the overall mixture, along with standard errors
-#' and empirical confidence intervals derived from Repeated Holdout iterations.
-#'
-#' @param model_res An object of class \code{"nwqs"}.
-#' @param return_raw Logical. Currently unused. Reserved for future use.
-#'
-#' @return A \code{data.frame} with columns: Target, Term, Estimate, SE,
-#'   Wald_CI_Lower, Wald_CI_Upper, Empirical_CI_Lower, Empirical_CI_Upper.
+#' @return 一个 \code{data.frame}，包含以下列：Target (对比目标), Term (变量名/整体),
+#'   Estimate (估计值), SE (经验标准误), Wald_CI_Lower, Wald_CI_Upper,
+#'   Empirical_CI_Lower, Empirical_CI_Upper。
 #'
 #' @importFrom splines ns
 #' @export
@@ -426,8 +312,12 @@ extract_nwqs_effects <- function(model_res, return_raw = FALSE) {
     iter_effects <- matrix(0, nrow = rh, ncol = length(comps) + 1)
     colnames(iter_effects) <- c("Overall", comps)
 
+    iter_effects <- matrix(NA_real_, nrow = rh, ncol = length(comps) + 1)
+    colnames(iter_effects) <- c("Overall", comps)
+
     for (i in seq_len(rh)) {
-      beta_i <- model_res$rh_coefs[i, "wqs_score"]
+      beta_i <- model_res$rh_coefs[i, "nwqs"]
+      if (!is.finite(beta_i)) next
       comp_effs_i <- numeric(length(comps))
       names(comp_effs_i) <- comps
 
@@ -465,134 +355,275 @@ extract_nwqs_effects <- function(model_res, return_raw = FALSE) {
 }
 
 
-# -------------------------------------------------------------------------
-# plot_nwqs_weight_box 放在这里（从 FINAL_utils_weight_box.R 粘贴）
-# -------------------------------------------------------------------------
+#' @title 绘制 NWQS 组分特异性对比箱线图 (Bootstrap 分布图)
+#'
+#' @description
+#' 专为医学与流行病学顶级期刊设计的高质量诊断图。此函数不仅展示效应的点估计，
+#' 而是通过箱线图加抖动点 (Jitter) 的形式，全景展示各暴露组分在不同 Bootstrap 样本中的效应量分布。
+#'
+#' @details
+#' \strong{可视化透明度与科学价值:} \cr
+#' 环境暴露数据通常伴随极高的多重共线性 (Multicollinearity)。单纯依赖点估计与标准误容易掩盖
+#' 权重分配的不稳定性。通过将 Bootstrap 集成过程中的每一次迭代可视化：
+#' \itemize{
+#'   \item 若箱体极宽或分布呈现双峰，高度提示该组分的效应受到共线性干扰或严重依赖特定的极端抽样 (Extreme Samples)。
+#'   \item 图中的横线代表零效应（线性回归为 0，指数族回归为 1）。只有当箱体的绝大部分（如 95% 区间）
+#'   远离该基线时，我们才能对该特定组分的相对贡献抱有高度的统计信心。
+#' }
+#' 绘图严格遵循 \pkg{ggplot2} 的无冗余设计哲学（清晰的主题、明确的坐标轴标签及对比度良好的颜色比例）。
+#'
+#' @param model \code{"nwqs_boot"} 类的对象。
+#' @param exponentiate Logical 或 \code{NULL}。是否对 Y 轴效应量进行指数化以显示为 OR 或 RR。若为 \code{NULL}，将自动根据误差分布族判断。
+#' @param free_y Logical。若为 \code{TRUE}（默认），各个组分分面的 Y 轴尺度将自由适配，方便观察效应极小的组分分布。
+#' @param base_size Integer。图表基础字体大小，默认 12，适合大多数学术出版的 A4 排版。
+#' @param fill_alpha Numeric。箱体填充的透明度，默认为 0.16，以确保底层抖动点清晰可见。
+#' @param palette Character。离散调色板，默认为 \code{"default"}。
+#' @param components Character vector。指定需要绘制的特定组分。
+#' @param top_n Integer 或 \code{NULL}。按权重降序排列，仅显示前 \code{top_n} 个最重要的组分。
+#' @param ylim Numeric vector (长度为 2)。强行限制 Y 轴范围（如截断极端 Bootstrap 离群值影响视觉比例时使用）。
+#' @param y_step Numeric。强制指定 Y 轴的刻度间距。
+#'
+#' @return 一个具备学术出版质量的 \code{ggplot} 分面箱线图对象。
+#'
 #' @export
-plot_nwqs_weight_box <- function(model, base_size = 12,
-                                 palette = "default", ...) {
+#' @method plot nwqs_boot
+plot_nwqs_contrast_box <- function(model,
+                                   exponentiate = NULL,
+                                   free_y = TRUE,
+                                   base_size = 12,
+                                   fill_alpha = 0.16,
+                                   palette = "default",
+                                   components = NULL,
+                                   top_n = NULL,
+                                   ylim = NULL,
+                                   y_step = NULL) {
+  .clean_name <- function(nm) {
+    nm <- gsub("_adj$", "", nm)
+    nm <- gsub("^(ln|log|log10|log2|scale)_", "", nm, ignore.case = TRUE)
+    nm <- gsub("URX", "", nm)
+    nm
+  }
+
   .get_palette <- function(n, pal = "default") {
     cols <- list(
       default = c(
         "#4A90C8", "#D92828", "#6EC44A", "#8B6FB8", "#00B4D8",
-        "#006B3C", "#A8D8EA", "#F4B6B6", "#5BA3D0", "#E03030", "#7AD450", "#9B7FC0"
+        "#006B3C", "#A8D8EA", "#F4B6B6", "#5BA3D0", "#E03030",
+        "#7AD450", "#9B7FC0"
       ),
       palette2 = c(
         "#9bbf8a", "#82afda", "#f79059", "#e7dbd3", "#c2bdde",
-        "#8dcec8", "#add3e2", "#3480b8", "#ffbe7a", "#fa8878", "#c82423", "#6b5b95"
+        "#8dcec8", "#add3e2", "#3480b8", "#ffbe7a", "#fa8878",
+        "#c82423", "#6b5b95"
       )
     )
     p <- if (pal %in% names(cols)) cols[[pal]] else cols[["default"]]
     rep(p, ceiling(n / length(p)))[seq_len(n)]
   }
 
-  # ── 判断输入类型并提取权重矩阵 ──
-  if (inherits(model, "nwqs_boot")) {
-    boot_fits <- model$boot_fits
-    valid_fits <- if (!is.null(boot_fits)) Filter(Negate(is.null), boot_fits) else NULL
+  calc_facet_layout <- function(n) {
+    if (n <= 5) {
+      return(list(nc = n))
+    }
+    if (n == 8) {
+      return(list(nc = 4))
+    }
+    if (n == 9) {
+      return(list(nc = 3))
+    }
+    if (n == 10) {
+      return(list(nc = 5))
+    }
+    if (n == 12) {
+      return(list(nc = 4))
+    }
+    sqrt_n <- ceiling(sqrt(n))
+    list(nc = min(5, sqrt_n))
+  }
 
-    if (!is.null(valid_fits) && length(valid_fits) > 0) {
-      w_mat <- do.call(rbind, lapply(valid_fits, function(bf) bf$final_weights))
-      ci_source <- "bootstrap"
-      n_iter <- length(valid_fits)
-      inner_rh <- model$point_fit$rh
-      if (inner_rh > 1) ci_source <- "bootstrap_with_inner_rh"
+  .resolve_selected_raw <- function(model, components = NULL, top_n = NULL) {
+    if (!is.null(model$final_weights) && length(model$final_weights) > 0) {
+      selected <- names(sort(model$final_weights, decreasing = TRUE))
     } else {
-      pf <- model$point_fit
-      if (is.null(pf$rh_weights) || pf$rh <= 1) {
-        stop("Weight boxplot requires either keep_fits=TRUE in nwqs_boot() or rh > 1 in the inner model.")
-      }
-      w_mat <- pf$rh_weights
-      ci_source <- "rh_splitting"
-      n_iter <- pf$rh
+      selected <- unique(setdiff(model$boot_table$Term, "Overall"))
     }
-  } else if (inherits(model, "nwqs")) {
-    if (is.null(model$rh_weights) || model$rh <= 1) {
-      stop("Weight boxplot requires rh > 1.")
+
+    if (!is.null(components)) {
+      keep <- selected %in% components | .clean_name(selected) %in% components
+      selected <- selected[keep]
     }
-    w_mat <- model$rh_weights
-    ci_source <- "rh_splitting"
-    n_iter <- model$rh
-  } else {
-    stop("model must be of class 'nwqs' or 'nwqs_boot'.")
+
+    if (!is.null(top_n) && is.numeric(top_n) && top_n > 0) {
+      selected <- selected[seq_len(min(top_n, length(selected)))]
+    }
+
+    selected
   }
 
-  # ── 提取点估计权重用于排序 ──
-  mix_names <- colnames(w_mat)
-  n_comps <- length(mix_names)
-
-  if (inherits(model, "nwqs_boot")) {
-    point_w <- model$final_weights
-  } else {
-    point_w <- model$final_weights
+  if (!inherits(model, "nwqs_boot")) {
+    stop("需传入 'nwqs_boot' 对象")
+  }
+  if (is.null(model$boot_table) || nrow(model$boot_table) == 0) {
+    stop("model$boot_table 为空，无法绘图")
+  }
+  if (!requireNamespace("dplyr", quietly = TRUE)) {
+    stop("请先安装 dplyr：install.packages('dplyr')")
   }
 
-  # 按点估计权重从高到低排序
-  ordered_names <- names(sort(point_w, decreasing = TRUE))
+  selected_raw <- .resolve_selected_raw(model, components = components, top_n = top_n)
+  if (length(selected_raw) == 0) {
+    stop("筛选后没有可绘制的组分")
+  }
 
-  # ── 转为长格式 ──
-  w_long <- data.frame(
-    Component = rep(mix_names, each = nrow(w_mat)),
-    Weight    = as.vector(w_mat)
+  boot_df <- model$boot_table
+  boot_df <- boot_df[boot_df$Term %in% c("Overall", selected_raw), , drop = FALSE]
+
+  plot_df <- data.frame(
+    Iteration = boot_df$Boot_ID,
+    Component_Raw = boot_df$Term,
+    Quantile = sub("_vs_.*", "", boot_df$Target),
+    Effect = boot_df$Estimate,
+    stringsAsFactors = FALSE
   )
-  w_long$Component <- factor(w_long$Component, levels = ordered_names)
 
-  # ── caption / subtitle 逻辑 ──
-  if (ci_source == "bootstrap") {
-    subtitle_text <- sprintf("Bootstrap weight distribution (%d replicates)", n_iter)
-    caption_text <- NULL
-  } else if (ci_source == "bootstrap_with_inner_rh") {
-    subtitle_text <- sprintf("Bootstrap weight distribution (%d replicates, inner rh=%d)", n_iter, model$point_fit$rh)
-    caption_text <- "Note: Inner rh > 1 introduces additional splitting variance; distributions may be slightly wider than true sampling variance."
+  selected_clean <- .clean_name(selected_raw)
+
+  plot_df$Component <- ifelse(
+    plot_df$Component_Raw == "Overall",
+    "Overall",
+    .clean_name(plot_df$Component_Raw)
+  )
+  plot_df$Component <- factor(
+    plot_df$Component,
+    levels = c("Overall", selected_clean)
+  )
+
+  q_levels_str <- paste0("Q", 2:(if (!is.null(model$q)) model$q else 4))
+  plot_df$Quantile <- factor(plot_df$Quantile, levels = q_levels_str)
+
+  is_exp_family <- model$family %in% c("binomial", "poisson", "quasipoisson")
+  if (is.null(exponentiate)) exponentiate <- is_exp_family
+
+  if (exponentiate) {
+    plot_df$Effect <- exp(plot_df$Effect)
+    y_label <- "Odds Ratio / Risk Ratio (95% Percentile CI)"
+    y_intercept <- 1
   } else {
-    subtitle_text <- sprintf("Weight distribution across %d Repeated Holdout iterations", n_iter)
-    caption_text <- "Note: Distributions reflect data-splitting variance only (NOT valid for inference). Use nwqs_boot(keep_fits=TRUE) for valid bootstrap distributions."
+    y_label <- "Coefficient (\u03B2 with 95% Percentile CI)"
+    y_intercept <- 0
   }
 
-  colors <- .get_palette(n_comps, palette)
-
-  # ── 竖直箱线图 (组分在 X 轴, 权重在 Y 轴) ──
-  p <- ggplot2::ggplot(w_long, ggplot2::aes(x = Component, y = Weight, fill = Component)) +
-    ggplot2::geom_boxplot(outlier.shape = NA, alpha = 0.7, width = 0.6, color = "gray30") +
-    ggplot2::geom_jitter(alpha = 0.3, width = 0.15, size = 0.8, color = "gray40") +
-    ggplot2::stat_summary(fun = mean, geom = "point", shape = 18, size = 3, color = "#2C3E50") +
-    ggplot2::scale_fill_manual(values = colors, guide = "none") +
-    ggplot2::theme_bw(base_size = base_size) +
-    ggplot2::labs(
-      title = "Component Weight Distribution",
-      subtitle = subtitle_text,
-      x = NULL, y = "Weight"
-    ) +
-    ggplot2::theme(
-      panel.grid.major.x = ggplot2::element_blank(),
-      panel.grid.minor = ggplot2::element_blank(),
-      axis.line = ggplot2::element_line(color = "#2C3E50", linewidth = 0.5),
-      plot.title = ggplot2::element_text(hjust = 0.5, face = "bold", size = base_size + 1),
-      plot.subtitle = ggplot2::element_text(hjust = 0.5, size = base_size - 1, color = "#7F8C8D"),
-      axis.text.x = ggplot2::element_text(face = "bold", angle = 45, hjust = 1)
+  stats_df <- plot_df %>%
+    dplyr::group_by(Component, Quantile) %>%
+    dplyr::summarise(
+      ymin = quantile(Effect, 0.025, na.rm = TRUE),
+      lower = quantile(Effect, 0.25, na.rm = TRUE),
+      middle = median(Effect, na.rm = TRUE),
+      upper = quantile(Effect, 0.75, na.rm = TRUE),
+      ymax = quantile(Effect, 0.975, na.rm = TRUE),
+      .groups = "drop"
     )
 
-  # ── caption 警告 (仅 RH 模式) ──
-  if (!is.null(caption_text)) {
-    p <- p + ggplot2::labs(caption = caption_text) +
-      ggplot2::theme(plot.caption = ggplot2::element_text(
-        face = "italic", color = "red3", size = base_size - 3, hjust = 0
-      ))
+  final_colors <- c(
+    "Overall" = "#555555",
+    stats::setNames(.get_palette(length(selected_clean), palette), selected_clean)
+  )
+  final_colors <- final_colors[c("Overall", selected_clean)]
+
+  layout_config <- calc_facet_layout(length(c("Overall", selected_clean)))
+
+  p <- ggplot2::ggplot() +
+    ggplot2::geom_jitter(
+      data = plot_df,
+      ggplot2::aes(x = Quantile, y = Effect, fill = Component),
+      shape = 21,
+      color = "white",
+      alpha = 0.35,
+      width = 0.22,
+      size = 0.85,
+      stroke = 0.15
+    ) +
+    ggplot2::geom_boxplot(
+      data = stats_df,
+      ggplot2::aes(
+        x = Quantile,
+        ymin = ymin,
+        lower = lower,
+        middle = middle,
+        upper = upper,
+        ymax = ymax,
+        fill = Component
+      ),
+      stat = "identity",
+      color = "black",
+      linewidth = 0.6,
+      width = 0.55,
+      alpha = fill_alpha
+    ) +
+    ggplot2::geom_hline(
+      yintercept = y_intercept,
+      linetype = "dashed",
+      color = "firebrick",
+      linewidth = 0.6
+    ) +
+    ggplot2::facet_wrap(
+      ~Component,
+      scales = ifelse(free_y, "free_y", "fixed"),
+      ncol = layout_config$nc,
+      axes = "all_x",
+      axis.labels = "all_x"
+    ) +
+    ggplot2::scale_fill_manual(values = final_colors, drop = FALSE) +
+    ggplot2::labs(
+      title = "Bootstrap Specificity and Stability Analysis",
+      subtitle = sprintf(
+        "Boxplots: Median [IQR]; Whiskers: 2.5th to 97.5th Percentiles (95%% CI); n=%d",
+        model$n_success
+      ),
+      x = "Exposure Quantile Index",
+      y = y_label
+    ) +
+    ggplot2::theme_minimal(base_size = base_size) +
+    ggplot2::theme(
+      legend.position = "none",
+      panel.grid.major.x = ggplot2::element_blank(),
+      panel.grid.minor = ggplot2::element_blank(),
+      strip.background = ggplot2::element_blank(),
+      strip.text = ggplot2::element_text(
+        face = "bold",
+        color = "black",
+        size = base_size
+      ),
+      axis.line = ggplot2::element_line(
+        color = "black",
+        linewidth = 0.5
+      ),
+      axis.text.x = ggplot2::element_text(color = "black"),
+      axis.ticks.x = ggplot2::element_line(color = "black"),
+      axis.title.x = ggplot2::element_text(color = "black"),
+      plot.title = ggplot2::element_text(
+        face = "bold",
+        hjust = 0.5,
+        size = base_size + 2
+      ),
+      plot.subtitle = ggplot2::element_text(
+        hjust = 0.5,
+        color = "gray30",
+        size = base_size - 1
+      ),
+      panel.spacing = ggplot2::unit(1.2, "lines")
+    )
+
+  if (!is.null(y_step) && !is.null(ylim)) {
+    y_breaks <- seq(ylim[1], ylim[2], by = y_step)
+    p <- p + ggplot2::scale_y_continuous(breaks = y_breaks)
+  } else if (!is.null(y_step)) {
+    p <- p + ggplot2::scale_y_continuous(breaks = scales::breaks_width(y_step))
   }
 
-  return(p)
-}
+  if (!is.null(ylim)) {
+    p <- p + ggplot2::coord_cartesian(ylim = ylim)
+  }
 
-
-safe_mean <- function(x) {
-  if (all(is.na(x))) NA_real_ else mean(x, na.rm = TRUE)
-}
-
-safe_sd <- function(x) {
-  n <- sum(!is.na(x))
-  if (n <= 1) NA_real_ else sd(x, na.rm = TRUE)
-}
-
-safe_prop_ge <- function(x, cutoff) {
-  if (all(is.na(x))) NA_real_ else mean(x >= cutoff, na.rm = TRUE)
+  p
 }

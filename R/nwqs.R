@@ -1,72 +1,67 @@
-#' Fit Non-linear Weighted Quantile Sum (NWQS) Regression
+#' @title 拟合非线性加权分位数和 (NWQS) 回归模型
 #'
 #' @description
-#' The main entry point for fitting Non-linear Weighted Quantile Sum (NWQS) regression models.
-#' NWQS evaluates the overall joint effect and component-specific relative importance of a highly
-#' correlated mixture, while flexibly accommodating non-linear dose-response relationships (e.g.,
-#' threshold effects, U-shaped curves). The method separates penalized representation learning
-#' from unpenalized final-stage effect estimation.
+#' `nwqs` 是拟合非线性加权分位数和 (Non-linear Weighted Quantile Sum) 回归模型的核心函数。
+#' 本方法旨在评估高共线性混合物暴露的整体联合效应 (overall joint effect) 以及各个组分的
+#' 相对重要性，同时灵活地容纳非线性剂量反应关系（例如：阈值效应、U型曲线等）。
+#' 算法在架构上将带惩罚的表征学习（权重与形状发现）与无惩罚的最终效应估计进行了严格分离。
 #'
 #' @details
-#' \strong{Algorithmic Architecture:} \cr
-#' The `nwqs` function implements a robust "Repeated Holdout" (RH) framework combined with a
-#' shape-decoupling architecture:
+#' \strong{算法架构与统计学考量:} \cr
+#' 本函数实现了一个稳健的“重复保留 (Repeated Holdout, RH)”架构，并结合了形状解耦机制：
 #' \enumerate{
-#'   \item \strong{Outer Repeated Holdout Splitting:} For each RH iteration, the data are randomly
-#'     split into a Training set (for weight/shape discovery) and a Validation set (for effect estimation).
-#'   \item \strong{Weight & Shape Discovery:} On the Training set, a multi-parameter engine
-#'     (specified by \code{weight_engine}) estimates the non-linear basis coefficients (shapes) and
-#'     extracts relative importance (weights) via Out-Of-Bag (OOB) permutation.
-#'   \item \strong{Shape Normalization:} To weaken the coupling between spline shape and effect
-#'     magnitude, shapes are standardized to have a unit variance on the predictor scale using the Training set.
-#'   \item \strong{1-DoF Effect Estimation:} The normalized shapes and weights are projected onto
-#'     the Validation set to construct a single \code{wqs_score}. A generalized linear model (GLM)
-#'     is then fitted to estimate the overall mixture effect without directly penalizing the final effect.
+#'   \item \strong{外部重复保留拆分 (Outer Repeated Holdout Splitting):} 在每次 RH 迭代中，数据被随机
+#'     拆分为训练集（用于发现权重和非线性形状）和验证集（用于效应估计）。
+#'     *医学统计学注:* 对于条件逻辑回归 (`family = "clogit"`)，算法严格在层/匹配组（Cluster/Stratum）级别
+#'     进行随机拆分，这对于维持配对病例对照研究 (Matched Case-Control Studies) 的设计完整性至关重要，可避免破坏匹配结构。
+#'   \item \strong{权重与形状发现:} 在训练集上，多参数引擎估计非线性基函数的系数（形状），并通过
+#'     袋外 (Out-Of-Bag, OOB) 置换法提取相对重要性（权重）。
+#'   \item \strong{形状归一化 (Shape Normalization):} 为了削弱样条形状与效应量之间的耦合，利用训练集将
+#'     形状标准化为在预测变量尺度上具有单位方差。
+#'   \item \strong{单自由度效应估计 (1-DoF Effect Estimation):} 将归一化后的形状和权重投影到验证集上，
+#'     构建单一的 `nwqs` 指数。随后拟合广义线性模型 (GLM) 以估计整体混合物效应，从而避免对最终效应的直接惩罚。
 #' }
 #'
-#' By setting \code{rh > 1}, the algorithm averages the weights, shapes, and coefficients across
-#' multiple random splits, producing stable empirical inferences. Note that the standard errors
-#' and confidence intervals generated from RH iterations reflect data-splitting variance, not true
-#' sampling variance. For robust statistical inference, use \code{nwqs_boot()}.
-#'
-#' @param data A \code{data.frame} containing the mixture components, covariates, and outcome variable.
-#' @param mix_name Character vector. Column names of the mixture components to be evaluated.
-#' @param covariates Character vector. Column names of covariates/confounders to adjust for. If
-#'   \code{NULL}, an unadjusted model is fitted.
-#' @param outcome Character. Column name of the dependent/outcome variable. Defaults to \code{"y"}.
-#' @param weight_engine Function. The core engine used for weight and shape discovery on the training
-#'   set. Defaults to \code{permutation_scorer}.
-#' @param q Integer. Number of quantiles used to categorize the continuous mixture components
-#'   (e.g., 4 for quartiles, 10 for deciles). Defaults to 4.
-#' @param df_spline Integer. Degrees of freedom for the natural cubic splines used to model
-#'   non-linearity. Defaults to 3.
-#' @param transform_fun Function. A custom transformation applied to the mixture components before
-#'   modeling. If \code{NULL}, the default quantile transformation (\code{trans_quantile}) is used.
-#' @param split_prop Numeric between (0, 1). The proportion of the full dataset allocated to the
-#'   Training set for weight/shape discovery in each RH iteration. Defaults to 0.6.
-#' @param rh Integer. Number of Repeated Holdout iterations. To obtain stable distributions, set
-#'   \code{rh} to at least 100. Defaults to 1.
-#' @param seed Integer. Random seed for reproducible repeated holdout splitting. Defaults to 1234.
-#' @param n_permutation Integer. Number of internal permutations or bootstraps passed to
-#'   \code{weight_engine} to compute the variable importance metric. Defaults to 30.
-#' @param family Character or function. Specifies the GLM error distribution and link function.
-#'   Supported options include \code{"gaussian"}, \code{"binomial"}, \code{"poisson"}, and \code{"quasipoisson"}.
-#' @param plan_strategy Character. Strategy for parallel computation powered by the \pkg{future}
-#'   package. Options are \code{"sequential"}, \code{"multicore"}, or \code{"multisession"}.
-#' @param n_workers Integer. Number of parallel workers to use if \code{plan_strategy != "sequential"}.
-#'   If \code{NULL}, the package automatically detects and optimizes CPU cores.
-#' @param quiet Logical. If \code{TRUE}, suppress the warning about RH-based standard errors
-#'   when \code{rh > 1}. Useful when called internally by \code{nwqs_boot()}. Defaults to \code{FALSE}.
-#' @param ... Additional arguments passed to \code{run_oob_permutation} or the selected \code{weight_engine}.
-#'
-#' @return An object of class \code{c("nwqs", "list")} containing the following key components:
+#' \strong{关于科学严谨性与偏倚风险的警告:} \cr
 #' \itemize{
-#'   \item \code{fit}: A list containing the summarized GLM object (coefficients, Deviance, AIC).
-#'   \item \code{final_weights}: A named numeric vector of the ensemble-averaged relative weights.
-#'   \item \code{mean_shapes}: A named numeric vector of the ensemble-averaged normalized spline coefficients.
-#'   \item \code{rh_coefs}: A matrix of the global GLM coefficients across all \code{rh} iterations.
-#'   \item \code{rh_weights}: A matrix of the extracted weights across all \code{rh} iterations.
-#'   \item \code{data}: The original dataset augmented with the final calculated ensemble \code{wqs_score}.
+#'   \item \strong{方差膨胀与推断错误:} 当设置 \code{rh > 1} 时，算法会平均多次拆分的结果以提供稳定的经验推断。
+#'     但必须严谨地认识到：此处输出的 \code{fit$coefficients} 中的标准误 (SE) 和置信区间 (CI) **仅反映了
+#'     数据拆分带来的算法方差 (Algorithmic Variance)，绝不能代表真实的抽样变异 (Sampling Variance)**。
+#'     直接使用该 P 值进行假设检验会导致第一类错误严重膨胀。进行可靠的推断必须使用 \code{nwqs_boot()}。
+#'   \item \strong{残余混杂 (Residual Confounding):} 请务必通过 \code{covariates} 传入充分的混杂因素。
+#'     如果存在未测量的混杂因素，或者模型对非线性关系的设定存在严重偏差，估计的联合效应可能产生偏倚。
+#'   \item \strong{选择偏倚 (Selection Bias):} 如果原始样本中的数据缺失是“非随机缺失 (MNAR)”，或者
+#'     训练集/验证集的随机拆分导致小样本下某些暴露特征的分布失衡，可能会在权重分配上引入偏倚。
+#' }
+#'
+#' @param data \code{data.frame}。包含混合物组分、协变量、匹配变量以及结局变量的数据框。
+#' @param mix_name Character vector。需要评估的混合物组分（暴露变量）的列名。
+#' @param covariates Character vector。用于调整的协变量/混杂因素的列名。若为 \code{NULL}，则拟合未调整模型。
+#' @param outcome Character。结局/因变量的列名，默认值为 \code{"y"}。
+#' @param strata_col Character。用于条件逻辑回归的层/匹配组 ID 的列名。若 \code{family = "clogit"}，此项为必填。
+#' @param weight_engine Function。用于在训练集上发现权重和形状的核心引擎，默认为 \code{permutation_scorer}。
+#' @param q Integer。将连续混合物变量分类的分位数数量（如 4 代表四分位数，10 代表十分位数），默认为 4。
+#' @param df_spline Integer。用于拟合非线性曲线的自然三次样条 (Natural Cubic Splines) 的自由度，默认为 3。
+#' @param transform_fun Function。在建模前对混合物组分应用的自定义转换函数。若为 \code{NULL}，默认使用分位数转换 (\code{trans_quantile})。
+#' @param train_prop Numeric (0, 1)。在单次 RH 迭代中，分配给训练集（用于权重/形状发现）的数据比例，默认为 0.6。
+#' @param rh Integer。重复保留 (Repeated Holdout) 的迭代次数。若要获得稳定的分布，建议设置为 100 以上。默认为 1。
+#' @param seed Integer。用于可重复的数据拆分的随机种子，默认为 1234。
+#' @param n_permutation Integer。传递给 \code{weight_engine} 计算变量重要性的内部置换或 Bootstrap 次数，默认为 10。
+#' @param family Character 包含拟合 GLM 的误差分布及链接函数。支持的选项包括 \code{"gaussian"}（线性回归）,
+#'   \code{"binomial"}（逻辑回归）, \code{"poisson"}, \code{"quasipoisson"}, 以及 \code{"clogit"}（条件逻辑回归）。
+#' @param plan_strategy Character。基于 \pkg{future} 包的并行计算策略。可选 \code{"sequential"}, \code{"multicore"}, 或 \code{"multisession"}。
+#' @param n_workers Integer。若不采取 \code{"sequential"}，指定并行的核心数。若为 \code{NULL}，将自动检测并优化 CPU 核心分配。
+#' @param quiet Logical。若为 \code{TRUE}，则静默关于 \code{rh > 1} 时标准误不代表抽样方差的警告信息。通常在 \code{nwqs_boot()} 内部调用时开启，默认为 \code{FALSE}。
+#' @param ... 传递给 \code{run_oob_permutation} 或所选 \code{weight_engine} 的其他额外参数。
+#'
+#' @return 返回一个 \code{c("nwqs", "list")} 类的对象，包含以下核心内容：
+#' \itemize{
+#'   \item \code{fit}: 包含汇总 GLM 对象（系数、偏差、AIC）的列表。
+#'   \item \code{final_weights}: 命名数值向量，表示多次迭代平均后的集成相对权重。
+#'   \item \code{mean_shapes}: 命名数值向量，表示多次迭代平均后的标准化样条系数。
+#'   \item \code{rh_coefs}: 矩阵，记录所有 \code{rh} 迭代中的全局 GLM 回归系数。
+#'   \item \code{rh_weights}: 矩阵，记录所有 \code{rh} 迭代中提取的权重。
+#'   \item \code{data}: 附加了最终计算出的集成 \code{nwqs} 指数得分的原始数据集。
 #' }
 #'
 #' @seealso \code{\link{nwqs_boot}}, \code{\link{plot.nwqs}}, \code{\link{summary.nwqs}}
@@ -76,36 +71,53 @@
 #' @importFrom future plan
 #' @importFrom future.apply future_lapply
 #' @export
-nwqs <- function(data, mix_name, covariates = NULL, outcome = "y",
+nwqs <- function(data, mix_name, covariates = NULL, outcome = "y", strata_col = NULL,
                  weight_engine = permutation_scorer, q = 4, df_spline = 3, transform_fun = NULL,
-                 split_prop = 0.6, rh = 1, seed = 1234, n_permutation = 30,
-                 family = c("gaussian", "binomial", "poisson", "quasipoisson"),
+                 train_prop = 0.6, rh = 100, seed = 1234, n_permutation = 100,
+                 family = c("gaussian", "binomial", "poisson", "quasipoisson", "clogit"),
                  plan_strategy = c("sequential", "multisession", "multicore"),
                  n_workers = NULL, quiet = FALSE, ...) {
+  family <- match.arg(family)
+  plan_strategy <- match.arg(plan_strategy)
+  if (length(covariates) == 0) covariates <- NULL
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # [NEW] Clogit 安全检查
+  # ──────────────────────────────────────────────────────────────────────────
+  if (family == "clogit") {
+    if (is.null(strata_col)) {
+      stop("For conditional logistic regression (family = 'clogit'), 'strata_col' must be provided.")
+    }
+    if (!requireNamespace("survival", quietly = TRUE)) {
+      stop("Please install the 'survival' package to use clogit.")
+    }
+    if (!(strata_col %in% names(data))) {
+      stop(paste("strata_col '", strata_col, "' not found in data.", sep = ""))
+    }
+  }
+
   # ──────────────────────────────────────────────────────────────────────────
   # [FIX #7] quiet 参数：允许 nwqs_boot() 内部调用时静默 RH 警告
   # ──────────────────────────────────────────────────────────────────────────
   t_start <- Sys.time()
   args <- list(...)
-  family <- match.arg(family)
-  plan_strategy <- match.arg(plan_strategy)
 
   if (!requireNamespace("future", quietly = TRUE) || !requireNamespace("future.apply", quietly = TRUE)) {
     stop("Please install 'future' and 'future.apply' packages.")
   }
   if (rh < 1) stop("'rh' must be at least 1.")
-  if (split_prop <= 0 || split_prop >= 1) stop("'split_prop' must be in (0, 1).")
+  if (train_prop <= 0 || train_prop >= 1) stop("'train_prop' must be in (0, 1).")
 
   current_reserve <- if (!is.null(args$cpu_reserve)) args$cpu_reserve else 0.2
 
   # ──────────────────────────────────────────────────────────────────────────
   # [FIX #7] on.exit 保护：确保 old_plan 为 NULL 时不会报错
-
   # ──────────────────────────────────────────────────────────────────────────
   old_plan <- tryCatch(
     configure_parallel_plan(
       loop_number = rh, strategy = plan_strategy,
-      n_workers = n_workers, reserve_cpu = current_reserve
+      n_workers = n_workers, reserve_cpu = current_reserve,
+      verbose = !isTRUE(quiet)
     ),
     error = function(e) {
       warning(
@@ -137,40 +149,77 @@ nwqs <- function(data, mix_name, covariates = NULL, outcome = "y",
   model_boundary <- attr(temp_spline, "Boundary.knots")
 
   # ──────────────────────────────────────────────────────────────────────────
-  # [FIX #3] 种子管理：串行模式下用 set.seed()，并行模式下完全依赖
-  #          future.seed = TRUE (L'Ecuyer-CMRG)，不再手动设种子
+  # [FIX #3] 种子管理
   # ──────────────────────────────────────────────────────────────────────────
   if (!use_parallel && !is.null(seed)) set.seed(seed)
 
   n_obs <- nrow(data)
 
+  # ──────────────────────────────────────────────────────────────────────────
+  # [NEW] Clogit 公式构建：注入 strata()
+  # ──────────────────────────────────────────────────────────────────────────
   if (is.null(covariates)) {
-    formula_str <- paste(outcome, "~ wqs_score")
+    if (family == "clogit") {
+      formula_str <- paste0(outcome, " ~ nwqs + strata(", strata_col, ")")
+    } else {
+      formula_str <- paste(outcome, "~ nwqs")
+    }
   } else {
     missing_cov <- setdiff(covariates, names(data))
     if (length(missing_cov) > 0) {
       stop(paste("Missing covariates:", paste(missing_cov, collapse = ", ")))
     }
-    formula_str <- paste(outcome, "~ wqs_score +", paste(covariates, collapse = " + "))
+    if (family == "clogit") {
+      formula_str <- paste0(outcome, " ~ nwqs + ", paste(covariates, collapse = " + "), " + strata(", strata_col, ")")
+    } else {
+      formula_str <- paste(outcome, "~ nwqs +", paste(covariates, collapse = " + "))
+    }
   }
   formula_final <- as.formula(formula_str)
 
   # --- RH 单次迭代函数 ---
   one_rh <- function(i) {
-    idx_all <- sample(seq_len(n_obs))
-    n_train <- floor(n_obs * split_prop)
-    train_idx <- idx_all[seq_len(n_train)]
-    valid_idx <- idx_all[(n_train + 1):n_obs]
+    # ──────────────────────────────────────────────────────────────────────
+    # [NEW] 如果是 Clogit，必须按组（Cluster）进行训练和验证集的拆分！
+    # ──────────────────────────────────────────────────────────────────────
+    if (family == "clogit") {
+      unique_strata <- unique(data_Q[[strata_col]])
+      n_strata <- length(unique_strata)
+      shuffled_strata <- sample(unique_strata)
+
+      n_train_strata <- max(1, floor(n_strata * train_prop))
+      train_strata <- shuffled_strata[seq_len(n_train_strata)]
+      valid_strata <- shuffled_strata[(n_train_strata + 1):n_strata]
+
+      train_idx <- which(data_Q[[strata_col]] %in% train_strata)
+      valid_idx <- which(data_Q[[strata_col]] %in% valid_strata)
+    } else {
+      idx_all <- sample(seq_len(n_obs))
+      n_train <- floor(n_obs * train_prop)
+      train_idx <- idx_all[seq_len(n_train)]
+      valid_idx <- idx_all[(n_train + 1):n_obs]
+    }
 
     data_train <- data_Q[train_idx, , drop = FALSE]
     data_valid <- data_Q[valid_idx, , drop = FALSE]
 
+    vars_needed <- unique(c(mix_name, outcome, covariates))
+    if (family == "clogit") vars_needed <- unique(c(vars_needed, strata_col))
+
     boot_res <- run_oob_permutation(
-      data = data_train, mix_name = mix_name, outcome = outcome,
-      weight_engine = weight_engine, n_permutation = n_permutation,
-      q = q, df_spline = df_spline,
-      model_knots = model_knots, model_boundary = model_boundary,
+      data = data_train[, vars_needed, drop = FALSE],
+      mix_name = mix_name,
+      outcome = outcome,
+      covariates = covariates,
+      weight_engine = weight_engine,
+      n_permutation = n_permutation,
+      q = q,
+      df_spline = df_spline,
+      model_knots = model_knots,
+      model_boundary = model_boundary,
+      family = family,
       boot_strategy = "sequential",
+      strata_col = strata_col, # 确保底层置换引擎也能识别匹配组
       ...
     )
     valid_res <- Filter(Negate(is.null), boot_res)
@@ -200,7 +249,7 @@ nwqs <- function(data, mix_name, covariates = NULL, outcome = "y",
     )
 
     # ──────────────────────────────────────────────────────────────────────
-    # [FIX #5] 防御性检查：确保展开后的列名与期望的 shape 名一致
+    # [FIX #5] 防御性检查
     # ──────────────────────────────────────────────────────────────────────
     expected_cols <- names(mean_shapes_iter)
     actual_train_cols <- colnames(train_trans)
@@ -233,22 +282,46 @@ nwqs <- function(data, mix_name, covariates = NULL, outcome = "y",
       combined_coefs[comp_cols] <- theta_norm * final_weights_iter[comp]
     }
 
-    wqs_score <- as.matrix(valid_trans[, expected_cols, drop = FALSE]) %*% combined_coefs
-    data_valid$wqs_score <- as.vector(wqs_score)
+    nwqs <- as.matrix(valid_trans[, expected_cols, drop = FALSE]) %*% combined_coefs
+    data_valid$nwqs <- as.vector(nwqs)
 
-    fit <- glm(formula_final, data = data_valid, family = family)
-    aic_val <- if (family == "quasipoisson") NA_real_ else AIC(fit)
+    # ──────────────────────────────────────────────────────────────────────
+    # [NEW] 兼容 Clogit 和 GLM 的拟合与指标萃取
+    # ──────────────────────────────────────────────────────────────────────
+    if (family == "clogit") {
+      fit <- survival::clogit(formula_final, data = data_valid)
+      aic_val <- stats::extractAIC(fit)[2]
+      null_dev <- -2 * fit$loglik[1]
+      res_dev <- -2 * fit$loglik[2]
+      df_n <- length(fit$coefficients)
+      df_r <- fit$n - length(fit$coefficients)
+    } else {
+      fit <- glm(formula_final, data = data_valid, family = family)
+      aic_val <- if (family == "quasipoisson") NA_real_ else AIC(fit)
+      null_dev <- fit$null.deviance
+      res_dev <- fit$deviance
+      df_n <- fit$df.null
+      df_r <- fit$df.residual
+    }
+
+    coefs_fit <- coef(fit)
+
+    if (!("nwqs" %in% names(coefs_fit)) || !is.finite(unname(coefs_fit["nwqs"]))) {
+      return(NULL)
+    }
+
+    if (!is.finite(stats::sd(data_valid$nwqs, na.rm = TRUE)) ||
+      stats::sd(data_valid$nwqs, na.rm = TRUE) < 1e-8) {
+      return(NULL)
+    }
 
     list(
       fit_obj = fit, weights = final_weights_iter, shapes = normalized_shapes_iter,
-      coefs = coef(fit), aic = aic_val, null_dev = fit$null.deviance,
-      res_dev = fit$deviance, df_null = fit$df.null, df_res = fit$df.residual
+      coefs = coefs_fit, aic = aic_val, null_dev = null_dev,
+      res_dev = res_dev, df_null = df_n, df_res = df_r
     )
   }
 
-  # ──────────────────────────────────────────────────────────────────────────
-  # [FIX #3] 并行时传 future.seed，串行时已经在上面 set.seed 了
-  # ──────────────────────────────────────────────────────────────────────────
   if (use_parallel) {
     rh_results <- future.apply::future_lapply(
       seq_len(rh), one_rh,
@@ -258,7 +331,12 @@ nwqs <- function(data, mix_name, covariates = NULL, outcome = "y",
     rh_results <- lapply(seq_len(rh), one_rh)
   }
 
-  rh_results <- Filter(Negate(is.null), rh_results)
+  rh_results <- Filter(function(x) {
+    !is.null(x) &&
+      !is.null(x$coefs) &&
+      "nwqs" %in% names(x$coefs) &&
+      is.finite(unname(x$coefs["nwqs"]))
+  }, rh_results)
   if (length(rh_results) == 0) stop("All iterations failed.")
 
   if (rh == 1) {
@@ -275,9 +353,6 @@ nwqs <- function(data, mix_name, covariates = NULL, outcome = "y",
 
   full_trans <- wqs_nonlinear_expand(data_Q, mix_name, knots = model_knots, boundary = model_boundary)
 
-  # ──────────────────────────────────────────────────────────────────────────
-  # [FIX #5] 防御性检查：full_trans 列名匹配
-  # ──────────────────────────────────────────────────────────────────────────
   expected_cols_full <- names(final_s_global)
   if (!all(expected_cols_full %in% colnames(full_trans))) {
     stop("Column mismatch between final shapes and wqs_nonlinear_expand() output on full data.")
@@ -292,7 +367,7 @@ nwqs <- function(data, mix_name, covariates = NULL, outcome = "y",
   }
 
   final_data <- data
-  final_data$wqs_score <- as.vector(
+  final_data$nwqs <- as.vector(
     as.matrix(full_trans[, expected_cols_full, drop = FALSE]) %*% combined_coefs_full
   )
 
@@ -300,6 +375,18 @@ nwqs <- function(data, mix_name, covariates = NULL, outcome = "y",
     single_res <- rh_results[[1]]
     final_obj <- single_res$fit_obj
     coef_summary <- as.data.frame(summary(final_obj)$coefficients)
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # [NEW] Clogit 的 summary 结构矫正 (与 glm 统一命名)
+    # ──────────────────────────────────────────────────────────────────────────
+    if (family == "clogit") {
+      if ("coef" %in% names(coef_summary)) names(coef_summary)[names(coef_summary) == "coef"] <- "Estimate"
+      if ("se(coef)" %in% names(coef_summary)) names(coef_summary)[names(coef_summary) == "se(coef)"] <- "Std. Error"
+      if ("z" %in% names(coef_summary)) names(coef_summary)[names(coef_summary) == "z"] <- "z value"
+      if ("Pr(>|z|)" %in% names(coef_summary) == FALSE && "p" %in% names(coef_summary)) {
+        names(coef_summary)[names(coef_summary) == "p"] <- "Pr(>|z|)"
+      }
+    }
 
     fit_obj <- list(
       coefficients = coef_summary, aic = single_res$aic, deviance = single_res$res_dev,
@@ -342,9 +429,6 @@ nwqs <- function(data, mix_name, covariates = NULL, outcome = "y",
   coef_mean <- colMeans(coef_mat, na.rm = TRUE)
   coef_sd <- apply(coef_mat, 2, sd, na.rm = TRUE)
 
-  # ──────────────────────────────────────────────────────────────────────────
-  # [FIX #1] quiet 参数控制是否发出 RH 警告
-  # ──────────────────────────────────────────────────────────────────────────
   if (!quiet) {
     warning(
       "When rh > 1, the Standard Errors and 95% CIs in `fit$coefficients` ",
@@ -355,10 +439,6 @@ nwqs <- function(data, mix_name, covariates = NULL, outcome = "y",
     )
   }
 
-  # ──────────────────────────────────────────────────────────────────────────
-  # [FIX #4] coef_summary 结构统一：补充 z_value 和 p_value 列，
-  #          使 rh > 1 与 rh == 1 输出的 coefficients 表结构一致
-  # ──────────────────────────────────────────────────────────────────────────
   z_value <- ifelse(coef_sd > 0, coef_mean / coef_sd, NA_real_)
   p_value <- ifelse(is.na(z_value), NA_real_, 2 * pnorm(-abs(z_value)))
 
@@ -389,56 +469,53 @@ nwqs <- function(data, mix_name, covariates = NULL, outcome = "y",
 }
 
 
-#' Bootstrap CI Wrapper for NWQS
+#' @title NWQS 模型的 Bootstrap 置信区间估计
 #'
 #' @description
-#' Performs outer bootstrap resampling for NWQS to approximate true sampling variability.
-#' Instead of computing just one contrast, this function extracts ALL terms and targets
-#' simultaneously and provides a comprehensive formatted table.
+#' `nwqs_boot` 为 NWQS 方法执行外部 Bootstrap 重抽样，旨在近似估计模型参数的真实抽样变异 (Sampling Variability)。
+#' 与仅计算单一对比差异不同，此函数会同时提取所有模型项的效应，并提供具备学术出版级质量的置信区间表格。
 #'
 #' @details
-#' \strong{Algorithmic Note on `rh_inner`:} \cr
-#' The parameter \code{rh_inner} controls the number of Repeated Holdout (RH) splits
-#' inside each individual bootstrap iteration. Setting \code{rh_inner = 1} (default)
-#' is highly recommended. The outer bootstrap is sufficient for deriving valid
-#' confidence intervals.
-#'
-#' @param data data.frame. Original dataset.
-#' @param mix_name Character vector. Mixture component names.
-#' @param covariates Character vector or NULL. Covariates to adjust for.
-#' @param outcome Character. Outcome variable name. Defaults to "y".
-#' @param family Character. One of "gaussian", "binomial", "poisson", "quasipoisson".
-#' @param n_boot Integer. Number of outer bootstrap replicates. Defaults to 100.
-#' @param rh_inner Integer. Number of RH iterations used inside each \code{nwqs()} fit.
-#'   Defaults to 1 to prevent severe computational overhead.
-#' @param conf_level Numeric. Confidence level. Defaults to 0.95.
-#' @param seed Integer or NULL. Random seed.
-#' @param keep_fits Logical. Whether to save all bootstrap \code{nwqs} model objects
-#'   in memory. Defaults to FALSE to save memory.
-#' @param plan_strategy Character. Parallel strategy for outer bootstrap.
-#' @param n_workers Integer or NULL. Number of workers for outer bootstrap.
-#' @param ... Additional arguments passed to \code{nwqs()} (e.g., \code{q},
-#'   \code{df_spline}, \code{weight_engine}).
-#'
-#' @return A list with class \code{c("nwqs_boot", "list")} containing:
+#' \strong{重抽样策略与统计学注意事项:} \cr
 #' \itemize{
-#'   \item \code{point_fit}: NWQS fit on the original data.
-#'   \item \code{point_effects}: Filtered \code{extract_nwqs_effects()} output.
-#'   \item \code{ci_table}: Long-format summary table with bootstrap percentile CIs.
-#'   \item \code{formatted_table}: Publication-ready wide-format table.
-#'   \item \code{boot_table}: Raw estimates across all bootstrap iterations.
-#'   \item \code{boot_fits}: Optional list of bootstrap model objects (if \code{keep_fits=TRUE}).
-#'   \item \code{conf_level}: The confidence level used.
-#'   \item \code{final_weights}: Ensemble-averaged weights from the point fit (mirrors nwqs output).
-#'   \item \code{mean_shapes}: Ensemble-averaged spline shapes from the point fit.
-#'   \item \code{mean_coefs}: Averaged GLM coefficients from the point fit.
-#'   \item \code{family}: GLM family used.
-#'   \item \code{q}: Number of quantiles used.
-#'   \item \code{df_spline}: Spline degrees of freedom.
-#'   \item \code{spline_knots}: Knot positions from the point fit.
-#'   \item \code{spline_boundary}: Boundary knots from the point fit.
-#'   \item \code{data}: Original dataset augmented with wqs_score from point fit.
-#'   \item \code{call}: The matched call.
+#'   \item \strong{独立样本 vs. 匹配数据:} 算法根据所选的误差分布自适应抽样策略。对于标准 GLM 模型，执行简单的随机有放回抽样。
+#'     而对于条件逻辑回归 (`family = "clogit"`)，算法执行\strong{整群重抽样 (Cluster Resampling)}。这意味着它会基于
+#'     匹配变量 (`strata_col`) 作为一个整体进行抽样，并在内部动态重构匹配 ID。这在流行病学设计中极为关键，防止了同一病例-对照组被
+#'     拆散或在多次抽中时混淆独立观察单位。
+#'   \item \strong{内部 RH 参数 (`rh_inner`):} 此参数控制单个 Bootstrap 样本内部执行的重复保留次数。
+#'     强烈建议在 Bootstrap 时将其设置为 1（默认值），以防止因“双重嵌套循环”引发的灾难性计算开销。外部 Bootstrap 足以提供
+#'     推断所需的稳健分布。
+#'   \item \strong{解释与选择偏倚:} Bootstrap 百分位法得出的 95\% CI 提供的是统计抽样方差的良好估计。然而，请注意它**无法纠正**
+#'     原始设计中的系统性选择偏倚。如果原始队列/样本并不代表目标人群，或者失访率较高且与暴露结局均相关，则通过 Bootstrap 生成的
+#'     置信区间会精确地“围绕”在这个有偏的估计量周围。
+#'   \item \strong{流行病学效应量化:} 对于指数族模型（`binomial`, `poisson`, `quasipoisson`, `clogit`），算法会自动计算并
+#'     报告指数化后的平均值与置信区间上限/下限，以便直接解释为比值比 (OR) 或相对危险度 (RR)。
+#' }
+#'
+#' @param data data.frame。原始数据集。
+#' @param mix_name Character vector。混合物组分列名。
+#' @param covariates Character vector 或 \code{NULL}。需要调整的协变量/混杂因素。
+#' @param outcome Character。结局变量列名，默认为 "y"。
+#' @param strata_col Character。匹配数据中条件逻辑回归所需的层/组 ID 列名。
+#' @param family Character。误差分布与连接函数，可选 "gaussian", "binomial", "poisson", "quasipoisson", "clogit"。
+#' @param n_boot Integer。外部 Bootstrap 抽样重复的次数。考虑到百分位置信区间的稳定性，建议在最终发表前设置为 500 或 1000（默认为 100）。
+#' @param rh_inner Integer。在每个 `nwqs()` 拟合内部使用的 RH 迭代次数。为避免计算量激增，默认为 1。
+#' @param n_permutation Integer。传递给底层 `nwqs()` 函数的置换次数，用于计算变量重要性权重。默认为 100。
+#' @param conf_level Numeric。所需置信区间的置信水平，默认为 0.95 (即 95\% 置信区间)。
+#' @param seed Integer 或 \code{NULL}。随机数种子，用于保证抽样的可重复性。
+#' @param keep_fits Logical。是否在内存中保留所有的 Bootstrap `nwqs` 模型对象。通常为了节省 RAM 设为 \code{FALSE}。
+#' @param plan_strategy Character。外部 Bootstrap 所采用的并行计算策略。
+#' @param n_workers Integer 或 \code{NULL}。并行核心数。
+#' @param ... 传递给核心 \code{nwqs()} 函数的其他参数（例如分位点数量 \code{q}，样条自由度 \code{df_spline} 等）。
+#'
+#' @return 一个 \code{c("nwqs_boot", "list")} 类的列表，主要包含以下内容供下游统计报告使用：
+#' \itemize{
+#'   \item \code{ci_table}: 包含均值及 Bootstrap 百分位置信区间的长格式数据框。若适用，自动报告 OR/RR 及其置信区间。
+#'   \item \code{formatted_table}: 可直接用于医学期刊附表的宽格式汇总表（带有权重降序排列）。
+#'   \item \code{boot_table}: 包含所有成功 Bootstrap 迭代中提取的原始估计值的长格式数据。
+#'   \item \code{final_weights}: 从原始点估计拟合中获取的混合物组分平均相对权重。
+#'   \item \code{n_success}: 成功收敛的 Bootstrap 迭代次数。
+#'   \item ... 及其他包含数据、公式调用和内部架构（样条结点）的辅助属性。
 #' }
 #' @seealso \code{\link{nwqs}}, \code{\link{plot.nwqs_boot}}, \code{\link{extract_nwqs_effects}}
 #' @importFrom stats aggregate quantile
@@ -449,14 +526,17 @@ nwqs_boot <- function(data,
                       mix_name,
                       covariates = NULL,
                       outcome = "y",
-                      family = c("gaussian", "binomial", "poisson", "quasipoisson"),
+                      strata_col = NULL,
+                      family = c("gaussian", "binomial", "poisson", "quasipoisson", "clogit"),
                       n_boot = 100,
                       rh_inner = 1,
+                      n_permutation = 100,
                       conf_level = 0.95,
                       seed = 1234,
                       keep_fits = FALSE,
-                      plan_strategy = c("sequential","multisession","multicore"),
+                      plan_strategy = c("sequential", "multisession", "multicore"),
                       n_workers = NULL,
+                      q = 4,
                       ...) {
   start_time <- Sys.time()
 
@@ -470,28 +550,15 @@ nwqs_boot <- function(data,
     stop("Please install 'future' and 'future.apply' packages.")
   }
 
-  # ── 1. Point Estimate on Original Data ──────────────────────────────────────
-  # ──────────────────────────────────────────────────────────────────────────
-  # [FIX #1] 使用 quiet = TRUE 避免 point_fit 的 RH 警告（当 rh_inner > 1）
-  # ──────────────────────────────────────────────────────────────────────────
-  point_fit <- nwqs(
-    data = data, mix_name = mix_name, covariates = covariates, outcome = outcome,
-    family = family, rh = rh_inner, quiet = TRUE, ...
-  )
-
-  point_effects <- extract_nwqs_effects(point_fit)
   cols_to_keep <- c("Target", "Term", "Estimate")
-  point_effects_clean <- point_effects[, names(point_effects) %in% cols_to_keep, drop = FALSE]
 
-  # ── 2. Parallel Configuration ────────────────────────────────────────────────
-  # ──────────────────────────────────────────────────────────────────────────
-  # [FIX #7] on.exit 保护：tryCatch 包裹 configure_parallel_plan
-  # ──────────────────────────────────────────────────────────────────────────
+  # ── 1. Parallel Configuration ────────────────────────────────────────────────
   old_plan <- tryCatch(
     configure_parallel_plan(
       loop_number = n_boot,
       strategy    = plan_strategy,
-      n_workers   = n_workers
+      n_workers   = n_workers,
+      verbose     = FALSE
     ),
     error = function(e) {
       warning(
@@ -508,33 +575,45 @@ nwqs_boot <- function(data,
     add = TRUE
   )
 
-  # ──────────────────────────────────────────────────────────────────────────
-  # [FIX #2] 种子管理：串行模式下才用 set.seed()；并行完全靠 future.seed
-  # ──────────────────────────────────────────────────────────────────────────
   use_parallel <- !inherits(future::plan(), "sequential")
   if (!use_parallel && !is.null(seed)) set.seed(seed)
 
   n_obs <- nrow(data)
   alpha <- 1 - conf_level
 
-  # ── 3. Single Bootstrap Iteration ───────────────────────────────────────────
+  # ── 2. Single Bootstrap Iteration ───────────────────────────────────────────
   one_boot <- function(b) {
-    idx_boot <- sample(seq_len(n_obs), size = n_obs, replace = TRUE)
-    data_boot <- data[idx_boot, , drop = FALSE]
+    # ────────────────────────────────────────────────────────────────────────
+    # Clogit 的整群重抽样与独立 ID 重构
+    # ────────────────────────────────────────────────────────────────────────
+    if (family == "clogit") {
+      unique_strata <- unique(data[[strata_col]])
+      sampled_strata <- sample(unique_strata, size = length(unique_strata), replace = TRUE)
 
-    # ──────────────────────────────────────────────────────────────────────
-    # [FIX #2] 内部 nwqs() 不再手动传 seed，让 future.seed 管理随机性
-    # [FIX #1] 内部使用 quiet = TRUE 避免每次 bootstrap 迭代都发警告
-    # ──────────────────────────────────────────────────────────────────────
+      boot_data_list <- lapply(seq_along(sampled_strata), function(idx) {
+        sub_data <- data[data[[strata_col]] == sampled_strata[idx], , drop = FALSE]
+        # 极其关键：防止同一匹配组被抽中多次而导致合并
+        sub_data[[strata_col]] <- paste0(sampled_strata[idx], "_boot_", idx)
+        return(sub_data)
+      })
+      data_boot <- do.call(rbind, boot_data_list)
+    } else {
+      idx_boot <- sample(seq_len(n_obs), size = n_obs, replace = TRUE)
+      data_boot <- data[idx_boot, , drop = FALSE]
+    }
+
     fit_b <- tryCatch(
       {
         nwqs(
-          data = data_boot, mix_name = mix_name, covariates = covariates, outcome = outcome,
-          family = family, plan_strategy = "sequential", rh = rh_inner,
-          seed = NULL, quiet = TRUE, ...
+          data = data_boot, mix_name = mix_name, covariates = covariates, outcome = outcome, q = q,
+          strata_col = strata_col, family = family, plan_strategy = plan_strategy, rh = rh_inner,
+          n_permutation = n_permutation, seed = NULL, quiet = TRUE, ...
         )
       },
-      error = function(e) NULL
+      error = function(e) {
+        message("Bootstrap ", b, " failed: ", conditionMessage(e))
+        NULL
+      }
     )
 
     if (is.null(fit_b)) {
@@ -548,13 +627,23 @@ nwqs_boot <- function(data,
     }
 
     eff_b_clean <- eff_b[, names(eff_b) %in% cols_to_keep, drop = FALSE]
-    list(Success = TRUE, Effects = eff_b_clean, Fit = if (keep_fits) fit_b else NULL)
+
+    # 直接提取单次迭代的权重、形状和骨架参数
+    list(
+      Success = TRUE,
+      Effects = eff_b_clean,
+      Weights = fit_b$final_weights,
+      Shapes = fit_b$mean_shapes,
+      Struct = list(
+        df_spline = fit_b$df_spline,
+        spline_knots = fit_b$spline_knots,
+        spline_boundary = fit_b$spline_boundary
+      ),
+      Fit = if (keep_fits) fit_b else NULL
+    )
   }
 
-  # ── 4. Execute Bootstrap Loop ────────────────────────────────────────────────
-  # ──────────────────────────────────────────────────────────────────────────
-  # [FIX #2] 并行时用 future.seed = seed 确保可复现
-  # ──────────────────────────────────────────────────────────────────────────
+  # ── 3. Execute Bootstrap Loop ────────────────────────────────────────────────
   if (use_parallel) {
     boot_results <- future.apply::future_lapply(
       seq_len(n_boot), one_boot,
@@ -574,93 +663,146 @@ nwqs_boot <- function(data,
     stop("All bootstrap replicates failed.")
   }
 
-  # ── 5. Aggregate Results ─────────────────────────────────────────────────────
-  valid_effs <- lapply(boot_results[boot_success], function(x) x$Effects)
+  # ── 4. Aggregate Results ─────────────────────────────────────────────────────
+  valid_results <- boot_results[boot_success]
 
-  # ──────────────────────────────────────────────────────────────────────────
-  # [FIX #8] Boot_ID 使用原始的 bootstrap 迭代编号，而非成功序号
-  # ──────────────────────────────────────────────────────────────────────────
+  # 获取基础结构信息（从第一个成功的迭代中提取）
+  first_struct <- valid_results[[1]]$Struct
+
+  # 提取所有成功的效应值
+  valid_effs <- lapply(valid_results, function(x) x$Effects)
   success_indices <- which(boot_success)
   for (i in seq_along(valid_effs)) {
     valid_effs[[i]]$Boot_ID <- success_indices[i]
   }
   all_effs_df <- do.call(rbind, valid_effs)
 
-  ci_lower <- aggregate(Estimate ~ Target + Term,
+  # 计算平均权重
+  valid_weights <- lapply(valid_results, function(x) x$Weights)
+  weights_mat <- do.call(rbind, valid_weights)
+  avg_weights <- colMeans(weights_mat, na.rm = TRUE)
+  avg_weights <- avg_weights / sum(avg_weights, na.rm = TRUE) # 归一化
+
+  # 计算平均形状
+  valid_shapes <- lapply(valid_results, function(x) x$Shapes)
+
+  # 增加 is.numeric() 判断，因为 mean_shapes 通常是数值向量
+  if (is.numeric(valid_shapes[[1]]) || is.data.frame(valid_shapes[[1]]) || is.matrix(valid_shapes[[1]])) {
+    avg_shapes <- Reduce("+", valid_shapes) / length(valid_shapes)
+  } else {
+    avg_shapes <- NULL
+    warning("Complex shape structure detected; could not average shapes.")
+  }
+
+  # ---- Bootstrap CI ----
+  ci_lower <- aggregate(
+    Estimate ~ Target + Term,
     data = all_effs_df,
     FUN = function(x) quantile(x, probs = alpha / 2, na.rm = TRUE)
   )
   names(ci_lower)[names(ci_lower) == "Estimate"] <- "Boot_CI_Lower"
 
-  ci_upper <- aggregate(Estimate ~ Target + Term,
+  ci_upper <- aggregate(
+    Estimate ~ Target + Term,
     data = all_effs_df,
     FUN = function(x) quantile(x, probs = 1 - alpha / 2, na.rm = TRUE)
   )
   names(ci_upper)[names(ci_upper) == "Estimate"] <- "Boot_CI_Upper"
 
-  ci_table <- merge(point_effects_clean, ci_lower, by = c("Target", "Term"), all.x = TRUE)
+  # ---- Bootstrap mean ----
+  boot_mean <- aggregate(
+    Estimate ~ Target + Term,
+    data = all_effs_df,
+    FUN = function(x) mean(x, na.rm = TRUE)
+  )
+  names(boot_mean)[names(boot_mean) == "Estimate"] <- "Boot_Mean"
+
+  # ---- Merge CI + boot mean (彻底摒弃点估计) ----
+  ci_table <- merge(boot_mean, ci_lower, by = c("Target", "Term"), all.x = TRUE)
   ci_table <- merge(ci_table, ci_upper, by = c("Target", "Term"), all.x = TRUE)
   ci_table$N_Success <- n_success
 
-  # ── 6. Formatted Table ───────────────────────────────────────────────────────
+  # ──────────────────────────────────────────────────────────────────────────
+  # Clogit 等指数族还原 (展示为 OR/RR)
+  # ──────────────────────────────────────────────────────────────────────────
+  is_exp_family <- family %in% c("binomial", "poisson", "quasipoisson", "clogit")
+
+  disp_lcl <- ci_table$Boot_CI_Lower
+  disp_ucl <- ci_table$Boot_CI_Upper
+  disp_mean <- ci_table$Boot_Mean
+
+  if (is_exp_family) {
+    disp_lcl <- exp(disp_lcl)
+    disp_ucl <- exp(disp_ucl)
+    disp_mean <- exp(disp_mean)
+  }
+
   ci_table$Formatted <- sprintf(
     "%.3f [%.3f, %.3f]",
-    ci_table$Estimate,
-    ci_table$Boot_CI_Lower,
-    ci_table$Boot_CI_Upper
+    disp_mean, disp_lcl, disp_ucl
   )
 
   formatted_table <- reshape(
     ci_table[, c("Term", "Target", "Formatted")],
     idvar = "Term", timevar = "Target", direction = "wide"
   )
-  names(formatted_table) <- gsub("Formatted\\.", "", names(formatted_table))
+  names(formatted_table) <- gsub("^Formatted\\.", "", names(formatted_table))
 
-  weights <- point_fit$final_weights
-  if (!is.null(weights)) {
-    weight_df <- data.frame(
-      Term = names(weights),
-      Weight = round(weights, 3),
-      stringsAsFactors = FALSE
-    )
-    weight_df <- rbind(data.frame(
-      Term = "Overall", Weight = NA_real_,
-      stringsAsFactors = FALSE
-    ), weight_df)
-    formatted_table <- merge(weight_df, formatted_table, by = "Term", all.y = TRUE)
-    formatted_table <- formatted_table[order(
-      formatted_table$Term != "Overall",
-      -formatted_table$Weight
-    ), ]
-    rownames(formatted_table) <- NULL
+  # 合并平均权重到格式化表格
+  weight_df <- data.frame(
+    Term = names(avg_weights),
+    Weight = round(avg_weights, 3),
+    stringsAsFactors = FALSE
+  )
+  weight_df <- rbind(
+    data.frame(Term = "Overall", Weight = NA_real_, stringsAsFactors = FALSE),
+    weight_df
+  )
+
+  formatted_table <- merge(weight_df, formatted_table, by = "Term", all.y = TRUE)
+  formatted_table <- formatted_table[order(
+    formatted_table$Term != "Overall",
+    -formatted_table$Weight,
+    na.last = TRUE
+  ), ]
+  rownames(formatted_table) <- NULL
+
+  boot_raw <- all_effs_df
+  if (is_exp_family) {
+    boot_raw$Estimate <- exp(boot_raw$Estimate)
   }
+  boot_raw$ColName <- paste(boot_raw$Term, boot_raw$Target, sep = "_")
 
-  boot_fits <- if (keep_fits) lapply(boot_results, function(x) x$Fit) else NULL
+  boot_contrast_matrix <- reshape(
+    boot_raw[, c("Boot_ID", "ColName", "Estimate")],
+    idvar = "Boot_ID", timevar = "ColName", direction = "wide"
+  )
+  names(boot_contrast_matrix) <- gsub("^Estimate\\.", "", names(boot_contrast_matrix))
+  rownames(boot_contrast_matrix) <- NULL
 
-  # ── 7. Build Output ──────────────────────────────────────────────────────────
+  boot_fits <- if (keep_fits) lapply(valid_results, function(x) x$Fit) else NULL
+
+  # ── 5. Output Construction ───────────────────────────────────────────────────
   out <- list(
-    point_fit       = point_fit,
-    point_effects   = point_effects_clean,
-    ci_table        = ci_table,
+    ci_table = ci_table,
     formatted_table = formatted_table,
-    boot_table      = all_effs_df,
-    boot_fits       = boot_fits,
-    conf_level      = conf_level,
-
-    # ── Mirror nwqs output fields for downstream compatibility ──────────────
-    final_weights   = point_fit$final_weights,
-    mean_shapes     = point_fit$mean_shapes,
-    mean_coefs      = point_fit$mean_coefs,
-    rh_weights      = point_fit$rh_weights,
-    rh_shapes       = point_fit$rh_shapes,
-    rh_coefs        = point_fit$rh_coefs,
-    family          = point_fit$family,
-    q               = point_fit$q,
-    df_spline       = point_fit$df_spline,
-    spline_knots    = point_fit$spline_knots,
-    spline_boundary = point_fit$spline_boundary,
-    data            = point_fit$data,
-    call            = match.call()
+    boot_table = all_effs_df,
+    boot_contrast_mat = boot_contrast_matrix,
+    boot_fits = boot_fits,
+    conf_level = conf_level,
+    n_boot = n_boot,
+    n_success = n_success,
+    rh_inner = rh_inner,
+    n_permutation = n_permutation,
+    final_weights = avg_weights,
+    mean_shapes = avg_shapes,
+    family = family,
+    q = q,
+    df_spline = first_struct$df_spline,
+    spline_knots = first_struct$spline_knots,
+    spline_boundary = first_struct$spline_boundary,
+    data = data,
+    call = match.call()
   )
 
   class(out) <- c("nwqs_boot", "list")

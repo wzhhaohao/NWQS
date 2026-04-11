@@ -2,22 +2,22 @@
 % Please edit documentation in R/methods.R
 \name{print.nwqs_boot}
 \alias{print.nwqs_boot}
-\title{Print Method for nwqs_boot Objects}
+\title{打印基于 Bootstrap 的 NWQS 模型正式推断结果}
 \usage{
 \method{print}{nwqs_boot}(x, digits = 3, ...)
 }
 \arguments{
-\item{x}{An object of class \code{"nwqs_boot"}.}
+\item{x}{\code{"nwqs_boot"} 类的对象。}
 
-\item{digits}{Integer. Significant digits. Defaults to 3.}
+\item{digits}{Integer。有效数字位数，默认为 3。}
 
-\item{...}{Additional arguments.}
+\item{...}{额外参数。}
 }
 \value{
-Invisibly returns \code{x}.
+隐式返回 \code{x}。
 }
 \description{
-Prints a concise summary of the \code{nwqs_boot} result, showing the point
-estimate alongside outer bootstrap percentile confidence intervals for all
-terms and targets.
+打印 \code{nwqs_boot} 的摘要结果。此输出反映了模型真实参数的抽样变异 (Sampling Variance)，
+展示了所有项（整体效应与组分特定效应）在各分位数对比下的点估计值和外部 Bootstrap 百分位置信区间。
+针对流行病学研究，会自动将指数族模型的系数转换为比值比 (OR) 或相对危险度 (RR)。
 }

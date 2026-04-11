@@ -2,22 +2,23 @@
 % Please edit documentation in R/nwqs.R
 \name{nwqs}
 \alias{nwqs}
-\title{Fit Non-linear Weighted Quantile Sum (NWQS) Regression}
+\title{拟合非线性加权分位数和 (NWQS) 回归模型}
 \usage{
 nwqs(
   data,
   mix_name,
   covariates = NULL,
   outcome = "y",
+  strata_col = NULL,
   weight_engine = permutation_scorer,
   q = 4,
   df_spline = 3,
   transform_fun = NULL,
-  split_prop = 0.6,
-  rh = 1,
+  train_prop = 0.6,
+  rh = 100,
   seed = 1234,
-  n_permutation = 30,
-  family = c("gaussian", "binomial", "poisson", "quasipoisson"),
+  n_permutation = 100,
+  family = c("gaussian", "binomial", "poisson", "quasipoisson", "clogit"),
   plan_strategy = c("sequential", "multisession", "multicore"),
   n_workers = NULL,
   quiet = FALSE,
@@ -25,91 +26,87 @@ nwqs(
 )
 }
 \arguments{
-\item{data}{A \code{data.frame} containing the mixture components, covariates, and outcome variable.}
+\item{data}{\code{data.frame}。包含混合物组分、协变量、匹配变量以及结局变量的数据框。}
 
-\item{mix_name}{Character vector. Column names of the mixture components to be evaluated.}
+\item{mix_name}{Character vector。需要评估的混合物组分（暴露变量）的列名。}
 
-\item{covariates}{Character vector. Column names of covariates/confounders to adjust for. If
-\code{NULL}, an unadjusted model is fitted.}
+\item{covariates}{Character vector。用于调整的协变量/混杂因素的列名。若为 \code{NULL}，则拟合未调整模型。}
 
-\item{outcome}{Character. Column name of the dependent/outcome variable. Defaults to \code{"y"}.}
+\item{outcome}{Character。结局/因变量的列名，默认值为 \code{"y"}。}
 
-\item{weight_engine}{Function. The core engine used for weight and shape discovery on the training
-set. Defaults to \code{permutation_scorer}.}
+\item{strata_col}{Character。用于条件逻辑回归的层/匹配组 ID 的列名。若 \code{family = "clogit"}，此项为必填。}
 
-\item{q}{Integer. Number of quantiles used to categorize the continuous mixture components
-(e.g., 4 for quartiles, 10 for deciles). Defaults to 4.}
+\item{weight_engine}{Function。用于在训练集上发现权重和形状的核心引擎，默认为 \code{permutation_scorer}。}
 
-\item{df_spline}{Integer. Degrees of freedom for the natural cubic splines used to model
-non-linearity. Defaults to 3.}
+\item{q}{Integer。将连续混合物变量分类的分位数数量（如 4 代表四分位数，10 代表十分位数），默认为 4。}
 
-\item{transform_fun}{Function. A custom transformation applied to the mixture components before
-modeling. If \code{NULL}, the default quantile transformation (\code{trans_quantile}) is used.}
+\item{df_spline}{Integer。用于拟合非线性曲线的自然三次样条 (Natural Cubic Splines) 的自由度，默认为 3。}
 
-\item{split_prop}{Numeric between (0, 1). The proportion of the full dataset allocated to the
-Training set for weight/shape discovery in each RH iteration. Defaults to 0.6.}
+\item{transform_fun}{Function。在建模前对混合物组分应用的自定义转换函数。若为 \code{NULL}，默认使用分位数转换 (\code{trans_quantile})。}
 
-\item{rh}{Integer. Number of Repeated Holdout iterations. To obtain stable distributions, set
-\code{rh} to at least 100. Defaults to 1.}
+\item{train_prop}{Numeric (0, 1)。在单次 RH 迭代中，分配给训练集（用于权重/形状发现）的数据比例，默认为 0.6。}
 
-\item{seed}{Integer. Random seed for reproducible repeated holdout splitting. Defaults to 1234.}
+\item{rh}{Integer。重复保留 (Repeated Holdout) 的迭代次数。若要获得稳定的分布，建议设置为 100 以上。默认为 1。}
 
-\item{n_permutation}{Integer. Number of internal permutations or bootstraps passed to
-\code{weight_engine} to compute the variable importance metric. Defaults to 30.}
+\item{seed}{Integer。用于可重复的数据拆分的随机种子，默认为 1234。}
 
-\item{family}{Character or function. Specifies the GLM error distribution and link function.
-Supported options include \code{"gaussian"}, \code{"binomial"}, \code{"poisson"}, and \code{"quasipoisson"}.}
+\item{n_permutation}{Integer。传递给 \code{weight_engine} 计算变量重要性的内部置换或 Bootstrap 次数，默认为 10。}
 
-\item{plan_strategy}{Character. Strategy for parallel computation powered by the \pkg{future}
-package. Options are \code{"sequential"}, \code{"multicore"}, or \code{"multisession"}.}
+\item{family}{Character 包含拟合 GLM 的误差分布及链接函数。支持的选项包括 \code{"gaussian"}（线性回归）,
+\code{"binomial"}（逻辑回归）, \code{"poisson"}, \code{"quasipoisson"}, 以及 \code{"clogit"}（条件逻辑回归）。}
 
-\item{n_workers}{Integer. Number of parallel workers to use if \code{plan_strategy != "sequential"}.
-If \code{NULL}, the package automatically detects and optimizes CPU cores.}
+\item{plan_strategy}{Character。基于 \pkg{future} 包的并行计算策略。可选 \code{"sequential"}, \code{"multicore"}, 或 \code{"multisession"}。}
 
-\item{quiet}{Logical. If \code{TRUE}, suppress the warning about RH-based standard errors
-when \code{rh > 1}. Useful when called internally by \code{nwqs_boot()}. Defaults to \code{FALSE}.}
+\item{n_workers}{Integer。若不采取 \code{"sequential"}，指定并行的核心数。若为 \code{NULL}，将自动检测并优化 CPU 核心分配。}
 
-\item{...}{Additional arguments passed to \code{run_oob_permutation} or the selected \code{weight_engine}.}
+\item{quiet}{Logical。若为 \code{TRUE}，则静默关于 \code{rh > 1} 时标准误不代表抽样方差的警告信息。通常在 \code{nwqs_boot()} 内部调用时开启，默认为 \code{FALSE}。}
+
+\item{...}{传递给 \code{run_oob_permutation} 或所选 \code{weight_engine} 的其他额外参数。}
 }
 \value{
-An object of class \code{c("nwqs", "list")} containing the following key components:
+返回一个 \code{c("nwqs", "list")} 类的对象，包含以下核心内容：
 \itemize{
-\item \code{fit}: A list containing the summarized GLM object (coefficients, Deviance, AIC).
-\item \code{final_weights}: A named numeric vector of the ensemble-averaged relative weights.
-\item \code{mean_shapes}: A named numeric vector of the ensemble-averaged normalized spline coefficients.
-\item \code{rh_coefs}: A matrix of the global GLM coefficients across all \code{rh} iterations.
-\item \code{rh_weights}: A matrix of the extracted weights across all \code{rh} iterations.
-\item \code{data}: The original dataset augmented with the final calculated ensemble \code{wqs_score}.
+\item \code{fit}: 包含汇总 GLM 对象（系数、偏差、AIC）的列表。
+\item \code{final_weights}: 命名数值向量，表示多次迭代平均后的集成相对权重。
+\item \code{mean_shapes}: 命名数值向量，表示多次迭代平均后的标准化样条系数。
+\item \code{rh_coefs}: 矩阵，记录所有 \code{rh} 迭代中的全局 GLM 回归系数。
+\item \code{rh_weights}: 矩阵，记录所有 \code{rh} 迭代中提取的权重。
+\item \code{data}: 附加了最终计算出的集成 \code{nwqs} 指数得分的原始数据集。
 }
 }
 \description{
-The main entry point for fitting Non-linear Weighted Quantile Sum (NWQS) regression models.
-NWQS evaluates the overall joint effect and component-specific relative importance of a highly
-correlated mixture, while flexibly accommodating non-linear dose-response relationships (e.g.,
-threshold effects, U-shaped curves). The method separates penalized representation learning
-from unpenalized final-stage effect estimation.
+\code{nwqs} 是拟合非线性加权分位数和 (Non-linear Weighted Quantile Sum) 回归模型的核心函数。
+本方法旨在评估高共线性混合物暴露的整体联合效应 (overall joint effect) 以及各个组分的
+相对重要性，同时灵活地容纳非线性剂量反应关系（例如：阈值效应、U型曲线等）。
+算法在架构上将带惩罚的表征学习（权重与形状发现）与无惩罚的最终效应估计进行了严格分离。
 }
 \details{
-\strong{Algorithmic Architecture:} \cr
-The \code{nwqs} function implements a robust "Repeated Holdout" (RH) framework combined with a
-shape-decoupling architecture:
+\strong{算法架构与统计学考量:} \cr
+本函数实现了一个稳健的“重复保留 (Repeated Holdout, RH)”架构，并结合了形状解耦机制：
 \enumerate{
-\item \strong{Outer Repeated Holdout Splitting:} For each RH iteration, the data are randomly
-split into a Training set (for weight/shape discovery) and a Validation set (for effect estimation).
-\item \strong{Weight & Shape Discovery:} On the Training set, a multi-parameter engine
-(specified by \code{weight_engine}) estimates the non-linear basis coefficients (shapes) and
-extracts relative importance (weights) via Out-Of-Bag (OOB) permutation.
-\item \strong{Shape Normalization:} To weaken the coupling between spline shape and effect
-magnitude, shapes are standardized to have a unit variance on the predictor scale using the Training set.
-\item \strong{1-DoF Effect Estimation:} The normalized shapes and weights are projected onto
-the Validation set to construct a single \code{wqs_score}. A generalized linear model (GLM)
-is then fitted to estimate the overall mixture effect without directly penalizing the final effect.
+\item \strong{外部重复保留拆分 (Outer Repeated Holdout Splitting):} 在每次 RH 迭代中，数据被随机
+拆分为训练集（用于发现权重和非线性形状）和验证集（用于效应估计）。
+\emph{医学统计学注:} 对于条件逻辑回归 (\code{family = "clogit"})，算法严格在层/匹配组（Cluster/Stratum）级别
+进行随机拆分，这对于维持配对病例对照研究 (Matched Case-Control Studies) 的设计完整性至关重要，可避免破坏匹配结构。
+\item \strong{权重与形状发现:} 在训练集上，多参数引擎估计非线性基函数的系数（形状），并通过
+袋外 (Out-Of-Bag, OOB) 置换法提取相对重要性（权重）。
+\item \strong{形状归一化 (Shape Normalization):} 为了削弱样条形状与效应量之间的耦合，利用训练集将
+形状标准化为在预测变量尺度上具有单位方差。
+\item \strong{单自由度效应估计 (1-DoF Effect Estimation):} 将归一化后的形状和权重投影到验证集上，
+构建单一的 \code{nwqs} 指数。随后拟合广义线性模型 (GLM) 以估计整体混合物效应，从而避免对最终效应的直接惩罚。
 }
 
-By setting \code{rh > 1}, the algorithm averages the weights, shapes, and coefficients across
-multiple random splits, producing stable empirical inferences. Note that the standard errors
-and confidence intervals generated from RH iterations reflect data-splitting variance, not true
-sampling variance. For robust statistical inference, use \code{nwqs_boot()}.
+\strong{关于科学严谨性与偏倚风险的警告:} \cr
+\itemize{
+\item \strong{方差膨胀与推断错误:} 当设置 \code{rh > 1} 时，算法会平均多次拆分的结果以提供稳定的经验推断。
+但必须严谨地认识到：此处输出的 \code{fit$coefficients} 中的标准误 (SE) 和置信区间 (CI) \strong{仅反映了
+数据拆分带来的算法方差 (Algorithmic Variance)，绝不能代表真实的抽样变异 (Sampling Variance)}。
+直接使用该 P 值进行假设检验会导致第一类错误严重膨胀。进行可靠的推断必须使用 \code{nwqs_boot()}。
+\item \strong{残余混杂 (Residual Confounding):} 请务必通过 \code{covariates} 传入充分的混杂因素。
+如果存在未测量的混杂因素，或者模型对非线性关系的设定存在严重偏差，估计的联合效应可能产生偏倚。
+\item \strong{选择偏倚 (Selection Bias):} 如果原始样本中的数据缺失是“非随机缺失 (MNAR)”，或者
+训练集/验证集的随机拆分导致小样本下某些暴露特征的分布失衡，可能会在权重分配上引入偏倚。
+}
 }
 \seealso{
 \code{\link{nwqs_boot}}, \code{\link{plot.nwqs}}, \code{\link{summary.nwqs}}

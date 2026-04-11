@@ -2,7 +2,7 @@
 % Please edit documentation in R/simulate_data.R
 \name{generate_linear_data}
 \alias{generate_linear_data}
-\title{Generate Linear Model Data}
+\title{生成线性混合物效应的连续型数据 (Generate Linear Model Data)}
 \usage{
 generate_linear_data(
   n_obs = 1000,
@@ -16,27 +16,7 @@ generate_linear_data(
   ...
 )
 }
-\arguments{
-\item{n_obs}{integer. Sample size. / 样本量。}
-
-\item{mu_preds}{numeric vector. Mean vector for predictors. / 预测变量均值。}
-
-\item{sigma_preds}{matrix. Covariance matrix for predictors. / 预测变量协方差矩阵。}
-
-\item{beta_wqs}{numeric. Weight for predictor coefficients. / 预测变量系数的权重，默认为1，不做缩放。}
-
-\item{beta_preds}{numeric vector. Coefficients for predictors. / 预测变量回归系数。}
-
-\item{snr_db}{numeric. Signal-to-Noise Ratio (dB). / 信噪比。}
-
-\item{transform_fun}{function. Optional transformation function. / 可选的数据变换函数。}
-
-\item{...}{arguments passed to generate_covariates. 传递给 generate_covariates 的参数。}
-}
-\value{
-data.frame. The final synthetic dataset. / 最终合成数据。
-}
 \description{
-Generates main predictors (multivariate normal) and covariates, adding noise based on SNR.
-生成主预测变量（多元正态）和协变量，并基于SNR添加噪音。
+为 Monte Carlo 模拟生成标准线性响应数据。暴露组分通过多元正态分布生成，
+可选经过分位数转换，最后与协变量的线性预测子组合，并根据信噪比引入测量误差。
 }

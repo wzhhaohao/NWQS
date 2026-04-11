@@ -1,3 +1,4 @@
+# R build artifacts
 .Rproj.user
 .Rhistory
 .RData
@@ -6,8 +7,57 @@ src/*.o
 src/*.so
 *.dll
 *.dylib
+
+# Package tarball
+*.tar.gz
+
+# Test and dev files
 dev_test.R
 dev_gwqs_test.R
 tests/
 R/update_next_time.R
 exploration_notes.R
+
+# Data and results
+实证研究/
+voc_dm_full_analysis/
+MCresult/
+Combined_MC_Results_Structured.json
+Table1_KNHANES_Baseline.csv
+
+# Scripts not part of the package
+热力图.R
+json_write.R
+个案数据处理.R
+
+# Simulation and analysis
+supplyment/
+Param_Grid_Merged/
+Param_Grid_Reduced/
+Param_Grid_Reduced_31_70/
+Param_Grid_Reduced_71_100/
+Hyperparam_Profile/
+
+# Paper and presentation materials
+论文写作/
+论文全部图片_重命名版/
+暂存图片/
+PPT/
+docs/
+
+# Build and tools
+build/
+tools/
+old/
+待跑_分析脚本/
+
+# Node / npm
+node_modules/
+package.json
+package-lock.json
+
+# IDE and tool configs
+.vscode/
+.codex_build/
+.claude/
+.DS_Store

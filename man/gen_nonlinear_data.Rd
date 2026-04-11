@@ -2,8 +2,7 @@
 % Please edit documentation in R/simulate_data.R
 \name{gen_nonlinear_data}
 \alias{gen_nonlinear_data}
-\title{Generate Non-linear Model Data with Splines
-生成基于自然样条(Natural Splines)的非线性模型数据}
+\title{生成非线性自然样条的连续型剂量反应数据 (Generate Non-linear Data)}
 \usage{
 gen_nonlinear_data(
   n_obs = 1000,
@@ -21,33 +20,18 @@ gen_nonlinear_data(
 )
 }
 \arguments{
-\item{n_obs}{integer. Sample size. / 样本量。}
-
-\item{mu_preds}{numeric vector. Mean vector for predictors. / 预测变量均值。}
-
-\item{sigma_preds}{matrix. Covariance matrix for predictors. / 预测变量协方差矩阵。}
-
-\item{beta_wqs}{numeric. Scaling factor for coefficients (default 1). / 系数缩放因子。}
-
-\item{beta_preds}{numeric vector. Coefficients for the predictors.
-Length must equal n_vars. / 预测变量的系数向量，长度必须等于变量数。
-Note: This coefficient is broadcasted to all spline basis functions of the variable.}
-
-\item{snr_db}{numeric. Signal-to-Noise Ratio (dB). / 信噪比。}
-
-\item{transform_fun}{function. Function to transform predictors (e.g., quantile binning). / 变换函数。 默认分位数转化}
-
-\item{df_spline}{integer. Degrees of freedom for natural splines (default 3). / 自然样条自由度。}
-
-\item{seed}{integer. Random seed. / 随机种子。}
-
-\item{...}{arguments passed to generate_covariates. 传递给 generate_covariates 的参数。}
-}
-\value{
-data.frame. Contains Y, transformed predictors (before spline expansion), and covariates.
+\item{shape}{Character 或 Character vector。控制各组分真实因果关系曲线的形态。
+可选 \code{"linear_like"}（准线性）, \code{"u_shape"}（非单调 U 型）, \code{"inv_u_shape"}（倒 U 型）,
+\code{"s_shape"}（S 型阈值）或 \code{"threshold"}（硬阈值安全水平）。}
 }
 \description{
-Generates predictors (multivariate normal), transforms them (optional),
-expands them using natural splines, adds covariates, and generates Y with SNR-based noise.
-生成预测变量，进行变换（可选），使用自然样条扩展，加入协变量，并根据信噪比生成 Y。
+高级数据生成函数。此机制允许为每种暴露成分设定特定的非线性剂量反应轨迹（如 U 型、S 型或阈值效应），
+随后利用自然三次样条 (Natural Cubic Splines) 精确映射这些形状，并合成最终的连续型结局变量。
+}
+\details{
+\strong{因果结构与基准事实 (Ground Truth) 的严格对齐:} \cr
+为了在 Monte Carlo 模拟中严谨地评估 NWQS 方法捕捉非线性的能力，本函数在生成数据时直接在底层推导出
+样条的基础节点 (\code{knots})，并将其作为\strong{不可变的度量尺}贯穿始终。函数同时会在属性 \code{true_effect_mat}
+中输出真正的偏效应对比值（如真正的 Q4 vs Q1 效应量）。这种将“因果形状生成”与“理论效应量计算”完美绑定的设计，
+彻底消除了评估模型性能时的基准误差。
 }

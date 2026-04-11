@@ -1,44 +1,32 @@
-#' Configure Intelligent Parallel Plan with Load Balancing
+#' @title 自动配置带负载均衡的智能并行计划 (Intelligent Parallel Plan Configuration)
 #'
 #' @description
-#' Automatically configures the parallel processing plan using the `future` package.
-#' It implements a "Smart Load Balancing" strategy to optimize resource usage based on
-#' the total number of tasks (`loop_number`) and available CPU cores.
-#' \cr
-#' 该函数利用 `future` 包自动配置并行处理计划。它采用“智能负载均衡”策略，根据任务总数和可用 CPU 核心优化资源使用。
+#' 利用 \pkg{future} 包自动配置并行处理计划。该函数采用“智能负载均衡 (Smart Load Balancing)”策略，
+#' 能够根据总任务数和系统可用物理核心，安全且高效地优化计算资源的分配。
 #'
 #' @details
-#' This function performs the following steps to ensure efficient and safe parallelization:
+#' \strong{系统稳定性与统计重现性保障:}
 #' \enumerate{
-#'   \item **Check Existing Plan**: If a parallel plan is already active (set externally), it respects the current settings and returns immediately to avoid conflicts.
-#'   \item **Sequential Mode**: If `strategy` is "sequential" or `loop_number` <= 1, it sets a sequential plan.
-#'   \item **Smart Load Balancing**: If `n_workers` is NULL, it calculates the optimal number of workers:
-#'   \itemize{
-#'     \item **Safety**: Limits usage to `(1 - reserve_cpu)` of total cores to prevent system freeze.
-#'     \item **Efficiency**: Calculates the minimum number of batches required to finish all loops.
-#'     \item **Balance**: Distributes workers evenly across batches to minimize memory spikes and CPU contention.
-#'     \item *Example*: Running 10 tasks on a machine with 8 safe cores. Instead of running 8 workers then 2 workers (unbalanced), it runs 2 rounds of 5 workers.
-#'   }
+#'   \item \strong{防死机机制 (Safety Guard):} 强制保留 \code{reserve_cpu} 比例的系统核心，避免在进行
+#'         大规模 Bootstrap 或 Monte Carlo 模拟时耗尽计算资源导致系统崩溃。
+#'   \item \strong{负载均衡 (Load Balancing):} 避免了原生的末端分配不均问题。例如，在 8 个可用核心上运行 10 个任务，
+#'         常规分配可能导致第一轮跑 8 个，第二轮仅跑 2 个（引发内存突刺和 CPU 争用）。本算法会将其智能平滑为 2 轮各 5 个工作节点。
+#'   \item \strong{无侵入设计:} 如果外部环境（如用户的 \code{.Rprofile} 或更高层脚本）已经激活了并行计划，
+#'         本函数将静默退出，绝不覆盖用户的全局设定。
 #' }
 #'
-#' @param loop_number integer. The total number of iterations or tasks to be executed (e.g., bootstrap samples `B` or repeated holdouts `rh`).
-#'   需要并行执行的任务/循环总数。
-#' @param strategy character. The parallel strategy to use. Defaults to "multisession" (efficient for Windows).
-#'   **Note**: Linux/macOS users may use "multicore" for better performance.
-#'   并行策略，默认为 "multisession"。Linux/macOS 用户可使用 "multicore" 以获得更好性能。
-#' @param n_workers integer. Optional. Manually specify the number of workers.
-#'   If NULL (default), the function calculates the optimal number automatically.
-#'   手动指定核心数。若为 NULL 则触发自动优化算法。
-#' @param reserve_cpu numeric. The proportion of system CPU to reserve (0 to 1). Default is 0.2 (20%).
-#'   保留给系统的 CPU 比例，防止死机。默认为 0.2。
-#' @param ... Additional arguments passed to `future::plan()`.
+#' @param loop_number Integer。需要并行执行的循环/任务总数（例如 Bootstrap 的重抽样次数 \code{B} 或 \code{rh}）。
+#' @param strategy Character。并行策略。默认为 \code{"multisession"}（对 Windows 友好且兼容性高）。Linux/macOS 用户为追求极致性能可指定 \code{"multicore"}。
+#' @param n_workers Integer 或 \code{NULL}。手动指定的核心数。若为 \code{NULL}（推荐），则触发自动优化算法。
+#' @param reserve_cpu Numeric (0, 1)。保留给操作系统的 CPU 核心比例，默认为 0.2 (20\%)。
+#' @param verbose Logical。是否打印自动并行负载均衡信息。默认为 \code{TRUE}。
+#' @param ... 传递给 \code{future::plan()} 的额外参数。
 #'
-#' @return The *previous* future plan (invisibly). This is intended to be used with `on.exit()` to restore the environment state after execution.
-#'   返回旧的并行计划（不可见对象），必须配合 `on.exit()` 使用以在函数结束时还原环境。
+#' @return 隐式返回 \emph{先前} 的 future 并行计划。必须配合 \code{on.exit()} 使用，以确保在函数退出时还原用户环境。
 #'
 #' @importFrom future plan availableCores
 #' @export
-configure_parallel_plan <- function(loop_number, strategy = "multisession", n_workers = NULL, reserve_cpu = 0.2, ...) {
+configure_parallel_plan <- function(loop_number, strategy = "multisession", n_workers = NULL, reserve_cpu = 0.2, verbose = TRUE, ...) {
     # 0. 获取当前计划
     current_plan <- future::plan()
     is_already_parallel <- !inherits(current_plan, "sequential")
@@ -72,10 +60,12 @@ configure_parallel_plan <- function(loop_number, strategy = "multisession", n_wo
         workers_final <- ceiling(loop_number / min_batches)
         workers_final <- as.integer(workers_final)
 
-        message(sprintf(
-            "Auto-Parallel: %d Cores Available (Limit %d). %d Loops split into %d rounds x %d workers.",
-            total_cores, safe_limit, loop_number, min_batches, workers_final
-        ))
+        if (isTRUE(verbose)) {
+            message(sprintf(
+                "Auto-Parallel: %d Cores Available (Limit %d). %d Loops split into %d rounds x %d workers.",
+                total_cores, safe_limit, loop_number, min_batches, workers_final
+            ))
+        }
     } else {
         # 用户强制指定
         workers_final <- max(1L, as.integer(n_workers))

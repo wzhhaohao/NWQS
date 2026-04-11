@@ -2,12 +2,13 @@
 % Please edit documentation in R/bootstrap.R
 \name{run_oob_permutation}
 \alias{run_oob_permutation}
-\title{Bootstrap General Runner (Parallel)}
+\title{运行袋外置换与并行重抽样调度器 (OOB Permutation Orchestrator)}
 \usage{
 run_oob_permutation(
   data,
   mix_name,
   outcome = "y",
+  covariates = NULL,
   weight_engine = permutation_scorer,
   n_permutation = 100,
   seed = NULL,
@@ -17,61 +18,44 @@ run_oob_permutation(
 )
 }
 \arguments{
-\item{data}{data.frame. The original dataset containing mixture and
-covariates.}
+\item{data}{\code{data.frame}。包含所需变量的原始数据集。}
 
-\item{mix_name}{character vector. Names of the mixture components.}
+\item{mix_name}{Character vector。混合物组分的列名。}
 
-\item{outcome}{character. Name of the outcome variable.
-Defaults to "y".}
+\item{outcome}{Character。结局变量的列名，默认为 \code{"y"}。}
 
-\item{weight_engine}{function. The internal modeling function to be
-executed for each bootstrap sample. Defaults to
-\code{permutation_scorer}.}
+\item{covariates}{Character vector 或 \code{NULL}。需要调整的协变量/混杂因素。}
 
-\item{n_permutation}{integer. Number of permutation iterations. Default is 100.}
+\item{weight_engine}{Function。底层用于计算权重和形状的引擎函数，默认为 \code{\link{permutation_scorer}}。}
 
-\item{seed}{integer/logical. Random seed for parallel reproducibility.
-If NULL (default), it uses \code{TRUE} to generate a stream of random
-seeds automatically.}
+\item{n_permutation}{Integer。内部 Bootstrap 或置换迭代的次数，默认为 100。}
 
-\item{boot_strategy}{character. Parallel strategy for this bootstrap
-run: "sequential", "multicore", or "multisession".
-If running inside an already parallelized outer RH loop, this should
-typically be "sequential".}
+\item{seed}{Integer 或 \code{NULL}。并行计算的随机数种子，确保基于 future 的并行结果可重现。}
 
-\item{boot_n_workers}{integer. Number of cores/workers to use.
-If NULL, the optimal number is calculated by
-\code{configure_parallel_plan}.}
+\item{boot_strategy}{Character。并行策略，可选 \code{"sequential"}, \code{"multicore"}, 或 \code{"multisession"}。}
 
-\item{...}{Additional arguments passed directly to \code{weight_engine}.}
+\item{boot_n_workers}{Integer 或 \code{NULL}。并行工作节点数。}
+
+\item{...}{传递给样条扩展函数 (\code{wqs_nonlinear_expand}) 或 \code{weight_engine} 的其他核心参数
+（如 \code{model_knots}, \code{model_boundary}, \code{q}, \code{df_spline} 等）。}
 }
 \value{
-list. A named list of length \code{B} containing results from all
-iterations. Failed iterations contain \code{NULL}.
+一个列表，长度等于 \code{n_permutation}，包含每次迭代中由 \code{weight_engine} 返回的权重和形状向量。
 }
 \description{
-Orchestrates repeated bootstrap / OOB-based internal model fitting for
-NWQS regression. It automatically handles parallel environment
-configuration (via \code{configure_parallel_plan}) and error handling for
-each iteration.
-\cr
-协调 NWQS 回归内部 Bootstrap / OOB 过程的并行执行。
-它自动处理并行环境配置（通过 \code{configure_parallel_plan}）
-以及每次迭代的错误处理。
+\code{run_oob_permutation} 是 NWQS 架构中的核心调度函数。它负责准备非线性样条的设计矩阵（Design Matrix），
+管理多线程并行计算，并向底层的 \code{weight_engine}（通常为 \code{permutation_scorer}）分发带有严格随机种子的重抽样任务。
 }
 \details{
-This function acts as a high-level wrapper that:
-\enumerate{
-\item Configures parallelism for the internal bootstrap loop.
-\item Pre-computes the spline-expanded design matrix once, using the
-globally fixed spline knots and boundaries passed from the
-outer \code{nwqs()} routine.
-\item Executes \code{B} iterations using \code{future_lapply}. Inside each
-iteration, the \code{weight_engine} is called on the full precomputed
-design matrix, while resampling logic is handled inside
-\code{weight_engine} (e.g., \code{permutation_scorer}).
-\item Uses \code{tryCatch} so that a failure in a single iteration does
-not crash the entire process.
+\strong{数据准备与防偏倚机制:} \cr
+\itemize{
+\item \strong{安全族解析 (Safe Family Parsing):} 针对流行病学中常用的条件逻辑回归 (\code{clogit}) 进行了特殊拦截，
+避免常规 \code{get()} 函数在调用 \code{survival} 包对象时引发环境报错。
+\item \strong{匹配结构隔离:} 将 \code{strata_col} 从主数据集中剥离并作为独立向量 \code{strata_id} 传递。这一操作
+确保了在后续生成设计矩阵 (\code{model.matrix}) 时，匹配 ID 不会被错误地视为常规数值或因子型协变量，
+从而避免自由度无意义的消耗和潜在的完全分离 (Complete Separation) 偏倚。
+\item \strong{极速路径 (Fast-Path):} 当无协变量（粗模型，Crude Model）时，函数会绕过高开销的 \code{as.formula}
+和 \code{model.matrix} 解析，直接拼接截距列。当存在协变量（调整模型，Adjusted Model）时，由于需要控制混杂因素 (Confounding factors)，
+函数会严谨地生成包含虚拟变量编码 (Dummy Coding) 的完整设计矩阵。
 }
 }

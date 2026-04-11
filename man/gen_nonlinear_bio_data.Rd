@@ -2,8 +2,7 @@
 % Please edit documentation in R/simulate_data.R
 \name{gen_nonlinear_bio_data}
 \alias{gen_nonlinear_bio_data}
-\title{Generate Non-linear Binary Model Data (Auto-Balanced)
-生成基于自然样条的非线性二分类数据 (支持自动平衡 0/1 比例)}
+\title{生成非线性剂量反应的二分类结局数据 (Generate Non-linear Binary Data)}
 \usage{
 gen_nonlinear_bio_data(
   n_obs = 1000,
@@ -24,42 +23,16 @@ gen_nonlinear_bio_data(
 )
 }
 \arguments{
-\item{n_obs}{integer. 样本量。}
+\item{target_prop}{Numeric (0, 1) 或 \code{NULL}。目标疾病发生率。若提供，算法将自动搜索截距以平衡队列中病例的比例。}
 
-\item{mu_preds}{numeric vector. 预测变量均值。}
-
-\item{sigma_preds}{matrix. 预测变量协方差矩阵。}
-
-\item{beta_wqs}{numeric. 混合物整体效应杠杆系数。}
-
-\item{beta_preds}{numeric vector. 各物质权重分配的基础系数。}
-
-\item{intercept}{numeric. 基础截距。如果 target_prop 不为 NULL，此参数将被覆盖。}
-
-\item{target_prop}{numeric. 目标事件发生率 (如 0.5)。自动计算让 Y=1 比例达到目标的截距。}
-
-\item{link}{character. 连接函数 ("logit", "probit", "cloglog")。}
-
-\item{snr_db}{numeric. 信噪比 (添加到潜变量 eta 上)。Inf 表示无额外噪声。}
-
-\item{transform_fun}{function. 预测变量的转换函数 (如分位数转换)。}
-
-\item{q}{integer. 分位数层数，用于求真值。}
-
-\item{df_spline}{integer. 样条自由度。}
-
-\item{seed}{integer. 随机种子。}
-
-\item{shape}{character. 混合物的非线性形状模式 ("linear_like", "u_shape", "s_shape")。}
-
-\item{...}{传递给 generate_covariates 的参数。}
-}
-\value{
-data.frame. Contains Y (binary), predictors, covariates.
-Attributes include true_effect_mat, true_prob, spline_knots, spline_boundary.
+\item{link}{Character。广义线性模型的连接函数，可选 \code{"logit"}（对应 OR）, \code{"probit"}, 或 \code{"cloglog"}。}
 }
 \description{
-Generates predictors (multivariate normal), transforms them (optional),
-expands them using natural splines, adds covariates, and generates Y with SNR-based noise.
-生成预测变量，进行变换（可选），使用自然样条扩展，加入协变量，并根据信噪比生成 Y。
+基于特定连接函数（Logit, Probit 或 Cloglog）生成非线性二分类结局数据，支持自动截距校准以控制罕见事件发生率。
+}
+\details{
+\strong{罕见病与基线风险校准 (Auto-Balanced Incidence Rate):} \cr
+在病例对照研究模拟中，任意设置回归系数会导致合成队列中事件发生率（Incidence Rate）极端失衡（如全为 0 或全为 1）。
+如果提供了 \code{target_prop}（例如 0.05 代表 5\\% 罕见病），算法将通过 \code{uniroot} 动态逆向求解截距，
+确保最终生成的二分类响应精确匹配目标疾病流行率。属性 \code{true_effect_mat} 中保存的即为真实的\strong{对数比值比 (Log-OR)}。
 }

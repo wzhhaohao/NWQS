@@ -3,27 +3,25 @@
 # 从 utils.R 中分离，这些函数仅用于模拟研究，不属于 NWQS 包核心功能
 # ==============================================================================
 
-
-#' Calculate Weight Allocation Error Metrics
+#' @title 计算权重分配的误差与相似度指标 (Calculate Weight Allocation Error Metrics)
 #'
 #' @description
-#' Computes multiple error and similarity metrics between estimated and true
-#' mixture component weights, including Sum of Absolute Errors (SAE), Mean
-#' Absolute Error (MAE), Pearson and Spearman correlations, and cosine similarity.
+#' 计算模型估计的混合物组分权重与数据生成时的真实（基准）权重之间的多种误差和相似度指标。
+#' 这对于评估模型在存在多重共线性或未测量混杂时，精准识别关键毒性物质的能力至关重要。
 #'
-#' @param w_est Numeric vector. Estimated weights from the model.
-#' @param w_true Numeric vector. True (ground-truth) weights from data generation.
-#'   Must be the same length as \code{w_est}. If both vectors are named, they are
-#'   aligned by name.
-#'
-#' @return A named list with components:
-#' \describe{
-#'   \item{SAE}{Sum of Absolute Errors: \eqn{\sum |w_{est} - w_{true}|}.}
-#'   \item{MAE}{Mean Absolute Error.}
-#'   \item{Pearson}{Pearson correlation coefficient.}
-#'   \item{Spearman}{Spearman rank correlation coefficient.}
-#'   \item{CosSim}{Cosine similarity between the two weight vectors.}
+#' @details
+#' \strong{指标解析:}
+#' \itemize{
+#'   \item \strong{SAE (绝对误差和):} $\sum |w_{est} - w_{true}|$。在成分数据 (Compositional Data) 框架下（权重和为1），SAE 是评估整体分配偏差的最直观指标。
+#'   \item \strong{Cosine Similarity (余弦相似度):} 衡量高维权重向量在方向上的对齐程度，对权重的绝对数值缩放具有不变性。
+#'   \item \strong{Spearman/Pearson:} 评估模型对暴露物相对重要性排序的恢复能力。
 #' }
+#'
+#' @param w_est Numeric vector。模型估计出的混合物相对权重向量。
+#' @param w_true Numeric vector。数据生成机制 (DGM) 设定的真实基准权重向量。必须与 \code{w_est} 长度一致。若两者均有命名属性，函数将自动按名称对齐。
+#'
+#' @return 返回一个包含以下元素的命名列表：
+#'   \code{SAE}, \code{MAE}, \code{Pearson}, \code{Spearman}, \code{CosSim}。
 #'
 #' @export
 calc_weight_error <- function(w_est, w_true) {
@@ -54,19 +52,23 @@ calc_weight_error <- function(w_est, w_true) {
 }
 
 
-#' Check Single-Simulation Coverage of Confidence Intervals
+#' @title 检验单次模拟的置信区间覆盖率 (Check Single-Simulation Coverage)
 #'
 #' @description
-#' Compares estimated effects from \code{\link{extract_nwqs_effects}} against a
-#' ground-truth effect matrix and determines whether Wald and empirical CIs cover
-#' the true values.
+#' 将模型提取的暴露效应估计值（如特定分位数的对比效应）与基准真实效应矩阵进行比对，
+#' 判定 Wald 置信区间和经验 (Empirical) 置信区间是否成功覆盖了真实值。
 #'
-#' @param est_df A \code{data.frame} produced by \code{\link{extract_nwqs_effects}}.
-#' @param true_mat A matrix of true effects (typically the \code{true_effect_mat}
-#'   attribute from data generation functions like \code{\link{gen_nonlinear_data}}).
+#' @details
+#' \strong{覆盖率与推断有效性:} \cr
+#' 在流行病学推断中，如果一个 95% 置信区间是无偏的，那么在成千上万次 Monte Carlo 模拟中，
+#' 它包含真实参数的比例应当趋近于 95%。此函数在单次模拟层面上打下布尔值标签 (\code{TRUE}/\code{FALSE})，
+#' 为后续计算宏观的名义覆盖率 (Nominal Coverage Probability) 提供基础。
 #'
-#' @return A \code{data.frame} with columns for Target, Term, True_Value, Estimate,
-#'   Bias, Wald and Empirical CI bounds, and logical coverage indicators.
+#' @param est_df \code{data.frame}。由 \code{\link{extract_nwqs_effects}} 提取的效应估计结果表。
+#' @param true_mat Matrix。真实的效应矩阵（通常从数据生成函数如 \code{\link{gen_nonlinear_data}} 的属性 \code{true_effect_mat} 中获取）。
+#'
+#' @return 返回一个 \code{data.frame}，包含对比目标 (\code{Target})、变量名 (\code{Term})、真实值、估计值、绝对偏差 (\code{Bias})，
+#'   以及 Wald 和经验置信区间的上下限及其覆盖指示变量 (\code{Covered_Wald}, \code{Covered_Empirical})。
 #'
 #' @importFrom dplyr select arrange %>%
 #' @export
@@ -96,29 +98,30 @@ check_coverage <- function(est_df, true_mat) {
 }
 
 
-#' Evaluate Monte Carlo Simulation Performance (Macro-level Metrics)
+#' @title 评估 Monte Carlo 模拟的宏观统计性能 (Evaluate Macro-level Performance)
 #'
 #' @description
-#' Aggregates results across multiple simulation replicates to compute macro-level
-#' performance metrics: coverage probability, bias, RMSE, statistical power / Type I
-#' error, and weight recovery accuracy (sensitivity/specificity).
+#' 跨越多次模拟迭代汇总结果，计算宏观层面的统计性能指标。涵盖区间覆盖概率、平均偏差、均方根误差 (RMSE)、
+#' 统计效能 (Power) / 第一类错误率 (Type I Error)，以及变量选择的敏感性与特异性。
 #'
-#' @param sim_weight_df A \code{data.frame} with one row per simulation, containing
-#'   columns named \code{NWQS_{Component}} for estimated weights and \code{NWQS_SAE}.
-#' @param sim_effect_df A \code{data.frame} with columns: Sim_ID, Target, Term,
-#'   Estimate, Wald_CI_Lower, Wald_CI_Upper, Empirical_CI_Lower, Empirical_CI_Upper.
-#' @param true_w Named numeric vector. True weight allocation.
-#' @param true_eff_mat Matrix. True effect values from data generation.
-#' @param w_threshold Numeric. Threshold for classifying a weight as "detected".
-#'   Defaults to 0.01.
+#' @details
+#' \strong{核心统计学评价维度:}
+#' \itemize{
+#'   \item \strong{Type I Error (假阳性率):} 当真实效应为 0 时，置信区间未覆盖 0 的模拟比例。控制在 $\alpha = 0.05$ 附近是模型稳健性的底线。
+#'   \item \strong{Power (检验效能):} 当真实效应不为 0 时，模型成功拒绝零假设的比例。反映了模型在给定样本量和信噪比下发现真实关联的能力。
+#'   \item \strong{敏感性/特异性 (Sensitivity/Specificity):} 评估权重分配的特征选择能力（基于设定的 \code{w_threshold}）。
+#' }
 #'
-#' @return A list with:
+#' @param sim_weight_df \code{data.frame}。多次模拟权重的汇总表，每行代表一次模拟。
+#' @param sim_effect_df \code{data.frame}。多次模拟效应估计的汇总表。
+#' @param true_w Named numeric vector。基准真实权重向量。
+#' @param true_eff_mat Matrix。数据生成时的真实效应矩阵。
+#' @param w_threshold Numeric。将估计权重判定为“有效检测出信号”的硬阈值，默认为 0.01。
+#'
+#' @return 一个包含两部分的列表：
 #' \describe{
-#'   \item{Weight_Metrics}{A one-row \code{data.frame} with Mean_SAE, Sensitivity,
-#'     and Specificity.}
-#'   \item{Effect_Metrics}{A \code{data.frame} with per-Target/Term metrics including
-#'     True_Value, Mean_Est, Mean_Bias, RB_pct, RMSE, CP_Wald, CP_Empirical,
-#'     Reject_H0, and Metric_Type.}
+#'   \item{\code{Weight_Metrics}}{权重分配的宏观性能（平均 SAE、敏感度、特异度）。}
+#'   \item{\code{Effect_Metrics}}{按变量和对比目标汇总的效应估计性能（包含 Mean_Bias, RMSE, 覆盖概率 CP, 拒绝零假设率 Reject_H0 等）。}
 #' }
 #'
 #' @export
@@ -180,17 +183,16 @@ evaluate_sim_performance <- function(sim_weight_df, sim_effect_df, true_w, true_
 }
 
 
-#' Check Bootstrap CI Coverage for nwqs_boot Object
+#' @title 检验 Bootstrap 置信区间的覆盖率 (Check Bootstrap CI Coverage)
 #'
 #' @description
-#' Evaluates whether bootstrap percentile confidence intervals from
-#' \code{\link{nwqs_boot}} cover the supplied true values.
+#' 专门用于评估经过 \code{\link{nwqs_boot}} 运行后得到的百分位 Bootstrap 置信区间是否覆盖了设定的真实因果效应值。
+#' 相比于数据拆分产生的经验区间，外部 Bootstrap 区间理应提供更接近名义水平（如 95%）的真实抽样方差覆盖率。
 #'
-#' @param boot_res An object of class \code{"nwqs_boot"}.
-#' @param true_value Numeric. The true effect value(s) to check coverage against.
+#' @param boot_res \code{"nwqs_boot"} 类的对象，包含内部的 \code{ci_table}。
+#' @param true_value Numeric。用于对照的基准真实效应值。
 #'
-#' @return A \code{data.frame} augmented with True_Value, Bias, and
-#'   Covered_Bootstrap columns.
+#' @return 返回原始的 \code{ci_table}，并增补了 \code{True_Value}, \code{Bias}, 及 \code{Covered_Bootstrap} 列。
 #'
 #' @export
 check_boot_coverage <- function(boot_res, true_value) {
@@ -214,27 +216,46 @@ check_boot_coverage <- function(boot_res, true_value) {
 }
 
 
-#' Derive True Importance Weights from Ground-Truth Effect Matrix
+#' @title 从真实效应矩阵推导相对重要性基准权重 (Derive True Importance Weights)
 #'
 #' @description
-#' Converts the absolute component-specific effects (e.g., Q4 vs Q1 contrast)
-#' from the true effect matrix into normalized importance weights, serving as
-#' the gold standard for weight recovery benchmarking.
+#' 将成分特定的绝对偏效应（从真实生成矩阵中提取）转换为归一化的、和为 1 的相对重要性权重。
 #'
-#' @param true_effect_mat Matrix. The true effect matrix (from data generation attributes).
-#' @param mix_name Character vector. Names of mixture components (must match rownames).
-#' @param method Character. Method for deriving importance. Currently only
-#'   \code{"q4q1_abs"} (absolute Q4 vs Q1 contrast) is supported.
+#' @details
+#' \strong{非线性权重的合理定义:} \cr
+#' 在纯线性模型中，权重通常可以直接基于真实斜率（系数）的绝对值分配（即 \code{method = "q4q1_abs"}）。
+#' 但当涉及非单调剂量反应曲线（如 U 型、倒 U 型）时，最高分位数与最低分位数的对比（Q4 vs Q1）可能正好抵消为 0。
+#' 为此，\code{method = "max_range"} 提取各个分位数节点处的效应极大值与极小值之差（极差），
+#' 以此作为衡量该暴露组分在整个分布范围内对结局产生的最大变异贡献，从而科学地定义非线性场景下的“真实权重”。
 #'
-#' @return A named numeric vector of true importance weights summing to 1.
+#' @param true_effect_mat Matrix。包含真实效应的矩阵。
+#' @param mix_name Character vector。混合物组分的名称列表。
+#' @param method Character。重要性推导方法。可选 \code{"q4q1_abs"}（仅适用单调线性场景）或 \code{"max_range"}（适用复杂非线性场景，默认）。
+#'
+#' @return 命名数值向量。代表各个组分的真实相对重要性基准，总和为 1。
 #'
 #' @export
-calc_true_importance <- function(true_effect_mat, mix_name, method = "q4q1_abs") {
+calc_true_importance <- function(true_effect_mat, mix_name, method = "max_range") {
+  
   if (method == "q4q1_abs") {
     if (!"Q4_vs_Q1" %in% colnames(true_effect_mat)) {
       stop("true_effect_mat must contain column 'Q4_vs_Q1'.")
     }
     contrib <- abs(true_effect_mat[mix_name, "Q4_vs_Q1"])
+    
+  } else if (method == "max_range") {
+    # 提取所有对比 Q1 的列
+    req_cols <- c("Q2_vs_Q1", "Q3_vs_Q1", "Q4_vs_Q1")
+    if (!all(req_cols %in% colnames(true_effect_mat))) {
+      stop("true_effect_mat must contain Q2_vs_Q1, Q3_vs_Q1, Q4_vs_Q1 columns.")
+    }
+    
+    # 计算极差 (Max - Min, 记得要把参照组 Q1 的 0 包含进去)
+    contrib <- sapply(mix_name, function(nm) {
+      vals <- c(0, as.numeric(true_effect_mat[nm, req_cols]))
+      max(vals, na.rm = TRUE) - min(vals, na.rm = TRUE)
+    })
+    
   } else {
     stop("Unsupported method.")
   }
@@ -251,31 +272,33 @@ calc_true_importance <- function(true_effect_mat, mix_name, method = "q4q1_abs")
 }
 
 
-#' Plot Monte Carlo Benchmark Results
+#' @title 绘制 Monte Carlo 基准测试结果复合图 (Plot Monte Carlo Benchmark Results)
 #'
 #' @description
-#' Produces a three-panel composite figure for Monte Carlo simulation benchmarking:
-#' (A) Model Fit Error (Deviance) as raincloud plots, (B) Weight Extraction Error
-#' (SAE) as raincloud plots, and (C) Component-Specific Weight Recovery Accuracy
-#' as faceted boxplots with true-value reference lines.
+#' 为多模型基准测试 (Benchmarking) 生成达到顶级期刊发表标准的复合可视化图表面板。
+#' 图表集成了雨云图 (Raincloud plots) 与分面箱线图，全景展示各候选模型的稳健性与偏差。
 #'
-#' @param dev_data A \code{data.frame} with columns \code{Model} and \code{Deviance}.
-#' @param sae_data A \code{data.frame} with columns \code{Model} and \code{SAE}.
-#' @param weight_data A \code{data.frame} with columns \code{Model}, \code{Component},
-#'   \code{Estimated_Weight}, and \code{True_Value}.
-#' @param scen_name Character. Scenario label for the plot title.
-#' @param family_name Character. GLM family label for the plot title.
-#' @param custom_palette Named character vector of colors keyed by model name.
-#'   If \code{NULL}, uses a default academic palette.
-#' @param save_path Character or NULL. File path to save the plot. If \code{NULL},
-#'   the plot is not saved automatically.
-#' @param base_size Numeric. Base font size. Defaults to 14.
+#' @details
+#' \strong{面板布局与学术解读:}
+#' \itemize{
+#'   \item \strong{面板 A (模型拟合误差 Deviance):} 通过雨云图展示各模型在多次模拟中的残余偏差分布。长尾分布往往暗示模型在某些模拟设置（如极端共线性或低信噪比）下发生崩溃。
+#'   \item \strong{面板 B (权重提取误差 SAE):} 衡量模型降维和特征选择的准确性。分布越集中于底部（接近 0），表明模型锁定关键毒性物质的能力越稳定。
+#'   \item \strong{面板 C (组分特异性权重恢复):} 以真实权重为水平参考线（虚线），展示每个模型在各个组分上的权重估计分布。能够直观揭示模型是否存在系统性的方向性偏倚（例如总是过度惩罚高方差变量）。
+#' }
+#' 默认采用了严谨的学术色板，并支持通过 \pkg{patchwork} 动态适应暴露组分的数量进行排版。
 #'
-#' @return A \code{patchwork} composite plot object (invisibly if saved).
+#' @param dev_data \code{data.frame}。包含 \code{Model} 和 \code{Deviance} 列。
+#' @param sae_data \code{data.frame}。包含 \code{Model} 和 \code{SAE} 列。
+#' @param weight_data \code{data.frame}。包含 \code{Model}, \code{Component}, \code{Estimated_Weight}, 及 \code{True_Value} 列。
+#' @param scen_name Character。模拟场景名称（用于总标题）。
+#' @param family_name Character。GLM 分布族名称（用于总标题）。
+#' @param custom_palette 命名字符向量。基于模型名称映射的十六进制颜色字典。若为 \code{NULL}，使用默认学术色板。
+#' @param save_path Character 或 \code{NULL}。保存高分辨率图片的本地路径。若为 \code{NULL} 则仅在绘图设备中渲染。
+#' @param base_size Numeric。基准字体大小，默认为 14。
 #'
-#' @importFrom ggplot2 ggplot aes geom_boxplot geom_point geom_hline facet_wrap
-#'   scale_fill_manual scale_color_manual theme_bw labs theme element_text
-#'   element_blank element_rect position_jitter position_nudge ggsave
+#' @return 隐式返回 \pkg{patchwork} 复合绘图对象。
+#'
+#' @importFrom ggplot2 ggplot aes geom_boxplot geom_point geom_hline facet_wrap scale_fill_manual scale_color_manual theme_bw labs theme element_text element_blank element_rect position_jitter position_nudge ggsave
 #' @export
 plot_monte_carlo_benchmark <- function(dev_data, sae_data, weight_data,
                                        scen_name = "Unknown Scenario",

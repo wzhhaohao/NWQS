@@ -2,8 +2,7 @@
 % Please edit documentation in R/simulate_data.R
 \name{gen_nonlinear_count_data}
 \alias{gen_nonlinear_count_data}
-\title{Generate Non-linear Count Model Data (Poisson)
-生成基于自然样条的非线性计数数据 (Poisson Regression)}
+\title{生成非线性暴露的计数结局数据 (Generate Non-linear Poisson Count Data)}
 \usage{
 gen_nonlinear_count_data(
   n_obs = 1000,
@@ -22,40 +21,14 @@ gen_nonlinear_count_data(
 )
 }
 \arguments{
-\item{n_obs}{integer. Sample size. / 样本量。}
-
-\item{mu_preds}{numeric vector. Mean vector for predictors.}
-
-\item{sigma_preds}{matrix. Covariance matrix.}
-
-\item{beta_wqs}{numeric. Scaling factor.}
-
-\item{beta_preds}{numeric vector. Coefficients.}
-
-\item{intercept}{numeric. Intercept (log-scale).
-Controls the baseline event rate.
-e.g., intercept=0 -> mean count ~1; intercept=2 -> mean count ~7.4.
-/ 模型截距（对数尺度）。控制基线事件发生率。}
-
-\item{snr_db}{numeric. SNR for the linear predictor (latent noise).}
-
-\item{transform_fun}{function.}
-
-\item{q}{integer. 分位数层数，用于求真值。}
-
-\item{df_spline}{integer.}
-
-\item{seed}{integer.}
-
-\item{shape}{character. 混合物的非线性形状模式 ("linear_like", "u_shape", "s_shape", "threshold")。}
-
-\item{...}{arguments passed to generate_covariates.}
-}
-\value{
-data.frame. Contains Y (count), predictors, covariates.
+\item{intercept}{Numeric。模型截距（对数尺度），直接控制泊松过程的基础 \eqn{\lambda}。}
 }
 \description{
-Generates predictors, expands using splines, adds covariates, calculates expected counts (lambda)
-via log-link, and samples count Y from Poisson distribution. Support explicit shape control.
-生成预测变量，使用样条扩展，加入协变量，通过对数连接函数计算期望次数，并从泊松分布中生成计数 Y。支持明确的非线性形状控制。
+通过对数连接 (Log-link) 将混合物的非线性样条特征映射为事件发生的期望发生率 (\eqn{\lambda})，
+并从泊松过程 (Poisson Process) 中生成离散的计数结局。
+}
+\details{
+\strong{截距与泊松基线风险:} \cr
+截距参数在对数尺度上直接控制基线事件发生率。例如 \code{intercept=0} 意味着协变量和暴露处于基准时，期望计数约为 1；
+而 \code{intercept=2} 则期望计数提升至 \eqn{e^2 \approx 7.4}。属性 \code{true_effect_mat} 提供的是纯正的\strong{对数相对危险度 (Log-RR)}。
 }

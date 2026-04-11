@@ -2,22 +2,20 @@
 % Please edit documentation in R/methods.R
 \name{summary.nwqs}
 \alias{summary.nwqs}
-\title{Summary Method for NWQS Objects}
+\title{NWQS 模型的详细统计摘要}
 \usage{
 \method{summary}{nwqs}(object, digits = max(3L, getOption("digits") - 3L), ...)
 }
 \arguments{
-\item{object}{An object of class \code{"nwqs"}.}
+\item{object}{\code{"nwqs"} 类的对象。}
 
-\item{digits}{Integer. Number of significant digits to print.}
+\item{digits}{Integer。保留的有效数字位数。}
 
-\item{...}{Additional arguments passed to or from other methods.}
+\item{...}{传递给其他方法的额外参数。}
 }
 \value{
-Invisibly returns the original \code{"nwqs"} object.
+隐式返回原始的 \code{"nwqs"} 对象。
 }
 \description{
-Provides a detailed statistical summary of the NWQS model, including the global
-regression coefficients, empirical standard errors, Z-statistics, P-values,
-and deviance metrics.
+提供 NWQS 模型的详尽统计摘要，包含全局 GLM 回归系数、经验标准误、Z 统计量、P 值以及偏差 (Deviance) 和 AIC 等拟合优度指标。
 }
