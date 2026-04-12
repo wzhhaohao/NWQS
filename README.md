@@ -142,6 +142,6 @@ GPL-3 License. See [LICENSE](LICENSE) for details.
 
 ## Authors
 
-**Wang Zhehao** ([wangzhehao_bill@foxmail.com](mailto:wangzhehao_bill@foxmail.com)) — Department of Public Health and Preventive Medicine, School of Medicine, Jinan University, Guangzhou, 510632, China
-**Chen Shirui** ([chenshr7@bjmu.edu.cn](mailto:chenshr7@bjmu.edu.cn)) — Peking University Center for Public Health and Epidemic Preparedness & Response, Peking University, Beijing 100191, China
-**Lin Ziqiang** ([linziqiang0314@gmail.com](mailto:linziqiang0314@gmail.com)) — Department of Public Health and Preventive Medicine, School of Medicine, Jinan University, Guangzhou, 510632, China (Corresponding author)
+1. **Wang Zhehao** ([wangzhehao_bill@foxmail.com](mailto:wangzhehao_bill@foxmail.com)) — Department of Public Health and Preventive Medicine, School of Medicine, Jinan University, Guangzhou, 510632, China
+2. **Chen Shirui** ([chenshr7@bjmu.edu.cn](mailto:chenshr7@bjmu.edu.cn)) — Peking University Center for Public Health and Epidemic Preparedness & Response, Peking University, Beijing 100191, China
+3. **Lin Ziqiang** ([linziqiang0314@gmail.com](mailto:linziqiang0314@gmail.com)) — Department of Public Health and Preventive Medicine, School of Medicine, Jinan University, Guangzhou, 510632, China (Corresponding author)
