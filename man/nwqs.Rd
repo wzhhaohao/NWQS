@@ -15,9 +15,9 @@ nwqs(
   df_spline = 3,
   transform_fun = NULL,
   train_prop = 0.6,
-  rh = 100,
+  rh = 10,
   seed = 1234,
-  n_permutation = 100,
+  n_permutation = 10,
   family = c("gaussian", "binomial", "poisson", "quasipoisson", "clogit"),
   plan_strategy = c("sequential", "multisession", "multicore"),
   n_workers = NULL,
@@ -54,7 +54,7 @@ If \code{NULL}, uses \code{trans_quantile}.}
 \item{train_prop}{Numeric in (0, 1). Training set proportion per RH
 iteration. Default is 0.6.}
 
-\item{rh}{Integer. Number of repeated holdout iterations. Default is 1.}
+\item{rh}{Integer. Number of repeated holdout iterations. Default is 10.}
 
 \item{seed}{Integer. Random seed for reproducible splits. Default is 1234.}
 

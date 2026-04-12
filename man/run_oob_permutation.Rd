@@ -10,7 +10,7 @@ run_oob_permutation(
   outcome = "y",
   covariates = NULL,
   weight_engine = permutation_scorer,
-  n_permutation = 100,
+  n_permutation = 10,
   seed = NULL,
   boot_strategy = c("sequential", "multicore", "multisession"),
   boot_n_workers = NULL,
@@ -33,7 +33,7 @@ adjust for.}
 shapes. Default is \code{\link{permutation_scorer}}.}
 
 \item{n_permutation}{Integer. Number of internal bootstrap or permutation
-iterations. Default is 100.}
+iterations. Default is 10.}
 
 \item{seed}{Integer or \code{NULL}. Random seed for reproducible parallel
 computation.}
