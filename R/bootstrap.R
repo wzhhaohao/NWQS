@@ -16,7 +16,7 @@
 #' @param weight_engine Function. The engine function for computing weights and
 #'   shapes. Default is \code{\link{permutation_scorer}}.
 #' @param n_permutation Integer. Number of internal bootstrap or permutation
-#'   iterations. Default is 100.
+#'   iterations. Default is 10.
 #' @param seed Integer or \code{NULL}. Random seed for reproducible parallel
 #'   computation.
 #' @param boot_strategy Character. Parallel strategy: \code{"sequential"},
@@ -36,7 +36,7 @@
 run_oob_permutation <- function(data, mix_name, outcome = "y",
                                 covariates = NULL,
                                 weight_engine = permutation_scorer,
-                                n_permutation = 100, seed = NULL,
+                                n_permutation = 10, seed = NULL,
                                 boot_strategy = c("sequential", "multicore", "multisession"),
                                 boot_n_workers = NULL, ...) {
   args <- list(...)

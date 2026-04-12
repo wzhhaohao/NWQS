@@ -13,13 +13,14 @@ nwqs_boot(
   family = c("gaussian", "binomial", "poisson", "quasipoisson", "clogit"),
   n_boot = 100,
   rh_inner = 1,
-  n_permutation = 100,
+  n_permutation = 10,
   conf_level = 0.95,
   seed = 1234,
   keep_fits = FALSE,
   plan_strategy = c("sequential", "multisession", "multicore"),
   n_workers = NULL,
   q = 4,
+  quiet = TRUE,
   ...
 )
 }
@@ -44,7 +45,7 @@ nwqs_boot(
 is 1.}
 
 \item{n_permutation}{Integer. Permutation count for variable importance.
-Default is 100.}
+Default is 10.}
 
 \item{conf_level}{Numeric. Confidence level. Default is 0.95.}
 
@@ -59,6 +60,9 @@ loop.}
 \item{n_workers}{Integer or \code{NULL}. Number of parallel workers.}
 
 \item{q}{Integer. Number of quantile bins. Default is 4.}
+
+\item{quiet}{Logical. If \code{TRUE}, suppresses verbose output. Default
+is \code{TRUE}.}
 
 \item{...}{Additional arguments passed to \code{nwqs()}.}
 }

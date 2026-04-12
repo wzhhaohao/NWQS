@@ -54,7 +54,7 @@
 #'   If \code{NULL}, uses \code{trans_quantile}.
 #' @param train_prop Numeric in (0, 1). Training set proportion per RH
 #'   iteration. Default is 0.6.
-#' @param rh Integer. Number of repeated holdout iterations. Default is 1.
+#' @param rh Integer. Number of repeated holdout iterations. Default is 10.
 #' @param seed Integer. Random seed for reproducible splits. Default is 1234.
 #' @param n_permutation Integer. Number of internal permutations for variable
 #'   importance. Default is 10.
@@ -92,7 +92,7 @@ nwqs <- function(data, mix_name, covariates = NULL, outcome = "y",
                  strata_col = NULL,
                  weight_engine = permutation_scorer, q = 4, df_spline = 3,
                  transform_fun = NULL,
-                 train_prop = 0.6, rh = 100, seed = 1234, n_permutation = 100,
+                 train_prop = 0.6, rh = 10, seed = 1234, n_permutation = 10,
                  family = c("gaussian", "binomial", "poisson", "quasipoisson", "clogit"),
                  plan_strategy = c("sequential", "multisession", "multicore"),
                  n_workers = NULL, quiet = FALSE, ...) {
@@ -492,7 +492,7 @@ nwqs <- function(data, mix_name, covariates = NULL, outcome = "y",
 #' @param rh_inner Integer. RH iterations per bootstrap replicate. Default
 #'   is 1.
 #' @param n_permutation Integer. Permutation count for variable importance.
-#'   Default is 100.
+#'   Default is 10.
 #' @param conf_level Numeric. Confidence level. Default is 0.95.
 #' @param seed Integer or \code{NULL}. Random seed.
 #' @param keep_fits Logical. Whether to retain all bootstrap model objects.
@@ -501,6 +501,8 @@ nwqs <- function(data, mix_name, covariates = NULL, outcome = "y",
 #'   loop.
 #' @param n_workers Integer or \code{NULL}. Number of parallel workers.
 #' @param q Integer. Number of quantile bins. Default is 4.
+#' @param quiet Logical. If \code{TRUE}, suppresses verbose output. Default
+#'   is \code{TRUE}.
 #' @param ... Additional arguments passed to \code{nwqs()}.
 #'
 #' @return An object of class \code{c("nwqs_boot", "list")} containing:
@@ -529,13 +531,14 @@ nwqs_boot <- function(data,
                       family = c("gaussian", "binomial", "poisson", "quasipoisson", "clogit"),
                       n_boot = 100,
                       rh_inner = 1,
-                      n_permutation = 100,
+                      n_permutation = 10,
                       conf_level = 0.95,
                       seed = 1234,
                       keep_fits = FALSE,
                       plan_strategy = c("sequential", "multisession", "multicore"),
                       n_workers = NULL,
                       q = 4,
+                      quiet = TRUE,
                       ...) {
   start_time <- Sys.time()
 

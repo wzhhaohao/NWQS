@@ -30,6 +30,12 @@ Hyperparam_Profile/
 # Documentation drafts
 docs/
 
+# Paper and manuscript files (not part of the package)
+*.docx
+*.pdf
+NWQS非线性WQS模型.md
+NWQS_论文*.md
+
 # Build and tools
 build/
 tools/

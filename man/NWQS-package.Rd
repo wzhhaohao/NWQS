@@ -9,7 +9,13 @@
 Fits non-linear weighted quantile sum (NWQS) regression models for assessing the joint effect and relative importance of correlated mixture exposures. Extends classical WQS by incorporating natural cubic splines to capture non-linear dose-response relationships (e.g., threshold, U-shaped, S-shaped curves). Supports Gaussian, binomial, Poisson, quasi-Poisson, and conditional logistic regression families. Provides repeated holdout estimation, external bootstrap inference, permutation-based variable importance, and publication-quality diagnostic plots.
 }
 \author{
-\strong{Maintainer}: Zhehao Wang \email{wangzhehao_bill@foxmail.com}
+\strong{Maintainer}: Ziqiang Lin \email{linziqiang0314@gmail.com} (Corresponding author)
+
+Authors:
+\itemize{
+  \item Zhehao Wang \email{wangzhehao_bill@foxmail.com}
+  \item Shirui Chen \email{chenshr7@bjmu.edu.cn}
+}
 
 }
 \keyword{internal}

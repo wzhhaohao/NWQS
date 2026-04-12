@@ -31,7 +31,7 @@
 #' @param family List. GLM family object (or a pseudo-family list with
 #'   \code{$family = "clogit"}).
 #' @param n_permutation Integer. Number of OOB permutations for stabilizing
-#'   importance scores. Default is 100.
+#'   importance scores. Default is 10.
 #' @param strata_id Vector or \code{NULL}. Stratum/matching group IDs required
 #'   for conditional logistic regression.
 #' @param ... Additional compatibility parameters.
@@ -48,7 +48,7 @@
 #' @importFrom survival Surv clogit coxph.fit coxph.control
 #' @export
 permutation_scorer <- function(x, y, mix_name, spline_vars, family,
-                               n_permutation = 100, strata_id = NULL, ...) {
+                               n_permutation = 10, strata_id = NULL, ...) {
   n_obs <- nrow(x)
   fam_name <- family$family
 

@@ -10,7 +10,7 @@ permutation_scorer(
   mix_name,
   spline_vars,
   family,
-  n_permutation = 100,
+  n_permutation = 10,
   strata_id = NULL,
   ...
 )
@@ -30,7 +30,7 @@ spline basis functions.}
 \code{$family = "clogit"}).}
 
 \item{n_permutation}{Integer. Number of OOB permutations for stabilizing
-importance scores. Default is 100.}
+importance scores. Default is 10.}
 
 \item{strata_id}{Vector or \code{NULL}. Stratum/matching group IDs required
 for conditional logistic regression.}
