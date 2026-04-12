@@ -2,28 +2,23 @@
 % Please edit documentation in R/monte_carlo.R
 \name{calc_weight_error}
 \alias{calc_weight_error}
-\title{计算权重分配的误差与相似度指标 (Calculate Weight Allocation Error Metrics)}
+\title{Calculate Weight Allocation Error Metrics}
 \usage{
 calc_weight_error(w_est, w_true)
 }
 \arguments{
-\item{w_est}{Numeric vector。模型估计出的混合物相对权重向量。}
+\item{w_est}{Numeric vector. Estimated mixture relative weights.}
 
-\item{w_true}{Numeric vector。数据生成机制 (DGM) 设定的真实基准权重向量。必须与 \code{w_est} 长度一致。若两者均有命名属性，函数将自动按名称对齐。}
+\item{w_true}{Numeric vector. True benchmark weights from the data
+generating mechanism. Must have the same length as \code{w_est}. If both
+are named, alignment is performed by name.}
 }
 \value{
-返回一个包含以下元素的命名列表：
-\code{SAE}, \code{MAE}, \code{Pearson}, \code{Spearman}, \code{CosSim}。
+A named list: \code{SAE}, \code{MAE}, \code{Pearson},
+\code{Spearman}, \code{CosSim}.
 }
 \description{
-计算模型估计的混合物组分权重与数据生成时的真实（基准）权重之间的多种误差和相似度指标。
-这对于评估模型在存在多重共线性或未测量混杂时，精准识别关键毒性物质的能力至关重要。
-}
-\details{
-\strong{指标解析:}
-\itemize{
-\item \strong{SAE (绝对误差和):} $\sum |w_{est} - w_{true}|$。在成分数据 (Compositional Data) 框架下（权重和为1），SAE 是评估整体分配偏差的最直观指标。
-\item \strong{Cosine Similarity (余弦相似度):} 衡量高维权重向量在方向上的对齐程度，对权重的绝对数值缩放具有不变性。
-\item \strong{Spearman/Pearson:} 评估模型对暴露物相对重要性排序的恢复能力。
-}
+Computes multiple error and similarity metrics between estimated mixture
+component weights and the true (ground-truth) weights used in data
+generation.
 }

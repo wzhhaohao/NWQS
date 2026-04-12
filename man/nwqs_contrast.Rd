@@ -2,23 +2,25 @@
 % Please edit documentation in R/utils.R
 \name{nwqs_contrast}
 \alias{nwqs_contrast}
-\title{计算 NWQS 联合暴露分位数对比效应}
+\title{Compute NWQS Joint Exposure Quantile Contrast Effects}
 \usage{
 nwqs_contrast(model, q_target = NULL, q_ref = 0)
 }
 \arguments{
-\item{model}{\code{"nwqs"} 类的对象。}
+\item{model}{An object of class \code{"nwqs"}.}
 
-\item{q_target}{Integer。目标分位数索引（基于 0 起始）。例如，3 代表 Q4。若为 \code{NULL}，将自动推断为最大分位数。}
+\item{q_target}{Integer. Target quantile index (0-based). For example, 3
+represents Q4. If \code{NULL}, automatically set to the maximum quantile.}
 
-\item{q_ref}{Integer。参考分位数索引（基于 0 起始）。默认为 0 (Q1)。}
+\item{q_ref}{Integer. Reference quantile index (0-based). Default is 0 (Q1).}
 }
 \value{
-隐式返回一个列表，包含计算的绝对偏效应变化 \code{delta_eta} 以及置信区间上下限 \code{lower} 和 \code{upper}。
-（注意：当 \code{rh = 1} 时，由于无法估计变异，上下限返回 \code{NA}）。
+Invisibly returns a list containing \code{delta_eta}, \code{lower},
+and \code{upper}. When \code{rh = 1}, confidence bounds are \code{NA}.
 }
 \description{
-计算整体混合物非线性效应的全局显著性，并评估联合暴露的分位数对比
-（例如：所有暴露组分同时处于最高分位数 Q4 相较于均处于最低分位数 Q1 时的效应变化）。
-对于逻辑回归和泊松回归，函数会自动将其转换为临床易解的比值比 (OR) 和相对危险度 (RR)。
+Evaluates the overall mixture non-linear effect significance and computes
+joint exposure quantile contrasts (e.g., all components simultaneously at
+their highest quantile vs. lowest). For logistic and Poisson models, results
+are automatically converted to odds ratios (OR) and rate ratios (RR).
 }

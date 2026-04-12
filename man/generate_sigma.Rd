@@ -2,7 +2,7 @@
 % Please edit documentation in R/simulate_data.R
 \name{generate_sigma}
 \alias{generate_sigma}
-\title{生成具有特定相关性结构的协方差矩阵 (Generate Covariance Matrix)}
+\title{Generate Covariance Matrix with Specific Correlation Structure}
 \usage{
 generate_sigma(
   n_vars,
@@ -12,27 +12,21 @@ generate_sigma(
 )
 }
 \arguments{
-\item{n_vars}{Integer。混合物组分（变量）的数量。}
+\item{n_vars}{Integer. Number of mixture variables.}
 
-\item{mode}{Character。相关性模式，可选 \code{"low"}, \code{"medium"}, \code{"high"}, \code{"mixed"}。}
+\item{mode}{Character. Correlation pattern: \code{"low"}, \code{"medium"},
+\code{"high"}, or \code{"mixed"} (block-diagonal structure).}
 
-\item{rho}{Numeric。基础相关系数强度（仅针对特定模式生效），默认为 0.7。}
+\item{rho}{Numeric. Base correlation strength (for certain modes). Default
+is 0.7.}
 
-\item{seed}{Integer 或 \code{NULL}。随机种子，用于控制 Monte Carlo 模拟的可重复性。}
+\item{seed}{Integer or \code{NULL}. Random seed for reproducibility.}
 }
 \value{
-Matrix。正定对称的相关系数矩阵。
+A positive-definite symmetric correlation matrix.
 }
 \description{
-根据指定的模式生成正定对称的相关系数/协方差矩阵，专为模拟高维共线性暴露数据而设计。
-}
-\details{
-\strong{环境暴露多重共线性模拟:} \cr
-公共卫生领域中的混合物数据（如全氟化合物 PFAS、多环芳烃 PAHs）通常具有高度相关性。
-此函数提供的模式完美契合不同的暴露场景：
-\itemize{
-\item \code{"high"}: 模拟同源暴露（如同一污染源排放的多种同系物），所有变量间具有高强度基础相关性。
-\item \code{"mixed"}: 模拟真实世界中具有“区块对角 (Block Diagonal)”特征的暴露族群（部分高度相关，部分独立）。
-}
-算法内部强制进行特征值修复 (Eigenvalue Repair)，确保生成的矩阵在数学上绝对正定 (Positive-Definite)。
+Generates a positive-definite symmetric correlation/covariance matrix with
+a specified correlation pattern, designed for simulating high-dimensional
+collinear exposure data.
 }

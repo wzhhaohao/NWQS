@@ -1,30 +1,19 @@
-# ==============================================================================
-# utils.R — NWQS 模型核心工具函数（清理版）
-# ==============================================================================
-
-#' @title 分位数或百分位数数据转换 (Quantile or Percentile Transformation)
+#' @title Quantile or Percentile Transformation
 #'
 #' @description
-#' 将连续的混合物暴露变量转换为离散的分位数区间 (Quantile Bins) 或连续的百分位秩 (Percentile Ranks)。
-#' 这一步是加权分位数和 (WQS) 及其扩展方法标准化不同量纲暴露特征的基石。
+#' Transforms continuous mixture exposure variables into discrete quantile bins
+#' or continuous percentile ranks. This standardization step is fundamental to
+#' weighted quantile sum (WQS) and its extensions for harmonizing exposures
+#' measured on different scales.
 #'
-#' @details
-#' \strong{方法学考量与潜在偏倚风险:}
-#' \describe{
-#'   \item{\code{"quantile"}}{经典的 gWQS 分箱逻辑，将数据划分为 \code{q} 个组（如 0 到 \code{q-1}）。
-#'     内部通过指定 \code{-Inf} 和 \code{Inf} 作为边界，极大地增强了对极端异常值 (Outliers) 的稳健性。
-#'     *流行病学警示:* 虽然分箱能抵抗异常值，但如果真实的剂量反应关系在某个分箱内部存在急剧的非线性变化，
-#'     分类操作可能引入一定程度的残余混杂 (Residual Confounding)。此外，分位点的确定高度依赖于当前样本，
-#'     若样本存在选择偏倚 (Selection Bias)，则截断点可能无法代表目标人群的真实暴露水平。}
-#'   \item{\code{"percentile"}}{通过 \eqn{rank(x) / (n + 1)} 将连续变量映射到 (0, 1) 区间。保留了比分类更多的
-#'     等级信息，适用于样本量较小或需要精细平滑非线性曲线的场景。}
-#' }
+#' @param data \code{data.frame}. Contains the mixture variables to transform.
+#' @param method Character. Transformation method: \code{"quantile"} (default)
+#'   or \code{"percentile"}.
+#' @param q Integer. Number of quantile bins (only used when
+#'   \code{method = "quantile"}). Default is 4 (quartiles).
 #'
-#' @param data \code{data.frame}。包含需要转换的混合物变量的数据框。
-#' @param method Character。转换方法：\code{"quantile"}（默认分位数）或 \code{"percentile"}（百分位秩）。
-#' @param q Integer。分位数的分箱数量（仅在 \code{method = "quantile"} 时生效）。默认为 4（四分位数）。
-#'
-#' @return 返回一个与输入同维度和同列名的 \code{data.frame}，包含转换后的无量纲数值。
+#' @return A \code{data.frame} with the same dimensions and column names as the
+#'   input, containing the transformed dimensionless values.
 #'
 #' @importFrom stats quantile
 #' @export
@@ -59,29 +48,31 @@ trans_quantile <- function(data, method = c("quantile", "percentile"), q = 4) {
 }
 
 
-# -------------------------------------------------------------------------
-
-#' @title WQS 混合物组分的非线性样条扩展
+#' @title Non-Linear Spline Expansion for WQS Mixture Components
 #'
 #' @description
-#' 使用全局固定的内部节点 (Knots) 和边界节点 (Boundary Knots)，将（已完成分位数转换的）混合物变量
-#' 转换为自然三次样条 (Natural Cubic Splines) 基矩阵。
+#' Transforms (quantile-transformed) mixture variables into a natural cubic
+#' spline basis matrix using globally fixed internal and boundary knots.
 #'
 #' @details
-#' \strong{严谨性说明 (基函数对齐):} \cr
-#' 在机器学习和统计建模结合的架构中（如 NWQS 采用的 Repeated Holdout 或 Bootstrap），
-#' 绝不能在不同的子样本中动态计算样条节点。此函数强制要求传入预先在全样本上确定的 \code{knots}
-#' 和 \code{boundary}，这确保了训练集、验证集和重抽样集之间基函数的绝对对齐。若不进行这种全局约束，
-#' 极易引发空间漂移偏倚 (Spatial Drift Bias)，导致交叉验证中提取的形状系数在验证集上失效。
+#' This function enforces the use of pre-computed \code{knots} and
+#' \code{boundary} to ensure basis function alignment across training,
+#' validation, and resampled datasets. Dynamically computing knots within
+#' subsamples would cause spatial drift bias.
 #'
-#' @param data \code{data.frame}。包含混合物变量（通常已经过转换）的数据框。
-#' @param mix_name Character vector。需要进行样条扩展的混合物组分列名。
-#' @param df_spline Integer。自然样条的自由度，默认为 3。
-#' @param knots Numeric vector。内部节点位置。为了确保全局尺度对齐，必须显式提供。
-#' @param boundary Numeric vector (长度为 2)。边界节点位置。必须显式提供以固定外推边界。
+#' @param data \code{data.frame}. Contains the mixture variables (typically
+#'   already transformed).
+#' @param mix_name Character vector. Column names of mixture components to
+#'   expand.
+#' @param df_spline Integer. Degrees of freedom for the natural spline.
+#'   Default is 3.
+#' @param knots Numeric vector. Internal knot positions. Must be explicitly
+#'   provided for global scale alignment.
+#' @param boundary Numeric vector (length 2). Boundary knot positions. Must be
+#'   explicitly provided.
 #'
-#' @return 一个数值型矩阵，列名格式为 \code{{Component}_B{BasisIndex}}
-#'   （例如，\code{Component1_B1}, \code{Component1_B2}）。
+#' @return A numeric matrix with columns named
+#'   \code{{Component}_B{BasisIndex}}.
 #'
 #' @importFrom splines ns
 #' @export
@@ -109,27 +100,26 @@ wqs_nonlinear_expand <- function(data, mix_name, df_spline = 3,
 }
 
 
-# -------------------------------------------------------------------------
-
-#' @title 计算 NWQS 联合暴露分位数对比效应
+#' @title Compute NWQS Joint Exposure Quantile Contrast Effects
 #'
 #' @description
-#' 计算整体混合物非线性效应的全局显著性，并评估联合暴露的分位数对比
-#' （例如：所有暴露组分同时处于最高分位数 Q4 相较于均处于最低分位数 Q1 时的效应变化）。
-#' 对于逻辑回归和泊松回归，函数会自动将其转换为临床易解的比值比 (OR) 和相对危险度 (RR)。
+#' Evaluates the overall mixture non-linear effect significance and computes
+#' joint exposure quantile contrasts (e.g., all components simultaneously at
+#' their highest quantile vs. lowest). For logistic and Poisson models, results
+#' are automatically converted to odds ratios (OR) and rate ratios (RR).
 #'
-#' @param model \code{"nwqs"} 类的对象。
-#' @param q_target Integer。目标分位数索引（基于 0 起始）。例如，3 代表 Q4。若为 \code{NULL}，将自动推断为最大分位数。
-#' @param q_ref Integer。参考分位数索引（基于 0 起始）。默认为 0 (Q1)。
+#' @param model An object of class \code{"nwqs"}.
+#' @param q_target Integer. Target quantile index (0-based). For example, 3
+#'   represents Q4. If \code{NULL}, automatically set to the maximum quantile.
+#' @param q_ref Integer. Reference quantile index (0-based). Default is 0 (Q1).
 #'
-#' @return 隐式返回一个列表，包含计算的绝对偏效应变化 \code{delta_eta} 以及置信区间上下限 \code{lower} 和 \code{upper}。
-#'   （注意：当 \code{rh = 1} 时，由于无法估计变异，上下限返回 \code{NA}）。
+#' @return Invisibly returns a list containing \code{delta_eta}, \code{lower},
+#'   and \code{upper}. When \code{rh = 1}, confidence bounds are \code{NA}.
 #'
 #' @importFrom splines ns
 #' @importFrom stats quantile coef
 #' @export
 nwqs_contrast <- function(model, q_target = NULL, q_ref = 0) {
-  # 【修改核心】：动态获取模型的最大分位数，不再写死 Q4(3)
   if (is.null(q_target)) {
     q_target <- if (!is.null(model$q)) model$q - 1 else 3
   }
@@ -274,21 +264,19 @@ nwqs_contrast <- function(model, q_target = NULL, q_ref = 0) {
 }
 
 
-# -------------------------------------------------------------------------
-
-#' @title 提取 NWQS 模型的详细分位数对比效应
+#' @title Extract Detailed Quantile Contrast Effects from NWQS Model
 #'
 #' @description
-#' 计算所有可能的分位数对比效应（例如 Q2 vs Q1，Q3 vs Q1，Q4 vs Q1）。
-#' 函数不仅会输出整体混合物的效应，还会将整体效应分解至每个单独的混合物组分，
-#' 并从 Repeated Holdout 迭代中提取标准误 (SE) 和经验置信区间。
+#' Computes all possible quantile contrast effects (e.g., Q2 vs Q1, Q3 vs Q1,
+#' Q4 vs Q1), decomposing the overall effect into component-specific
+#' contributions. Standard errors and empirical confidence intervals are
+#' derived from repeated holdout iterations.
 #'
-#' @param model_res \code{"nwqs"} 类的对象。
-#' @param return_raw Logical。当前未使用，为未来扩展保留。
+#' @param model_res An object of class \code{"nwqs"}.
+#' @param return_raw Logical. Currently unused; reserved for future extensions.
 #'
-#' @return 一个 \code{data.frame}，包含以下列：Target (对比目标), Term (变量名/整体),
-#'   Estimate (估计值), SE (经验标准误), Wald_CI_Lower, Wald_CI_Upper,
-#'   Empirical_CI_Lower, Empirical_CI_Upper。
+#' @return A \code{data.frame} with columns: Target, Term, Estimate, SE,
+#'   Wald_CI_Lower, Wald_CI_Upper, Empirical_CI_Lower, Empirical_CI_Upper.
 #'
 #' @importFrom splines ns
 #' @export
@@ -355,38 +343,32 @@ extract_nwqs_effects <- function(model_res, return_raw = FALSE) {
 }
 
 
-#' @title 绘制 NWQS 组分特异性对比箱线图 (Bootstrap 分布图)
+#' @title Plot Component-Specific Bootstrap Contrast Boxplots
 #'
 #' @description
-#' 专为医学与流行病学顶级期刊设计的高质量诊断图。此函数不仅展示效应的点估计，
-#' 而是通过箱线图加抖动点 (Jitter) 的形式，全景展示各暴露组分在不同 Bootstrap 样本中的效应量分布。
+#' Generates publication-quality diagnostic boxplots showing the distribution
+#' of component-specific effects across bootstrap replicates. Jittered points
+#' overlay the boxplots to reveal the full distribution of effect estimates.
 #'
-#' @details
-#' \strong{可视化透明度与科学价值:} \cr
-#' 环境暴露数据通常伴随极高的多重共线性 (Multicollinearity)。单纯依赖点估计与标准误容易掩盖
-#' 权重分配的不稳定性。通过将 Bootstrap 集成过程中的每一次迭代可视化：
-#' \itemize{
-#'   \item 若箱体极宽或分布呈现双峰，高度提示该组分的效应受到共线性干扰或严重依赖特定的极端抽样 (Extreme Samples)。
-#'   \item 图中的横线代表零效应（线性回归为 0，指数族回归为 1）。只有当箱体的绝大部分（如 95% 区间）
-#'   远离该基线时，我们才能对该特定组分的相对贡献抱有高度的统计信心。
-#' }
-#' 绘图严格遵循 \pkg{ggplot2} 的无冗余设计哲学（清晰的主题、明确的坐标轴标签及对比度良好的颜色比例）。
+#' @param model An object of class \code{"nwqs_boot"}.
+#' @param exponentiate Logical or \code{NULL}. Whether to exponentiate the
+#'   Y-axis to display OR or RR. If \code{NULL}, automatically determined from
+#'   the model family.
+#' @param free_y Logical. If \code{TRUE} (default), each facet panel has an
+#'   independently scaled Y-axis.
+#' @param base_size Integer. Base font size. Default is 12.
+#' @param fill_alpha Numeric. Box fill transparency. Default is 0.16.
+#' @param palette Character. Discrete color palette. Default is
+#'   \code{"default"}.
+#' @param components Character vector. Specific components to display.
+#' @param top_n Integer or \code{NULL}. Show only the top \code{top_n}
+#'   components ranked by weight.
+#' @param ylim Numeric vector (length 2). Force Y-axis limits.
+#' @param y_step Numeric. Force Y-axis tick spacing.
 #'
-#' @param model \code{"nwqs_boot"} 类的对象。
-#' @param exponentiate Logical 或 \code{NULL}。是否对 Y 轴效应量进行指数化以显示为 OR 或 RR。若为 \code{NULL}，将自动根据误差分布族判断。
-#' @param free_y Logical。若为 \code{TRUE}（默认），各个组分分面的 Y 轴尺度将自由适配，方便观察效应极小的组分分布。
-#' @param base_size Integer。图表基础字体大小，默认 12，适合大多数学术出版的 A4 排版。
-#' @param fill_alpha Numeric。箱体填充的透明度，默认为 0.16，以确保底层抖动点清晰可见。
-#' @param palette Character。离散调色板，默认为 \code{"default"}。
-#' @param components Character vector。指定需要绘制的特定组分。
-#' @param top_n Integer 或 \code{NULL}。按权重降序排列，仅显示前 \code{top_n} 个最重要的组分。
-#' @param ylim Numeric vector (长度为 2)。强行限制 Y 轴范围（如截断极端 Bootstrap 离群值影响视觉比例时使用）。
-#' @param y_step Numeric。强制指定 Y 轴的刻度间距。
-#'
-#' @return 一个具备学术出版质量的 \code{ggplot} 分面箱线图对象。
+#' @return A publication-quality \code{ggplot} faceted boxplot object.
 #'
 #' @export
-#' @method plot nwqs_boot
 plot_nwqs_contrast_box <- function(model,
                                    exponentiate = NULL,
                                    free_y = TRUE,
@@ -422,21 +404,11 @@ plot_nwqs_contrast_box <- function(model,
   }
 
   calc_facet_layout <- function(n) {
-    if (n <= 5) {
-      return(list(nc = n))
-    }
-    if (n == 8) {
-      return(list(nc = 4))
-    }
-    if (n == 9) {
-      return(list(nc = 3))
-    }
-    if (n == 10) {
-      return(list(nc = 5))
-    }
-    if (n == 12) {
-      return(list(nc = 4))
-    }
+    if (n <= 5) return(list(nc = n))
+    if (n == 8) return(list(nc = 4))
+    if (n == 9) return(list(nc = 3))
+    if (n == 10) return(list(nc = 5))
+    if (n == 12) return(list(nc = 4))
     sqrt_n <- ceiling(sqrt(n))
     list(nc = min(5, sqrt_n))
   }
@@ -461,18 +433,18 @@ plot_nwqs_contrast_box <- function(model,
   }
 
   if (!inherits(model, "nwqs_boot")) {
-    stop("需传入 'nwqs_boot' 对象")
+    stop("Input must be an 'nwqs_boot' object.")
   }
   if (is.null(model$boot_table) || nrow(model$boot_table) == 0) {
-    stop("model$boot_table 为空，无法绘图")
+    stop("model$boot_table is empty; cannot plot.")
   }
   if (!requireNamespace("dplyr", quietly = TRUE)) {
-    stop("请先安装 dplyr：install.packages('dplyr')")
+    stop("Please install 'dplyr': install.packages('dplyr')")
   }
 
   selected_raw <- .resolve_selected_raw(model, components = components, top_n = top_n)
   if (length(selected_raw) == 0) {
-    stop("筛选后没有可绘制的组分")
+    stop("No components remain after filtering.")
   }
 
   boot_df <- model$boot_table

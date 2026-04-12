@@ -2,7 +2,7 @@
 % Please edit documentation in R/simulate_data.R
 \name{generate_linear_data}
 \alias{generate_linear_data}
-\title{生成线性混合物效应的连续型数据 (Generate Linear Model Data)}
+\title{Generate Linear Mixture Effect Data}
 \usage{
 generate_linear_data(
   n_obs = 1000,
@@ -16,7 +16,30 @@ generate_linear_data(
   ...
 )
 }
+\arguments{
+\item{n_obs}{Integer. Sample size.}
+
+\item{mu_preds}{Numeric vector. Mean vector for multivariate normal
+exposure generation.}
+
+\item{sigma_preds}{Matrix. Covariance matrix for exposure generation.}
+
+\item{beta_wqs}{Numeric. Overall mixture effect coefficient.}
+
+\item{beta_preds}{Numeric vector. Component-specific effect weights.}
+
+\item{snr_db}{Numeric. Signal-to-noise ratio in dB. Default is 10.}
+
+\item{transform_fun}{Function or \code{NULL}. Custom transformation for
+exposures.}
+
+\item{seed}{Integer or \code{NULL}. Random seed.}
+
+\item{...}{Additional arguments passed to \code{generate_covariates}.}
+}
 \description{
-为 Monte Carlo 模拟生成标准线性响应数据。暴露组分通过多元正态分布生成，
-可选经过分位数转换，最后与协变量的线性预测子组合，并根据信噪比引入测量误差。
+Generates continuous outcome data with linear mixture effects for Monte
+Carlo simulation. Exposure components are drawn from a multivariate normal
+distribution, optionally quantile-transformed, combined with covariate
+effects, and corrupted by noise according to the specified SNR.
 }

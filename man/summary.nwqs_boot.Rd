@@ -2,22 +2,22 @@
 % Please edit documentation in R/methods.R
 \name{summary.nwqs_boot}
 \alias{summary.nwqs_boot}
-\title{NWQS Bootstrap 集成模型的详细摘要}
+\title{Detailed Summary for NWQS Bootstrap Ensemble Model}
 \usage{
 \method{summary}{nwqs_boot}(object, digits = 4, ...)
 }
 \arguments{
-\item{object}{\code{"nwqs_boot"} 类的对象。}
+\item{object}{An object of class \code{"nwqs_boot"}.}
 
-\item{digits}{Integer。有效数字位数，默认为 4。}
+\item{digits}{Integer. Number of significant digits. Default is 4.}
 
-\item{...}{额外参数。}
+\item{...}{Additional arguments.}
 }
 \value{
-隐式返回 \code{object}。
+Invisibly returns \code{object}.
 }
 \description{
-提供 \code{nwqs_boot} 结果的详尽摘要，除了包含具备统计学效力的 Bootstrap 置信区间表外，
-还专门提供了跨 Bootstrap 样本的“组分权重稳定性指标 (Component Weight Stability)”，这对于评估
-高度共线性的混合物暴露在重抽样下的表现（如是否存在权重的不稳定跳转）具有重要科学价值。
+Provides a detailed summary of \code{nwqs_boot} results including
+bootstrap confidence interval tables and component weight stability
+metrics across bootstrap replicates.
 }

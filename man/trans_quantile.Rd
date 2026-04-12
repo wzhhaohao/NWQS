@@ -2,33 +2,26 @@
 % Please edit documentation in R/utils.R
 \name{trans_quantile}
 \alias{trans_quantile}
-\title{分位数或百分位数数据转换 (Quantile or Percentile Transformation)}
+\title{Quantile or Percentile Transformation}
 \usage{
 trans_quantile(data, method = c("quantile", "percentile"), q = 4)
 }
 \arguments{
-\item{data}{\code{data.frame}。包含需要转换的混合物变量的数据框。}
+\item{data}{\code{data.frame}. Contains the mixture variables to transform.}
 
-\item{method}{Character。转换方法：\code{"quantile"}（默认分位数）或 \code{"percentile"}（百分位秩）。}
+\item{method}{Character. Transformation method: \code{"quantile"} (default)
+or \code{"percentile"}.}
 
-\item{q}{Integer。分位数的分箱数量（仅在 \code{method = "quantile"} 时生效）。默认为 4（四分位数）。}
+\item{q}{Integer. Number of quantile bins (only used when
+\code{method = "quantile"}). Default is 4 (quartiles).}
 }
 \value{
-返回一个与输入同维度和同列名的 \code{data.frame}，包含转换后的无量纲数值。
+A \code{data.frame} with the same dimensions and column names as the
+input, containing the transformed dimensionless values.
 }
 \description{
-将连续的混合物暴露变量转换为离散的分位数区间 (Quantile Bins) 或连续的百分位秩 (Percentile Ranks)。
-这一步是加权分位数和 (WQS) 及其扩展方法标准化不同量纲暴露特征的基石。
-}
-\details{
-\strong{方法学考量与潜在偏倚风险:}
-\describe{
-\item{\code{"quantile"}}{经典的 gWQS 分箱逻辑，将数据划分为 \code{q} 个组（如 0 到 \code{q-1}）。
-内部通过指定 \code{-Inf} 和 \code{Inf} 作为边界，极大地增强了对极端异常值 (Outliers) 的稳健性。
-\emph{流行病学警示:} 虽然分箱能抵抗异常值，但如果真实的剂量反应关系在某个分箱内部存在急剧的非线性变化，
-分类操作可能引入一定程度的残余混杂 (Residual Confounding)。此外，分位点的确定高度依赖于当前样本，
-若样本存在选择偏倚 (Selection Bias)，则截断点可能无法代表目标人群的真实暴露水平。}
-\item{\code{"percentile"}}{通过 \eqn{rank(x) / (n + 1)} 将连续变量映射到 (0, 1) 区间。保留了比分类更多的
-等级信息，适用于样本量较小或需要精细平滑非线性曲线的场景。}
-}
+Transforms continuous mixture exposure variables into discrete quantile bins
+or continuous percentile ranks. This standardization step is fundamental to
+weighted quantile sum (WQS) and its extensions for harmonizing exposures
+measured on different scales.
 }

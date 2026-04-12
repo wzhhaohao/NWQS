@@ -2,7 +2,7 @@
 % Please edit documentation in R/nwqs.R
 \name{nwqs_boot}
 \alias{nwqs_boot}
-\title{NWQS 模型的 Bootstrap 置信区间估计}
+\title{Bootstrap Confidence Interval Estimation for NWQS}
 \usage{
 nwqs_boot(
   data,
@@ -24,68 +24,75 @@ nwqs_boot(
 )
 }
 \arguments{
-\item{data}{data.frame。原始数据集。}
+\item{data}{data.frame. Original dataset.}
 
-\item{mix_name}{Character vector。混合物组分列名。}
+\item{mix_name}{Character vector. Mixture component column names.}
 
-\item{covariates}{Character vector 或 \code{NULL}。需要调整的协变量/混杂因素。}
+\item{covariates}{Character vector or \code{NULL}. Covariates/confounders.}
 
-\item{outcome}{Character。结局变量列名，默认为 "y"。}
+\item{outcome}{Character. Outcome column name. Default is \code{"y"}.}
 
-\item{strata_col}{Character。匹配数据中条件逻辑回归所需的层/组 ID 列名。}
+\item{strata_col}{Character. Stratum ID column name for clogit.}
 
-\item{family}{Character。误差分布与连接函数，可选 "gaussian", "binomial", "poisson", "quasipoisson", "clogit"。}
+\item{family}{Character. Error distribution: \code{"gaussian"},
+\code{"binomial"}, \code{"poisson"}, \code{"quasipoisson"},
+\code{"clogit"}.}
 
-\item{n_boot}{Integer。外部 Bootstrap 抽样重复的次数。考虑到百分位置信区间的稳定性，建议在最终发表前设置为 500 或 1000（默认为 100）。}
+\item{n_boot}{Integer. Number of bootstrap replicates. Default is 100.}
 
-\item{rh_inner}{Integer。在每个 \code{nwqs()} 拟合内部使用的 RH 迭代次数。为避免计算量激增，默认为 1。}
+\item{rh_inner}{Integer. RH iterations per bootstrap replicate. Default
+is 1.}
 
-\item{n_permutation}{Integer。传递给底层 \code{nwqs()} 函数的置换次数，用于计算变量重要性权重。默认为 100。}
+\item{n_permutation}{Integer. Permutation count for variable importance.
+Default is 100.}
 
-\item{conf_level}{Numeric。所需置信区间的置信水平，默认为 0.95 (即 95\\% 置信区间)。}
+\item{conf_level}{Numeric. Confidence level. Default is 0.95.}
 
-\item{seed}{Integer 或 \code{NULL}。随机数种子，用于保证抽样的可重复性。}
+\item{seed}{Integer or \code{NULL}. Random seed.}
 
-\item{keep_fits}{Logical。是否在内存中保留所有的 Bootstrap \code{nwqs} 模型对象。通常为了节省 RAM 设为 \code{FALSE}。}
+\item{keep_fits}{Logical. Whether to retain all bootstrap model objects.
+Default is \code{FALSE}.}
 
-\item{plan_strategy}{Character。外部 Bootstrap 所采用的并行计算策略。}
+\item{plan_strategy}{Character. Parallel strategy for the outer bootstrap
+loop.}
 
-\item{n_workers}{Integer 或 \code{NULL}。并行核心数。}
+\item{n_workers}{Integer or \code{NULL}. Number of parallel workers.}
 
-\item{...}{传递给核心 \code{nwqs()} 函数的其他参数（例如分位点数量 \code{q}，样条自由度 \code{df_spline} 等）。}
+\item{q}{Integer. Number of quantile bins. Default is 4.}
+
+\item{...}{Additional arguments passed to \code{nwqs()}.}
 }
 \value{
-一个 \code{c("nwqs_boot", "list")} 类的列表，主要包含以下内容供下游统计报告使用：
+An object of class \code{c("nwqs_boot", "list")} containing:
 \itemize{
-\item \code{ci_table}: 包含均值及 Bootstrap 百分位置信区间的长格式数据框。若适用，自动报告 OR/RR 及其置信区间。
-\item \code{formatted_table}: 可直接用于医学期刊附表的宽格式汇总表（带有权重降序排列）。
-\item \code{boot_table}: 包含所有成功 Bootstrap 迭代中提取的原始估计值的长格式数据。
-\item \code{final_weights}: 从原始点估计拟合中获取的混合物组分平均相对权重。
-\item \code{n_success}: 成功收敛的 Bootstrap 迭代次数。
-\item ... 及其他包含数据、公式调用和内部架构（样条结点）的辅助属性。
+\item \code{ci_table}: Long-format CI table with bootstrap percentile
+intervals.
+\item \code{formatted_table}: Wide-format summary table for publication.
+\item \code{boot_table}: Raw estimates from all successful bootstrap
+iterations.
+\item \code{final_weights}: Ensemble-averaged component weights.
+\item \code{n_success}: Number of successful bootstrap iterations.
 }
 }
 \description{
-\code{nwqs_boot} 为 NWQS 方法执行外部 Bootstrap 重抽样，旨在近似估计模型参数的真实抽样变异 (Sampling Variability)。
-与仅计算单一对比差异不同，此函数会同时提取所有模型项的效应，并提供具备学术出版级质量的置信区间表格。
+Performs external bootstrap resampling for the NWQS method to approximate
+the true sampling variability of model parameters. Extracts effects for
+all model terms and provides publication-quality confidence interval tables.
 }
 \details{
-\strong{重抽样策略与统计学注意事项:} \cr
+Resampling strategies:
 \itemize{
-\item \strong{独立样本 vs. 匹配数据:} 算法根据所选的误差分布自适应抽样策略。对于标准 GLM 模型，执行简单的随机有放回抽样。
-而对于条件逻辑回归 (\code{family = "clogit"})，算法执行\strong{整群重抽样 (Cluster Resampling)}。这意味着它会基于
-匹配变量 (\code{strata_col}) 作为一个整体进行抽样，并在内部动态重构匹配 ID。这在流行病学设计中极为关键，防止了同一病例-对照组被
-拆散或在多次抽中时混淆独立观察单位。
-\item \strong{内部 RH 参数 (\code{rh_inner}):} 此参数控制单个 Bootstrap 样本内部执行的重复保留次数。
-强烈建议在 Bootstrap 时将其设置为 1（默认值），以防止因“双重嵌套循环”引发的灾难性计算开销。外部 Bootstrap 足以提供
-推断所需的稳健分布。
-\item \strong{解释与选择偏倚:} Bootstrap 百分位法得出的 95\\% CI 提供的是统计抽样方差的良好估计。然而，请注意它\strong{无法纠正}
-原始设计中的系统性选择偏倚。如果原始队列/样本并不代表目标人群，或者失访率较高且与暴露结局均相关，则通过 Bootstrap 生成的
-置信区间会精确地“围绕”在这个有偏的估计量周围。
-\item \strong{流行病学效应量化:} 对于指数族模型（\code{binomial}, \code{poisson}, \code{quasipoisson}, \code{clogit}），算法会自动计算并
-报告指数化后的平均值与置信区间上限/下限，以便直接解释为比值比 (OR) 或相对危险度 (RR)。
+\item For standard GLM families, simple random sampling with replacement.
+\item For conditional logistic regression (\code{family = "clogit"}),
+cluster resampling based on \code{strata_col} with dynamic ID
+reconstruction to preserve matched designs.
 }
+
+For exponential family models (\code{binomial}, \code{poisson},
+\code{quasipoisson}, \code{clogit}), results are automatically reported
+as exponentiated values (OR or RR) with corresponding CIs.
 }
 \seealso{
-\code{\link{nwqs}}, \code{\link{plot.nwqs_boot}}, \code{\link{extract_nwqs_effects}}
+\code{\link{nwqs}}, \code{\link{plot.nwqs_boot}},
+\code{\link{extract_nwqs_effects}}
 }

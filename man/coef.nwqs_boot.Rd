@@ -2,18 +2,19 @@
 % Please edit documentation in R/methods.R
 \name{coef.nwqs_boot}
 \alias{coef.nwqs_boot}
-\title{从 NWQS Bootstrap 对象中提取基础系数}
+\title{Extract Coefficients from NWQS Bootstrap Object}
 \usage{
 \method{coef}{nwqs_boot}(object, ...)
 }
 \arguments{
-\item{object}{\code{"nwqs_boot"} 类的对象。}
+\item{object}{An object of class \code{"nwqs_boot"}.}
 
-\item{...}{额外参数。}
+\item{...}{Additional arguments.}
 }
 \value{
-包含全局模型基础系数的命名数值向量。
+A named numeric vector of global model coefficients.
 }
 \description{
-注意：此函数提取的是在完整原始数据集上拟合的点估计基础系数，并非 Bootstrap 均值。
+Extracts point estimate coefficients from the original full-data fit, not
+bootstrap means.
 }

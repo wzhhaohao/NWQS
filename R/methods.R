@@ -1,38 +1,22 @@
-# ==============================================================================
-# Internal Helpers (内部辅助函数)
-# ==============================================================================
-
-#' 格式化 P 值 (内部辅助函数)
+#' Format P-values
 #'
-#' @description 将 P 值格式化为符合医学期刊发表标准（如 <0.001）的字符串。
-#' @param p 数值向量。包含需要格式化的 P 值。
-#' @return 格式化后的字符向量。
+#' @param p Numeric vector of P-values.
+#' @return Formatted character vector.
 #' @keywords internal
 #' @noRd
 .format_pval <- function(p) {
   sapply(p, function(pv) {
-    if (is.na(pv)) {
-      return("NA")
-    }
-    if (pv < 0.001) {
-      return("<0.001")
-    }
-    if (pv < 0.01) {
-      return(sprintf("%.3f", pv))
-    }
-    if (pv < 0.05) {
-      return(sprintf("%.3f", pv))
-    }
+    if (is.na(pv)) return("NA")
+    if (pv < 0.001) return("<0.001")
     return(sprintf("%.3f", pv))
   })
 }
 
-#' 打印模型系数表 (内部辅助函数)
+#' Print Model Coefficient Table
 #'
-#' @description 格式化输出 GLM 系数表，自动计算并附加 Z 检验的 P 值及显著性星号。
-#' @param coef_table 数据框或矩阵。包含模型系数、标准误等。
-#' @param digits 整数。保留的有效数字位数，默认为 4。
-#' @return 隐式返回打印的数据框。
+#' @param coef_table Data frame or matrix with model coefficients.
+#' @param digits Integer. Number of significant digits. Default is 4.
+#' @return Invisibly returns the printed data frame.
 #' @keywords internal
 #' @noRd
 .print_coef_table <- function(coef_table, digits = 4) {
@@ -66,46 +50,36 @@
 }
 
 
-# ==============================================================================
-# S3 Methods: nwqs (点估计与经验算法推断)
-# ==============================================================================
-
-#' @title 绘制非线性加权分位数和 (NWQS) 模型的诊断与剂量反应图
+#' @title Plot NWQS Model Diagnostics and Dose-Response Curves
 #'
 #' @description
-#' 为 \code{nwqs} 对象生成达到出版标准的诊断图。该函数能够可视化混合物各组分的权重分布，
-#' 以及整体混合物或单个组分的非线性剂量反应轨迹（部分效应或预测绝对值）。
+#' Generates publication-quality diagnostic plots for an \code{nwqs} object,
+#' including component weight distributions and non-linear dose-response
+#' trajectories.
 #'
-#' @details
-#' \strong{剂量反应曲线解读:} \cr
-#' 当设置 \code{type = "curves"} 或 \code{"both"} 时，函数将映射估计的非线性样条曲线。
-#' \itemize{
-#'   \item 若 \code{y_scale = "partial"}：曲线代表在保持其他变量不变的情况下，暴露水平增加的独立相对效应
-#'     （例如：零中心化的对数比值比 Log-OR、对数相对危险度 Log-RR 或连续型结局的变化量 \eqn{\Delta Y}）。
-#'   \item 若 \code{y_scale = "predicted"}：曲线展示绝对预测尺度（例如：二分类模型的绝对预测概率）。
-#' }
+#' @param x An object of class \code{"nwqs"}.
+#' @param type Character. Plot type: \code{"both"} (default), \code{"curves"},
+#'   or \code{"weights"}.
+#' @param y_scale Character. Y-axis scale for curves: \code{"partial"}
+#'   (default) or \code{"predicted"}.
+#' @param components Character vector. Specific components to display. If
+#'   \code{NULL}, all are shown.
+#' @param overlay Logical. If \code{TRUE} (default), all curves are overlaid.
+#'   If \code{FALSE}, faceted by component.
+#' @param plot_ci Logical. Whether to plot 95\% empirical confidence ribbons
+#'   from repeated holdout iterations. Default is \code{FALSE}.
+#' @param base_size Integer. Base font size. Default is 12.
+#' @param palette Character. Color palette: \code{"default"}, \code{"palette2"},
+#'   \code{"palette3"}, or \code{"palette4"}.
+#' @param colorblind_friendly Logical. If \code{TRUE}, uses a colorblind-safe
+#'   palette. Default is \code{FALSE}.
+#' @param top_n Integer or \code{NULL}. Show only the top \code{top_n}
+#'   components by weight.
+#' @param ... Additional arguments passed to other methods.
 #'
-#' \strong{关于置信带 (Confidence Ribbons) 的严正警告:} \cr
-#' 当 \code{plot_ci = TRUE} 且 \code{rh > 1} 时，图中的 95\% 经验置信带来源于重复保留 (Repeated Holdout) 迭代。
-#' 请务必注意：**这些置信带仅反映了数据拆分带来的算法方差 (Algorithmic Variance)，绝对不能用于正式的统计推断或假设检验。**
-#' 它们通常比真实的置信带更窄。若需发表具备统计学效力的带有真实置信区间的图表，请务必使用 \code{\link{plot.nwqs_boot}}。
+#' @return A \code{ggplot} or \pkg{patchwork} composite object.
 #'
-#' @param x \code{"nwqs"} 类的对象，由 \code{\link{nwqs}} 函数拟合产生。
-#' @param type Character。绘图类型：\code{"both"}（默认，使用 \pkg{patchwork} 拼接权重与曲线）、\code{"curves"}（非线性剂量反应曲线）或 \code{"weights"}（组分权重条形图）。
-#' @param y_scale Character。曲线的 Y 轴尺度：\code{"partial"}（默认，相对偏效应）或 \code{"predicted"}（绝对预测值）。
-#' @param components Character vector。需要显示的特定混合物组分名称。若为 \code{NULL}（默认），则显示所有组分。
-#' @param overlay Logical。若为 \code{TRUE}（默认），所有组分的曲线将叠加在同一图层中。若为 \code{FALSE}，则按组分进行分面 (Faceted) 绘图。
-#' @param plot_ci Logical。是否绘制来自 Repeated Holdout 迭代的 95\% 经验置信带。默认为 \code{FALSE}。需要 \code{rh > 1}。
-#' @param base_size Integer。\pkg{ggplot2} 主题的基础字体大小，默认为 12。
-#' @param palette Character。配色方案，可选：\code{"default"}, \code{"palette2"}, \code{"palette3"}, 或 \code{"palette4"}。
-#' @param colorblind_friendly Logical。若为 \code{TRUE}，则强制使用对色盲友好的调色板，默认为 \code{FALSE}。
-#' @param top_n Integer 或 \code{NULL}。按权重降序排列，仅显示前 \code{top_n} 个最重要的组分。
-#' @param ... 传递给其他方法的额外参数。
-#'
-#' @return 返回一个 \code{ggplot} 对象（当 \code{type} 为 \code{"weights"} 或 \code{"curves"} 时），
-#'   或一个 \pkg{patchwork} 复合拼接对象（当 \code{type = "both"} 时）。
-#'
-#' @seealso \code{\link{plot.nwqs_boot}} 以获取基于 Bootstrap 的具有真实统计学效力的诊断图。
+#' @seealso \code{\link{plot.nwqs_boot}} for bootstrap-based inference plots.
 #' @export
 #' @method plot nwqs
 plot.nwqs <- function(x, type = c("both", "curves", "weights"),
@@ -152,7 +126,6 @@ plot.nwqs <- function(x, type = c("both", "curves", "weights"),
     }
   }
 
-  # -- Weights panel -----------------------------------------------------------
   if (type %in% c("weights", "both")) {
     w_names <- names(x$final_weights)
     if (!is.null(components)) w_names <- intersect(w_names, components)
@@ -201,7 +174,6 @@ plot.nwqs <- function(x, type = c("both", "curves", "weights"),
     }
   }
 
-  # -- Curves panel ------------------------------------------------------------
   if (type %in% c("curves", "both")) {
     q_level <- if (!is.null(x$q)) x$q else 4
     x_seq <- seq(0, q_level - 1, length.out = 100)
@@ -332,12 +304,8 @@ plot.nwqs <- function(x, type = c("both", "curves", "weights"),
     }
   }
 
-  if (type == "weights") {
-    return(p_w)
-  }
-  if (type == "curves") {
-    return(p_c)
-  }
+  if (type == "weights") return(p_w)
+  if (type == "curves") return(p_c)
 
   if (!requireNamespace("patchwork", quietly = TRUE)) {
     stop("Install 'patchwork': install.packages('patchwork')")
@@ -357,17 +325,18 @@ plot.nwqs <- function(x, type = c("both", "curves", "weights"),
 }
 
 
-#' @title 打印 NWQS 模型摘要 (基于数据拆分经验推断)
+#' @title Print NWQS Model Summary
 #'
 #' @description
-#' 打印非线性加权分位数和 (NWQS) 模型的简洁出版级摘要。
-#' 自动格式化并输出整体混合物效应、特定组分的相对权重以及绝对效应对比（如最高分位数 Q4 vs 最低分位数 Q1）的 95\% 经验置信区间。
+#' Prints a concise publication-quality summary of the NWQS model including
+#' overall mixture effects, component weights, and quantile contrast effects
+#' with 95\% empirical confidence intervals.
 #'
-#' @param x \code{"nwqs"} 类的对象。
-#' @param digits Integer。需打印的有效数字位数。
-#' @param ... 传递给其他方法的额外参数。
+#' @param x An object of class \code{"nwqs"}.
+#' @param digits Integer. Number of significant digits.
+#' @param ... Additional arguments.
 #'
-#' @return 隐式返回原始的 \code{"nwqs"} 对象。
+#' @return Invisibly returns the \code{"nwqs"} object.
 #' @export
 #' @method print nwqs
 print.nwqs <- function(x, digits = max(3L, getOption("digits") - 3L), ...) {
@@ -483,16 +452,18 @@ print.nwqs <- function(x, digits = max(3L, getOption("digits") - 3L), ...) {
 }
 
 
-#' @title NWQS 模型的详细统计摘要
+#' @title Detailed Statistical Summary for NWQS Model
 #'
 #' @description
-#' 提供 NWQS 模型的详尽统计摘要，包含全局 GLM 回归系数、经验标准误、Z 统计量、P 值以及偏差 (Deviance) 和 AIC 等拟合优度指标。
+#' Provides a detailed statistical summary of the NWQS model including
+#' regression coefficients, standard errors, Z-statistics, P-values, and
+#' goodness-of-fit metrics (deviance, AIC).
 #'
-#' @param object \code{"nwqs"} 类的对象。
-#' @param digits Integer。保留的有效数字位数。
-#' @param ... 传递给其他方法的额外参数。
+#' @param object An object of class \code{"nwqs"}.
+#' @param digits Integer. Number of significant digits.
+#' @param ... Additional arguments.
 #'
-#' @return 隐式返回原始的 \code{"nwqs"} 对象。
+#' @return Invisibly returns the \code{"nwqs"} object.
 #' @export
 #' @method summary nwqs
 summary.nwqs <- function(object, digits = max(3L, getOption("digits") - 3L), ...) {
@@ -547,22 +518,19 @@ coef.nwqs <- function(object, ...) {
 }
 
 
-# ==============================================================================
-# S3 Methods: nwqs_boot (正式的 Bootstrap 统计推断)
-# ==============================================================================
-
-#' @title 打印基于 Bootstrap 的 NWQS 模型正式推断结果
+#' @title Print Bootstrap NWQS Inference Results
 #'
 #' @description
-#' 打印 \code{nwqs_boot} 的摘要结果。此输出反映了模型真实参数的抽样变异 (Sampling Variance)，
-#' 展示了所有项（整体效应与组分特定效应）在各分位数对比下的点估计值和外部 Bootstrap 百分位置信区间。
-#' 针对流行病学研究，会自动将指数族模型的系数转换为比值比 (OR) 或相对危险度 (RR)。
+#' Prints the \code{nwqs_boot} summary reflecting true sampling variance.
+#' Shows all terms (overall and component-specific effects) with point
+#' estimates and bootstrap percentile confidence intervals. For exponential
+#' family models, coefficients are automatically converted to OR or RR.
 #'
-#' @param x \code{"nwqs_boot"} 类的对象。
-#' @param digits Integer。有效数字位数，默认为 3。
-#' @param ... 额外参数。
+#' @param x An object of class \code{"nwqs_boot"}.
+#' @param digits Integer. Number of significant digits. Default is 3.
+#' @param ... Additional arguments.
 #'
-#' @return 隐式返回 \code{x}。
+#' @return Invisibly returns \code{x}.
 #' @export
 #' @method print nwqs_boot
 print.nwqs_boot <- function(x, digits = 3, ...) {
@@ -572,12 +540,10 @@ print.nwqs_boot <- function(x, digits = 3, ...) {
     stop("`x$ci_table` is missing or empty.")
   }
 
-  # 我们在新的 nwqs_boot 中已经直接导出了这些参数，无需再去猜
   n_success <- x$n_success
   n_total <- x$n_boot
   conf_pct <- if (!is.null(x$conf_level)) sprintf("%.0f%%", x$conf_level * 100) else "95%"
 
-  # 注意这里直接从 x$family 读取，并加上了 clogit
   is_exp_family <- !is.null(x$family) && x$family %in% c("binomial", "poisson", "quasipoisson", "clogit")
 
   cat("\n--- NWQS Bootstrap Ensemble Results ---\n")
@@ -597,29 +563,24 @@ print.nwqs_boot <- function(x, digits = 3, ...) {
     cat("    (Displayed on the original coefficient scale)\n\n")
   }
 
-  # 打印核心的汇总表格（包含平均权重和效应值）
   print(x$formatted_table, digits = digits, row.names = FALSE)
-
-  # （注：删除了原本打印单一模型 AIC、Deviance 和底层系数表的代码，
-  # 因为作为纯集成模型，这里展示的 formatted_table 就是全部的最终统计推断结果）
 
   invisible(x)
 }
 
 
-
-#' @title NWQS Bootstrap 集成模型的详细摘要
+#' @title Detailed Summary for NWQS Bootstrap Ensemble Model
 #'
 #' @description
-#' 提供 \code{nwqs_boot} 结果的详尽摘要，除了包含具备统计学效力的 Bootstrap 置信区间表外，
-#' 还专门提供了跨 Bootstrap 样本的“组分权重稳定性指标 (Component Weight Stability)”，这对于评估
-#' 高度共线性的混合物暴露在重抽样下的表现（如是否存在权重的不稳定跳转）具有重要科学价值。
+#' Provides a detailed summary of \code{nwqs_boot} results including
+#' bootstrap confidence interval tables and component weight stability
+#' metrics across bootstrap replicates.
 #'
-#' @param object \code{"nwqs_boot"} 类的对象。
-#' @param digits Integer。有效数字位数，默认为 4。
-#' @param ... 额外参数。
+#' @param object An object of class \code{"nwqs_boot"}.
+#' @param digits Integer. Number of significant digits. Default is 4.
+#' @param ... Additional arguments.
 #'
-#' @return 隐式返回 \code{object}。
+#' @return Invisibly returns \code{object}.
 #' @export
 #' @method summary nwqs_boot
 summary.nwqs_boot <- function(object, digits = 4, ...) {
@@ -676,32 +637,34 @@ summary.nwqs_boot <- function(object, digits = 4, ...) {
 }
 
 
-
-
-#' @title 绘制 NWQS Bootstrap 诊断图 (权重与对比箱线图)
+#' @title Plot NWQS Bootstrap Diagnostic Charts
 #'
 #' @description
-#' 为 \code{nwqs_boot} 对象生成推断级的诊断图。与点估计模型使用曲线图不同，Bootstrap 推断由于其集成特性，
-#' 这里将剂量反应对比（如 \eqn{Q_i} vs \eqn{Q_1}）可视化为基于大量 Bootstrap 样本分布的箱线图 (Boxplots)。
-#' 这种可视化能够极其直观地呈现真实样本变异下的置信度。
+#' Generates inference-level diagnostic plots for \code{nwqs_boot} objects.
+#' Visualizes quantile contrasts as boxplots based on bootstrap distributions,
+#' combined with component weight bar charts.
 #'
-#' @param x \code{"nwqs_boot"} 类的对象。
-#' @param type Character。绘图类型：\code{"both"}（默认，权重图与对比箱图拼接）、\code{"curves"}（这里实际渲染为对比箱线图）或 \code{"weights"}（平均权重分布）。
-#' @param y_scale Character。对比分布的尺度：\code{"partial"}（不进行指数转换的系数尺度）、\code{"contrast_or"}（指数转换后的 OR/RR 尺度）或 \code{"predicted"}（预测尺度）。
-#' @param components Character vector。需要显示的特定混合物组分名称。若为 \code{NULL}，则显示所有组分。
-#' @param overlay Logical。为兼容旧接口保留，在箱线图模式下不生效。
-#' @param show_ci Logical。为兼容旧接口保留，在箱线图模式下不生效（箱线图自带分布信息）。
-#' @param base_size Integer。基础字体大小，默认为 12。
-#' @param palette Character。离散调色板。
-#' @param top_n Integer 或 \code{NULL}。按权重降序排列，仅显示前 \code{top_n} 组分。
-#' @param ylim Numeric vector。限制 Y 轴范围（如 \code{c(min, max)}），用于截断极端离群值。
-#' @param y_step Numeric。Y 轴刻度步长。
-#' @param free_y Logical。若为 \code{TRUE}，各个组分的 Y 轴尺度自由适配。
-#' @param fill_alpha Numeric。箱线图的填充透明度，默认为 0.16。
-#' @param exponentiate Logical 或 \code{NULL}。是否对 Y 轴效应量进行指数化（计算 OR/RR）。若为 \code{NULL}，则根据模型族自动推断。
-#' @param ... 传递给 \code{plot_nwqs_contrast_box} 的额外参数。
+#' @param x An object of class \code{"nwqs_boot"}.
+#' @param type Character. Plot type: \code{"both"} (default), \code{"curves"}
+#'   (contrast boxplots), or \code{"weights"}.
+#' @param y_scale Character. Effect scale: \code{"partial"}, \code{"contrast_or"},
+#'   or \code{"predicted"}.
+#' @param components Character vector. Specific components to display.
+#' @param overlay Logical. Retained for backward compatibility.
+#' @param show_ci Logical. Retained for backward compatibility.
+#' @param base_size Integer. Base font size. Default is 12.
+#' @param palette Character. Discrete color palette.
+#' @param top_n Integer or \code{NULL}. Show only the top \code{top_n}
+#'   components by weight.
+#' @param ylim Numeric vector. Force Y-axis limits.
+#' @param y_step Numeric. Y-axis tick spacing.
+#' @param free_y Logical. If \code{TRUE}, each facet has free Y-axis scaling.
+#' @param fill_alpha Numeric. Box fill transparency. Default is 0.16.
+#' @param exponentiate Logical or \code{NULL}. Whether to exponentiate effects.
+#'   If \code{NULL}, auto-detected from model family.
+#' @param ... Additional arguments passed to \code{plot_nwqs_contrast_box}.
 #'
-#' @return 返回 \code{ggplot} 对象或 \pkg{patchwork} 拼接图。
+#' @return A \code{ggplot} or \pkg{patchwork} composite object.
 #' @export
 #' @method plot nwqs_boot
 plot.nwqs_boot <- function(x,
@@ -763,14 +726,11 @@ plot.nwqs_boot <- function(x,
     selected
   }
 
-  # 为了兼容旧接口保留 y_scale：
-  # partial -> 不指数化；其他 -> 对 exp family 默认指数化
   if (is.null(exponentiate)) {
     is_exp_family <- x$family %in% c("binomial", "poisson", "quasipoisson")
     exponentiate <- if (y_scale == "partial") FALSE else is_exp_family
   }
 
-  # overlay / show_ci 仅为兼容旧接口保留，当前箱图版本不再使用
   is_combined <- (type == "both")
 
   selected_raw <- .resolve_selected_raw(x, components = components, top_n = top_n)
@@ -779,7 +739,6 @@ plot.nwqs_boot <- function(x,
   global_colors <- .get_palette(length(selected_clean), palette)
   names(global_colors) <- selected_clean
 
-  # -- Weight bar chart --------------------------------------------------------
   if (type %in% c("weights", "both")) {
     w <- x$final_weights
 
@@ -793,7 +752,7 @@ plot.nwqs_boot <- function(x,
       w <- sort(w, decreasing = TRUE)
     }
 
-    if (length(w) == 0) stop("筛选后没有可绘制的权重")
+    if (length(w) == 0) stop("No components remain after filtering.")
 
     clean_names_w <- .clean_name(names(w))
     clean_levels_w <- .clean_name(names(sort(w, decreasing = TRUE)))
@@ -841,7 +800,6 @@ plot.nwqs_boot <- function(x,
       )
   }
 
-  # -- Contrast box plot -------------------------------------------------------
   if (type %in% c("curves", "both")) {
     p_c <- plot_nwqs_contrast_box(
       model = x,
@@ -857,15 +815,11 @@ plot.nwqs_boot <- function(x,
     )
   }
 
-  if (type == "weights") {
-    return(p_w)
-  }
-  if (type == "curves") {
-    return(p_c)
-  }
+  if (type == "weights") return(p_w)
+  if (type == "curves") return(p_c)
 
   if (!requireNamespace("patchwork", quietly = TRUE)) {
-    stop("请先安装 'patchwork'：install.packages('patchwork')")
+    stop("Please install 'patchwork': install.packages('patchwork')")
   }
 
   p_w + p_c +
@@ -884,16 +838,18 @@ plot.nwqs_boot <- function(x,
 }
 
 
-#' @title 从 NWQS Bootstrap 对象中提取基础系数
+#' @title Extract Coefficients from NWQS Bootstrap Object
 #'
-#' @description 注意：此函数提取的是在完整原始数据集上拟合的点估计基础系数，并非 Bootstrap 均值。
-#' @param object \code{"nwqs_boot"} 类的对象。
-#' @param ... 额外参数。
-#' @return 包含全局模型基础系数的命名数值向量。
+#' @description
+#' Extracts point estimate coefficients from the original full-data fit, not
+#' bootstrap means.
+#'
+#' @param object An object of class \code{"nwqs_boot"}.
+#' @param ... Additional arguments.
+#'
+#' @return A named numeric vector of global model coefficients.
 #' @export
 #' @method coef nwqs_boot
 coef.nwqs_boot <- function(object, ...) {
   object$point_fit$mean_coefs
 }
-
-

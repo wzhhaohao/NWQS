@@ -2,7 +2,7 @@
 % Please edit documentation in R/simulate_data.R
 \name{generate_covariates}
 \alias{generate_covariates}
-\title{生成流行病学测量的混杂因素集 (Generate Covariates)}
+\title{Generate Covariates for Epidemiological Simulation}
 \usage{
 generate_covariates(
   n_obs = 1000,
@@ -15,28 +15,30 @@ generate_covariates(
 )
 }
 \arguments{
-\item{n_obs}{Integer。模拟队列的样本量。}
+\item{n_obs}{Integer. Sample size.}
 
-\item{beta_cont}{Numeric。连续型变量（如年龄的标准化值）的真实回归系数。}
+\item{beta_cont}{Numeric. True regression coefficient for the continuous
+variable.}
 
-\item{beta_bin}{Numeric。二分类变量（如性别）的真实回归系数。}
+\item{beta_bin}{Numeric. True regression coefficient for the binary
+variable.}
 
-\item{beta_cat}{Numeric vector。多分类变量（如吸烟状态类别）的真实回归系数向量。}
+\item{beta_cat}{Numeric vector. True regression coefficients for the
+categorical variable levels.}
 
-\item{prob_bin}{Numeric。二分类变量发生率。}
+\item{prob_bin}{Numeric. Probability for the binary variable.}
 
-\item{prob_cat}{Numeric vector。多分类变量各水平的分布概率。}
+\item{prob_cat}{Numeric vector. Level probabilities for the categorical
+variable.}
 
-\item{Intercept}{Numeric。基线截距。}
+\item{Intercept}{Numeric. Baseline intercept.}
 }
 \value{
-List。包含生成的协变量数据框 \code{original}、设计矩阵形式的 \code{mm}，以及真实的线性预测子贡献 \code{eta_cov}。
+A list with elements: \code{original} (raw covariate data.frame),
+\code{mm} (design matrix form), and \code{eta_cov} (true linear predictor
+contribution).
 }
 \description{
-随机生成包含连续型、二分类和多分类变量的混杂因素数据集，并计算它们的真实线性效应。
-}
-\details{
-此函数用于模拟流行病学研究中常规收集的、需要被模型控制的协变量（如年龄、性别、BMI 分组或吸烟状态）。
-将这些协变量注入生成数据，旨在验证模型在存在可测量混杂 (Measured Confounding) 时，
-对混合物主效应进行无偏估计 (Unbiased Estimation) 的能力。
+Randomly generates a covariate dataset containing continuous, binary, and
+categorical variables, and computes their true linear effect contribution.
 }

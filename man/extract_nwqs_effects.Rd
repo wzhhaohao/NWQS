@@ -2,22 +2,22 @@
 % Please edit documentation in R/utils.R
 \name{extract_nwqs_effects}
 \alias{extract_nwqs_effects}
-\title{提取 NWQS 模型的详细分位数对比效应}
+\title{Extract Detailed Quantile Contrast Effects from NWQS Model}
 \usage{
 extract_nwqs_effects(model_res, return_raw = FALSE)
 }
 \arguments{
-\item{model_res}{\code{"nwqs"} 类的对象。}
+\item{model_res}{An object of class \code{"nwqs"}.}
 
-\item{return_raw}{Logical。当前未使用，为未来扩展保留。}
+\item{return_raw}{Logical. Currently unused; reserved for future extensions.}
 }
 \value{
-一个 \code{data.frame}，包含以下列：Target (对比目标), Term (变量名/整体),
-Estimate (估计值), SE (经验标准误), Wald_CI_Lower, Wald_CI_Upper,
-Empirical_CI_Lower, Empirical_CI_Upper。
+A \code{data.frame} with columns: Target, Term, Estimate, SE,
+Wald_CI_Lower, Wald_CI_Upper, Empirical_CI_Lower, Empirical_CI_Upper.
 }
 \description{
-计算所有可能的分位数对比效应（例如 Q2 vs Q1，Q3 vs Q1，Q4 vs Q1）。
-函数不仅会输出整体混合物的效应，还会将整体效应分解至每个单独的混合物组分，
-并从 Repeated Holdout 迭代中提取标准误 (SE) 和经验置信区间。
+Computes all possible quantile contrast effects (e.g., Q2 vs Q1, Q3 vs Q1,
+Q4 vs Q1), decomposing the overall effect into component-specific
+contributions. Standard errors and empirical confidence intervals are
+derived from repeated holdout iterations.
 }

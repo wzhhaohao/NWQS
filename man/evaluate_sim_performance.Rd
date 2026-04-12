@@ -2,7 +2,7 @@
 % Please edit documentation in R/monte_carlo.R
 \name{evaluate_sim_performance}
 \alias{evaluate_sim_performance}
-\title{评估 Monte Carlo 模拟的宏观统计性能 (Evaluate Macro-level Performance)}
+\title{Evaluate Macro-Level Monte Carlo Simulation Performance}
 \usage{
 evaluate_sim_performance(
   sim_weight_df,
@@ -13,32 +13,30 @@ evaluate_sim_performance(
 )
 }
 \arguments{
-\item{sim_weight_df}{\code{data.frame}。多次模拟权重的汇总表，每行代表一次模拟。}
+\item{sim_weight_df}{\code{data.frame}. Aggregated weight table across
+simulations, one row per simulation.}
 
-\item{sim_effect_df}{\code{data.frame}。多次模拟效应估计的汇总表。}
+\item{sim_effect_df}{\code{data.frame}. Aggregated effect estimates across
+simulations.}
 
-\item{true_w}{Named numeric vector。基准真实权重向量。}
+\item{true_w}{Named numeric vector. True benchmark weight vector.}
 
-\item{true_eff_mat}{Matrix。数据生成时的真实效应矩阵。}
+\item{true_eff_mat}{Matrix. True effect matrix from data generation.}
 
-\item{w_threshold}{Numeric。将估计权重判定为“有效检测出信号”的硬阈值，默认为 0.01。}
+\item{w_threshold}{Numeric. Threshold for classifying an estimated weight
+as "detected signal". Default is 0.01.}
 }
 \value{
-一个包含两部分的列表：
+A list with two elements:
 \describe{
-\item{\code{Weight_Metrics}}{权重分配的宏观性能（平均 SAE、敏感度、特异度）。}
-\item{\code{Effect_Metrics}}{按变量和对比目标汇总的效应估计性能（包含 Mean_Bias, RMSE, 覆盖概率 CP, 拒绝零假设率 Reject_H0 等）。}
+\item{\code{Weight_Metrics}}{Mean SAE, sensitivity, and specificity.}
+\item{\code{Effect_Metrics}}{Per-variable and per-contrast summary
+including Mean_Bias, RMSE, coverage probability, and rejection rate.}
 }
 }
 \description{
-跨越多次模拟迭代汇总结果，计算宏观层面的统计性能指标。涵盖区间覆盖概率、平均偏差、均方根误差 (RMSE)、
-统计效能 (Power) / 第一类错误率 (Type I Error)，以及变量选择的敏感性与特异性。
-}
-\details{
-\strong{核心统计学评价维度:}
-\itemize{
-\item \strong{Type I Error (假阳性率):} 当真实效应为 0 时，置信区间未覆盖 0 的模拟比例。控制在 $\alpha = 0.05$ 附近是模型稳健性的底线。
-\item \strong{Power (检验效能):} 当真实效应不为 0 时，模型成功拒绝零假设的比例。反映了模型在给定样本量和信噪比下发现真实关联的能力。
-\item \strong{敏感性/特异性 (Sensitivity/Specificity):} 评估权重分配的特征选择能力（基于设定的 \code{w_threshold}）。
-}
+Aggregates results across multiple simulation iterations to compute
+macro-level statistical performance metrics including coverage probability,
+mean bias, RMSE, statistical power / Type I error rate, and variable
+selection sensitivity and specificity.
 }

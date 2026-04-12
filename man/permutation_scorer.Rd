@@ -2,7 +2,7 @@
 % Please edit documentation in R/weights.R
 \name{permutation_scorer}
 \alias{permutation_scorer}
-\title{极速广义线性与条件逻辑回归的置换打分引擎}
+\title{Fast GLM and Conditional Logistic Regression Permutation Scoring Engine}
 \usage{
 permutation_scorer(
   x,
@@ -16,57 +16,55 @@ permutation_scorer(
 )
 }
 \arguments{
-\item{x}{Numeric matrix。包含样条基函数列和调整协变量的设计矩阵。}
+\item{x}{Numeric matrix. Design matrix containing spline basis columns and
+adjustment covariates.}
 
-\item{y}{Numeric vector。结局变量。}
+\item{y}{Numeric vector. Outcome variable.}
 
-\item{mix_name}{Character vector。原始混合物组分的名称列表。}
+\item{mix_name}{Character vector. Names of original mixture components.}
 
-\item{spline_vars}{Character vector。设计矩阵 \code{x} 中所有属于样条基函数的列名。}
+\item{spline_vars}{Character vector. Column names in \code{x} that belong to
+spline basis functions.}
 
-\item{family}{List。GLM 的误差分布族对象（或包含 \code{$family = "clogit"} 的伪族列表）。}
+\item{family}{List. GLM family object (or a pseudo-family list with
+\code{$family = "clogit"}).}
 
-\item{n_permutation}{Integer。用于稳定重要性得分的 OOB 样本置换次数，默认为 100。}
+\item{n_permutation}{Integer. Number of OOB permutations for stabilizing
+importance scores. Default is 100.}
 
-\item{strata_id}{Vector 或 \code{NULL}。条件逻辑回归模型所需的匹配层/组别 ID。}
+\item{strata_id}{Vector or \code{NULL}. Stratum/matching group IDs required
+for conditional logistic regression.}
 
-\item{...}{其他兼容性扩展参数。}
+\item{...}{Additional compatibility parameters.}
 }
 \value{
-返回一个包含以下两个元素的列表：
+A list with two elements:
 \itemize{
-\item \code{weights}: 基于置换损失增加量归一化后的各混合物组分相对权重。
-\item \code{shapes}: 在袋内 (In-bag) 样本上估计得到的所有混合物样条系数。若模型因完全分离或共线性剔除变量，对应系数设为 0。
+\item \code{weights}: Normalized relative importance weights for each
+mixture component.
+\item \code{shapes}: Spline basis coefficients estimated on in-bag data.
+Coefficients dropped due to collinearity are set to 0.
 }
 }
 \description{
-\code{permutation_scorer} 是 NWQS 架构中负责单次内部迭代的核心计算引擎。该函数在袋内 (In-Bag)
-Bootstrap 样本上拟合无惩罚的广义线性模型 (GLM) 或条件逻辑回归 (clogit) 模型，并在袋外 (OOB)
-样本上评估预测损失，最终通过随机置换推导出各个混合物组分的相对重要性。
+Core computational engine for a single internal iteration within the NWQS
+framework. Fits an unpenalized GLM or conditional logistic regression model
+on in-bag bootstrap samples, evaluates prediction loss on out-of-bag (OOB)
+samples, and derives relative component importance via random permutation.
 }
 \details{
-\strong{工作流与算法提速:}
+Workflow:
 \enumerate{
-\item \strong{自适应抽样与拟合:} 在袋内数据上拟合标准 GLM 或 clogit 以初步估计样条基系数。
-\item \strong{极速基线损失评估:} 在 OOB 样本上计算基线损失（如均方误差或偏对数似然）。对于 \code{clogit}，
-为突破计算瓶颈，底层直接剥离了 formula 解析，调用 C++ 层的 \code{survival::coxph.fit}
-并设定 \code{iter.max = 0}，实现了毫秒级的精准偏对数似然 (Partial Log-likelihood) 评估。
-\item \strong{分组置换重要性 (Grouped Permutation Importance):} 针对每个混合物组分，联合打乱其所有对应的
-非线性样条基函数列，并重新计算 OOB 损失的变化量。
+\item Adaptive sampling and model fitting on in-bag data.
+\item Baseline loss evaluation on OOB samples (MSE or deviance). For
+clogit, the engine bypasses formula parsing and directly calls
+\code{survival::coxph.fit} with \code{iter.max = 0} for millisecond-level
+partial log-likelihood evaluation.
+\item Grouped permutation importance: for each mixture component, all
+corresponding spline basis columns are jointly shuffled and the OOB loss
+change is measured.
 }
 
-\strong{医学统计学严谨性与偏倚防范:}
-\itemize{
-\item \strong{匹配设计的整群保护 (Cluster Preservation):} 当 \code{family = "clogit"} 时，算法严格执行
-基于匹配层 (\code{strata_id}) 的整群有放回抽样 (Cluster Resampling)，并在内部动态重命名匹配组 ID。
-这一机制完美保护了 1:N 配对病例对照研究 (Matched Case-Control) 的设计完整性。如果在此时错误地
-采用 IID 独立抽样而打乱了配对结构，将不可避免地引入严重的选择偏倚 (Selection Bias) 并歪曲推断。
-\item \strong{降低残余混杂 (Residual Confounding):} 通过置换整个样条基矩阵而不是单一线性系数，引擎能够
-全面捕捉高度非线性的剂量反应关系（如阈值效应或 U 型暴露风险），这有效降低了因参数化形式误设
-(Model Misspecification) 而残留的混杂风险。
-}
-
-\strong{权重推导公式:}
-组分的相对权重由其置换后造成的损失增加量 (Delta Loss) 决定，为避免负重要性，截断了小于 0 的噪声波动：
-$$Weights_i = \frac{\sqrt{\max(0, \Delta Loss_i)}}{\sum \sqrt{\max(0, \Delta Loss)}}$$
+Weight derivation formula:
+\deqn{w_i = \frac{\sqrt{\max(0, \Delta Loss_i)}}{\sum \sqrt{\max(0, \Delta Loss)}}}
 }

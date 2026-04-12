@@ -2,7 +2,7 @@
 % Please edit documentation in R/bootstrap.R
 \name{run_oob_permutation}
 \alias{run_oob_permutation}
-\title{运行袋外置换与并行重抽样调度器 (OOB Permutation Orchestrator)}
+\title{OOB Permutation and Parallel Resampling Orchestrator}
 \usage{
 run_oob_permutation(
   data,
@@ -18,44 +18,42 @@ run_oob_permutation(
 )
 }
 \arguments{
-\item{data}{\code{data.frame}。包含所需变量的原始数据集。}
+\item{data}{\code{data.frame}. The original dataset containing all required
+variables.}
 
-\item{mix_name}{Character vector。混合物组分的列名。}
+\item{mix_name}{Character vector. Column names of mixture components.}
 
-\item{outcome}{Character。结局变量的列名，默认为 \code{"y"}。}
+\item{outcome}{Character. Column name of the outcome variable. Default is
+\code{"y"}.}
 
-\item{covariates}{Character vector 或 \code{NULL}。需要调整的协变量/混杂因素。}
+\item{covariates}{Character vector or \code{NULL}. Covariates/confounders to
+adjust for.}
 
-\item{weight_engine}{Function。底层用于计算权重和形状的引擎函数，默认为 \code{\link{permutation_scorer}}。}
+\item{weight_engine}{Function. The engine function for computing weights and
+shapes. Default is \code{\link{permutation_scorer}}.}
 
-\item{n_permutation}{Integer。内部 Bootstrap 或置换迭代的次数，默认为 100。}
+\item{n_permutation}{Integer. Number of internal bootstrap or permutation
+iterations. Default is 100.}
 
-\item{seed}{Integer 或 \code{NULL}。并行计算的随机数种子，确保基于 future 的并行结果可重现。}
+\item{seed}{Integer or \code{NULL}. Random seed for reproducible parallel
+computation.}
 
-\item{boot_strategy}{Character。并行策略，可选 \code{"sequential"}, \code{"multicore"}, 或 \code{"multisession"}。}
+\item{boot_strategy}{Character. Parallel strategy: \code{"sequential"},
+\code{"multicore"}, or \code{"multisession"}.}
 
-\item{boot_n_workers}{Integer 或 \code{NULL}。并行工作节点数。}
+\item{boot_n_workers}{Integer or \code{NULL}. Number of parallel workers.}
 
-\item{...}{传递给样条扩展函数 (\code{wqs_nonlinear_expand}) 或 \code{weight_engine} 的其他核心参数
-（如 \code{model_knots}, \code{model_boundary}, \code{q}, \code{df_spline} 等）。}
+\item{...}{Additional arguments passed to \code{wqs_nonlinear_expand} or
+\code{weight_engine} (e.g., \code{model_knots}, \code{model_boundary},
+\code{q}, \code{df_spline}).}
 }
 \value{
-一个列表，长度等于 \code{n_permutation}，包含每次迭代中由 \code{weight_engine} 返回的权重和形状向量。
+A list of length \code{n_permutation}, each element containing the
+weights and shapes returned by \code{weight_engine}.
 }
 \description{
-\code{run_oob_permutation} 是 NWQS 架构中的核心调度函数。它负责准备非线性样条的设计矩阵（Design Matrix），
-管理多线程并行计算，并向底层的 \code{weight_engine}（通常为 \code{permutation_scorer}）分发带有严格随机种子的重抽样任务。
-}
-\details{
-\strong{数据准备与防偏倚机制:} \cr
-\itemize{
-\item \strong{安全族解析 (Safe Family Parsing):} 针对流行病学中常用的条件逻辑回归 (\code{clogit}) 进行了特殊拦截，
-避免常规 \code{get()} 函数在调用 \code{survival} 包对象时引发环境报错。
-\item \strong{匹配结构隔离:} 将 \code{strata_col} 从主数据集中剥离并作为独立向量 \code{strata_id} 传递。这一操作
-确保了在后续生成设计矩阵 (\code{model.matrix}) 时，匹配 ID 不会被错误地视为常规数值或因子型协变量，
-从而避免自由度无意义的消耗和潜在的完全分离 (Complete Separation) 偏倚。
-\item \strong{极速路径 (Fast-Path):} 当无协变量（粗模型，Crude Model）时，函数会绕过高开销的 \code{as.formula}
-和 \code{model.matrix} 解析，直接拼接截距列。当存在协变量（调整模型，Adjusted Model）时，由于需要控制混杂因素 (Confounding factors)，
-函数会严谨地生成包含虚拟变量编码 (Dummy Coding) 的完整设计矩阵。
-}
+Core dispatching function in the NWQS framework. Prepares the non-linear
+spline design matrix, manages multi-threaded parallel computation, and
+distributes resampling tasks with strict random seeds to the underlying
+weight engine (typically \code{\link{permutation_scorer}}).
 }
