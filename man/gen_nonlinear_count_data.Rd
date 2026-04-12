@@ -2,7 +2,7 @@
 % Please edit documentation in R/simulate_data.R
 \name{gen_nonlinear_count_data}
 \alias{gen_nonlinear_count_data}
-\title{生成非线性暴露的计数结局数据 (Generate Non-linear Poisson Count Data)}
+\title{Generate Non-Linear Poisson Count Data}
 \usage{
 gen_nonlinear_count_data(
   n_obs = 1000,
@@ -21,14 +21,40 @@ gen_nonlinear_count_data(
 )
 }
 \arguments{
-\item{intercept}{Numeric。模型截距（对数尺度），直接控制泊松过程的基础 \eqn{\lambda}。}
+\item{n_obs}{Integer. Sample size.}
+
+\item{mu_preds}{Numeric vector. Mean vector for multivariate normal
+exposure generation.}
+
+\item{sigma_preds}{Matrix. Covariance matrix for exposure generation.}
+
+\item{beta_wqs}{Numeric. Overall mixture effect coefficient.}
+
+\item{beta_preds}{Numeric vector. Component-specific effect weights.}
+
+\item{intercept}{Numeric. Model intercept on the log scale, directly
+controlling the baseline Poisson rate \eqn{\lambda}.}
+
+\item{snr_db}{Numeric. Signal-to-noise ratio in dB. Default is
+\code{Inf} (no noise).}
+
+\item{transform_fun}{Function or \code{NULL}. Custom transformation for
+exposures.}
+
+\item{q}{Integer. Number of quantile bins. Default is 4.}
+
+\item{df_spline}{Integer. Degrees of freedom for natural cubic splines.
+Default is 3.}
+
+\item{seed}{Integer or \code{NULL}. Random seed.}
+
+\item{shape}{Character or character vector. Dose-response curve shape(s).}
+
+\item{...}{Additional arguments passed to \code{generate_covariates}.}
 }
 \description{
-通过对数连接 (Log-link) 将混合物的非线性样条特征映射为事件发生的期望发生率 (\eqn{\lambda})，
-并从泊松过程 (Poisson Process) 中生成离散的计数结局。
-}
-\details{
-\strong{截距与泊松基线风险:} \cr
-截距参数在对数尺度上直接控制基线事件发生率。例如 \code{intercept=0} 意味着协变量和暴露处于基准时，期望计数约为 1；
-而 \code{intercept=2} 则期望计数提升至 \eqn{e^2 \approx 7.4}。属性 \code{true_effect_mat} 提供的是纯正的\strong{对数相对危险度 (Log-RR)}。
+Maps non-linear spline features of mixture exposures to expected event
+rates (\eqn{\lambda}) via a log link and generates discrete count outcomes
+from a Poisson process. The \code{true_effect_mat} attribute stores true
+log rate ratios (log-RR).
 }

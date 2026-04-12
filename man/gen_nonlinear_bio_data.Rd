@@ -2,7 +2,7 @@
 % Please edit documentation in R/simulate_data.R
 \name{gen_nonlinear_bio_data}
 \alias{gen_nonlinear_bio_data}
-\title{生成非线性剂量反应的二分类结局数据 (Generate Non-linear Binary Data)}
+\title{Generate Non-Linear Binary Outcome Data}
 \usage{
 gen_nonlinear_bio_data(
   n_obs = 1000,
@@ -23,16 +23,45 @@ gen_nonlinear_bio_data(
 )
 }
 \arguments{
-\item{target_prop}{Numeric (0, 1) 或 \code{NULL}。目标疾病发生率。若提供，算法将自动搜索截距以平衡队列中病例的比例。}
+\item{n_obs}{Integer. Sample size.}
 
-\item{link}{Character。广义线性模型的连接函数，可选 \code{"logit"}（对应 OR）, \code{"probit"}, 或 \code{"cloglog"}。}
+\item{mu_preds}{Numeric vector. Mean vector for multivariate normal
+exposure generation.}
+
+\item{sigma_preds}{Matrix. Covariance matrix for exposure generation.}
+
+\item{beta_wqs}{Numeric. Overall mixture effect coefficient.}
+
+\item{beta_preds}{Numeric vector. Component-specific effect weights.}
+
+\item{intercept}{Numeric. Baseline model intercept on the log-odds scale.}
+
+\item{target_prop}{Numeric in (0, 1) or \code{NULL}. Target disease
+incidence rate. If provided, the intercept is automatically calibrated.}
+
+\item{link}{Character. Link function: \code{"logit"}, \code{"probit"}, or
+\code{"cloglog"}.}
+
+\item{snr_db}{Numeric. Signal-to-noise ratio in dB. Default is
+\code{Inf} (no noise).}
+
+\item{transform_fun}{Function or \code{NULL}. Custom transformation for
+exposures.}
+
+\item{q}{Integer. Number of quantile bins. Default is 4.}
+
+\item{df_spline}{Integer. Degrees of freedom for natural cubic splines.
+Default is 3.}
+
+\item{seed}{Integer or \code{NULL}. Random seed.}
+
+\item{shape}{Character or character vector. Dose-response curve shape(s).}
+
+\item{...}{Additional arguments passed to \code{generate_covariates}.}
 }
 \description{
-基于特定连接函数（Logit, Probit 或 Cloglog）生成非线性二分类结局数据，支持自动截距校准以控制罕见事件发生率。
-}
-\details{
-\strong{罕见病与基线风险校准 (Auto-Balanced Incidence Rate):} \cr
-在病例对照研究模拟中，任意设置回归系数会导致合成队列中事件发生率（Incidence Rate）极端失衡（如全为 0 或全为 1）。
-如果提供了 \code{target_prop}（例如 0.05 代表 5\\% 罕见病），算法将通过 \code{uniroot} 动态逆向求解截距，
-确保最终生成的二分类响应精确匹配目标疾病流行率。属性 \code{true_effect_mat} 中保存的即为真实的\strong{对数比值比 (Log-OR)}。
+Generates non-linear binary outcome data using a specified link function
+(logit, probit, or cloglog). Supports automatic intercept calibration to
+control rare event incidence rates. The \code{true_effect_mat} attribute
+stores true log-odds ratios.
 }

@@ -2,26 +2,24 @@
 % Please edit documentation in R/monte_carlo.R
 \name{check_coverage}
 \alias{check_coverage}
-\title{检验单次模拟的置信区间覆盖率 (Check Single-Simulation Coverage)}
+\title{Check Single-Simulation Confidence Interval Coverage}
 \usage{
 check_coverage(est_df, true_mat)
 }
 \arguments{
-\item{est_df}{\code{data.frame}。由 \code{\link{extract_nwqs_effects}} 提取的效应估计结果表。}
+\item{est_df}{\code{data.frame}. Effect estimates extracted by
+\code{\link{extract_nwqs_effects}}.}
 
-\item{true_mat}{Matrix。真实的效应矩阵（通常从数据生成函数如 \code{\link{gen_nonlinear_data}} 的属性 \code{true_effect_mat} 中获取）。}
+\item{true_mat}{Matrix. True effect matrix (typically from the
+\code{true_effect_mat} attribute of a data generation function).}
 }
 \value{
-返回一个 \code{data.frame}，包含对比目标 (\code{Target})、变量名 (\code{Term})、真实值、估计值、绝对偏差 (\code{Bias})，
-以及 Wald 和经验置信区间的上下限及其覆盖指示变量 (\code{Covered_Wald}, \code{Covered_Empirical})。
+A \code{data.frame} with columns: Target, Term, True_Value,
+Estimate, Bias, Wald_CI_Lower, Wald_CI_Upper, Covered_Wald,
+Empirical_CI_Lower, Empirical_CI_Upper, Covered_Empirical.
 }
 \description{
-将模型提取的暴露效应估计值（如特定分位数的对比效应）与基准真实效应矩阵进行比对，
-判定 Wald 置信区间和经验 (Empirical) 置信区间是否成功覆盖了真实值。
-}
-\details{
-\strong{覆盖率与推断有效性:} \cr
-在流行病学推断中，如果一个 95\% 置信区间是无偏的，那么在成千上万次 Monte Carlo 模拟中，
-它包含真实参数的比例应当趋近于 95\%。此函数在单次模拟层面上打下布尔值标签 (\code{TRUE}/\code{FALSE})，
-为后续计算宏观的名义覆盖率 (Nominal Coverage Probability) 提供基础。
+Compares extracted exposure effect estimates against a ground-truth effect
+matrix, determining whether Wald and empirical confidence intervals
+successfully cover the true values.
 }

@@ -2,19 +2,21 @@
 % Please edit documentation in R/monte_carlo.R
 \name{check_boot_coverage}
 \alias{check_boot_coverage}
-\title{检验 Bootstrap 置信区间的覆盖率 (Check Bootstrap CI Coverage)}
+\title{Check Bootstrap Confidence Interval Coverage}
 \usage{
 check_boot_coverage(boot_res, true_value)
 }
 \arguments{
-\item{boot_res}{\code{"nwqs_boot"} 类的对象，包含内部的 \code{ci_table}。}
+\item{boot_res}{An object of class \code{"nwqs_boot"} containing a
+\code{ci_table}.}
 
-\item{true_value}{Numeric。用于对照的基准真实效应值。}
+\item{true_value}{Numeric. The benchmark true effect value for comparison.}
 }
 \value{
-返回原始的 \code{ci_table}，并增补了 \code{True_Value}, \code{Bias}, 及 \code{Covered_Bootstrap} 列。
+The original \code{ci_table} augmented with \code{True_Value},
+\code{Bias}, and \code{Covered_Bootstrap} columns.
 }
 \description{
-专门用于评估经过 \code{\link{nwqs_boot}} 运行后得到的百分位 Bootstrap 置信区间是否覆盖了设定的真实因果效应值。
-相比于数据拆分产生的经验区间，外部 Bootstrap 区间理应提供更接近名义水平（如 95\%）的真实抽样方差覆盖率。
+Evaluates whether the percentile bootstrap confidence intervals from
+\code{\link{nwqs_boot}} cover the specified true causal effect values.
 }

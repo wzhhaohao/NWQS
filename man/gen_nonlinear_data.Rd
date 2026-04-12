@@ -2,7 +2,7 @@
 % Please edit documentation in R/simulate_data.R
 \name{gen_nonlinear_data}
 \alias{gen_nonlinear_data}
-\title{生成非线性自然样条的连续型剂量反应数据 (Generate Non-linear Data)}
+\title{Generate Non-Linear Spline Dose-Response Data (Continuous Outcome)}
 \usage{
 gen_nonlinear_data(
   n_obs = 1000,
@@ -20,18 +20,39 @@ gen_nonlinear_data(
 )
 }
 \arguments{
-\item{shape}{Character 或 Character vector。控制各组分真实因果关系曲线的形态。
-可选 \code{"linear_like"}（准线性）, \code{"u_shape"}（非单调 U 型）, \code{"inv_u_shape"}（倒 U 型）,
-\code{"s_shape"}（S 型阈值）或 \code{"threshold"}（硬阈值安全水平）。}
+\item{n_obs}{Integer. Sample size.}
+
+\item{mu_preds}{Numeric vector. Mean vector for multivariate normal
+exposure generation.}
+
+\item{sigma_preds}{Matrix. Covariance matrix for exposure generation.}
+
+\item{beta_wqs}{Numeric. Overall mixture effect coefficient.}
+
+\item{beta_preds}{Numeric vector. Component-specific effect weights.}
+
+\item{snr_db}{Numeric. Signal-to-noise ratio in dB. Default is 10.}
+
+\item{transform_fun}{Function or \code{NULL}. Custom transformation for
+exposures.}
+
+\item{q}{Integer. Number of quantile bins. Default is 4.}
+
+\item{df_spline}{Integer. Degrees of freedom for natural cubic splines.
+Default is 3.}
+
+\item{seed}{Integer or \code{NULL}. Random seed.}
+
+\item{shape}{Character or character vector. Controls the true causal
+dose-response curve shape for each component. Options: \code{"linear_like"},
+\code{"u_shape"}, \code{"inv_u_shape"}, \code{"s_shape"},
+\code{"threshold"}, \code{"neg_linear"}, \code{"inv_threshold"}.}
+
+\item{...}{Additional arguments passed to \code{generate_covariates}.}
 }
 \description{
-高级数据生成函数。此机制允许为每种暴露成分设定特定的非线性剂量反应轨迹（如 U 型、S 型或阈值效应），
-随后利用自然三次样条 (Natural Cubic Splines) 精确映射这些形状，并合成最终的连续型结局变量。
-}
-\details{
-\strong{因果结构与基准事实 (Ground Truth) 的严格对齐:} \cr
-为了在 Monte Carlo 模拟中严谨地评估 NWQS 方法捕捉非线性的能力，本函数在生成数据时直接在底层推导出
-样条的基础节点 (\code{knots})，并将其作为\strong{不可变的度量尺}贯穿始终。函数同时会在属性 \code{true_effect_mat}
-中输出真正的偏效应对比值（如真正的 Q4 vs Q1 效应量）。这种将“因果形状生成”与“理论效应量计算”完美绑定的设计，
-彻底消除了评估模型性能时的基准误差。
+Advanced data generation function that allows specifying component-specific
+non-linear dose-response trajectories (e.g., U-shaped, S-shaped, threshold
+effects). Uses natural cubic splines to precisely map these shapes and
+synthesizes a continuous outcome variable.
 }

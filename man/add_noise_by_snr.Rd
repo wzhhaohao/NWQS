@@ -2,25 +2,21 @@
 % Please edit documentation in R/simulate_data.R
 \name{add_noise_by_snr}
 \alias{add_noise_by_snr}
-\title{基于目标信噪比注入高斯白噪声 (Add Gaussian Noise given Target SNR)}
+\title{Add Gaussian Noise Given Target Signal-to-Noise Ratio}
 \usage{
 add_noise_by_snr(signal_vec, snr_db)
 }
 \arguments{
-\item{signal_vec}{Numeric vector。无噪声的纯净信号（如真实的潜在线性预测子 \eqn{\eta}）。}
+\item{signal_vec}{Numeric vector. The noise-free signal (e.g., the true
+linear predictor \eqn{\eta}).}
 
-\item{snr_db}{Numeric。目标信噪比 (dB)。值越大代表信号质量越好，\code{Inf} 代表不添加噪声。}
+\item{snr_db}{Numeric. Target signal-to-noise ratio in dB. Higher values
+mean cleaner signal; \code{Inf} adds no noise.}
 }
 \value{
-Numeric vector。叠加了测量误差/环境噪声后的观测信号。
+Numeric vector. The observed signal with added noise.
 }
 \description{
-计算纯净信号的功率，并根据指定的目标信噪比 (Signal-to-Noise Ratio, SNR) 注入正态分布的白噪声。
-}
-\details{
-\strong{流行病学模拟意义:} \cr
-在方法学研究中，该函数用于模拟\strong{未测量的混杂因素 (Unmeasured Confounding)} 或 \strong{暴露评估的测量误差 (Measurement Error)}。
-信噪比的计算公式为：
-$$SNR_{dB} = 10 \log_{10}\left(\frac{P_{signal}}{P_{noise}}\right)$$
-\code{snr_db} 越低，表明临床或环境数据中的噪声占比越大，这被用来严苛地测试 NWQS 在低信噪比下提取真实暴露权重的稳健性。
+Computes the power of a clean signal and injects normally distributed white
+noise according to a specified target SNR in decibels.
 }

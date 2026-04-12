@@ -2,7 +2,7 @@
 % Please edit documentation in R/methods.R
 \name{plot.nwqs_boot}
 \alias{plot.nwqs_boot}
-\title{绘制 NWQS Bootstrap 诊断图 (权重与对比箱线图)}
+\title{Plot NWQS Bootstrap Diagnostic Charts}
 \usage{
 \method{plot}{nwqs_boot}(
   x,
@@ -23,41 +23,45 @@
 )
 }
 \arguments{
-\item{x}{\code{"nwqs_boot"} 类的对象。}
+\item{x}{An object of class \code{"nwqs_boot"}.}
 
-\item{type}{Character。绘图类型：\code{"both"}（默认，权重图与对比箱图拼接）、\code{"curves"}（这里实际渲染为对比箱线图）或 \code{"weights"}（平均权重分布）。}
+\item{type}{Character. Plot type: \code{"both"} (default), \code{"curves"}
+(contrast boxplots), or \code{"weights"}.}
 
-\item{y_scale}{Character。对比分布的尺度：\code{"partial"}（不进行指数转换的系数尺度）、\code{"contrast_or"}（指数转换后的 OR/RR 尺度）或 \code{"predicted"}（预测尺度）。}
+\item{y_scale}{Character. Effect scale: \code{"partial"}, \code{"contrast_or"},
+or \code{"predicted"}.}
 
-\item{components}{Character vector。需要显示的特定混合物组分名称。若为 \code{NULL}，则显示所有组分。}
+\item{components}{Character vector. Specific components to display.}
 
-\item{overlay}{Logical。为兼容旧接口保留，在箱线图模式下不生效。}
+\item{overlay}{Logical. Retained for backward compatibility.}
 
-\item{show_ci}{Logical。为兼容旧接口保留，在箱线图模式下不生效（箱线图自带分布信息）。}
+\item{show_ci}{Logical. Retained for backward compatibility.}
 
-\item{base_size}{Integer。基础字体大小，默认为 12。}
+\item{base_size}{Integer. Base font size. Default is 12.}
 
-\item{palette}{Character。离散调色板。}
+\item{palette}{Character. Discrete color palette.}
 
-\item{top_n}{Integer 或 \code{NULL}。按权重降序排列，仅显示前 \code{top_n} 组分。}
+\item{top_n}{Integer or \code{NULL}. Show only the top \code{top_n}
+components by weight.}
 
-\item{ylim}{Numeric vector。限制 Y 轴范围（如 \code{c(min, max)}），用于截断极端离群值。}
+\item{ylim}{Numeric vector. Force Y-axis limits.}
 
-\item{y_step}{Numeric。Y 轴刻度步长。}
+\item{y_step}{Numeric. Y-axis tick spacing.}
 
-\item{free_y}{Logical。若为 \code{TRUE}，各个组分的 Y 轴尺度自由适配。}
+\item{free_y}{Logical. If \code{TRUE}, each facet has free Y-axis scaling.}
 
-\item{fill_alpha}{Numeric。箱线图的填充透明度，默认为 0.16。}
+\item{fill_alpha}{Numeric. Box fill transparency. Default is 0.16.}
 
-\item{exponentiate}{Logical 或 \code{NULL}。是否对 Y 轴效应量进行指数化（计算 OR/RR）。若为 \code{NULL}，则根据模型族自动推断。}
+\item{exponentiate}{Logical or \code{NULL}. Whether to exponentiate effects.
+If \code{NULL}, auto-detected from model family.}
 
-\item{...}{传递给 \code{plot_nwqs_contrast_box} 的额外参数。}
+\item{...}{Additional arguments passed to \code{plot_nwqs_contrast_box}.}
 }
 \value{
-返回 \code{ggplot} 对象或 \pkg{patchwork} 拼接图。
+A \code{ggplot} or \pkg{patchwork} composite object.
 }
 \description{
-为 \code{nwqs_boot} 对象生成推断级的诊断图。与点估计模型使用曲线图不同，Bootstrap 推断由于其集成特性，
-这里将剂量反应对比（如 \eqn{Q_i} vs \eqn{Q_1}）可视化为基于大量 Bootstrap 样本分布的箱线图 (Boxplots)。
-这种可视化能够极其直观地呈现真实样本变异下的置信度。
+Generates inference-level diagnostic plots for \code{nwqs_boot} objects.
+Visualizes quantile contrasts as boxplots based on bootstrap distributions,
+combined with component weight bar charts.
 }

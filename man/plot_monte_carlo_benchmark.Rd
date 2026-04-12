@@ -2,7 +2,7 @@
 % Please edit documentation in R/monte_carlo.R
 \name{plot_monte_carlo_benchmark}
 \alias{plot_monte_carlo_benchmark}
-\title{绘制 Monte Carlo 基准测试结果复合图 (Plot Monte Carlo Benchmark Results)}
+\title{Plot Monte Carlo Benchmark Results}
 \usage{
 plot_monte_carlo_benchmark(
   dev_data,
@@ -16,35 +16,32 @@ plot_monte_carlo_benchmark(
 )
 }
 \arguments{
-\item{dev_data}{\code{data.frame}。包含 \code{Model} 和 \code{Deviance} 列。}
+\item{dev_data}{\code{data.frame} with \code{Model} and \code{Deviance}
+columns.}
 
-\item{sae_data}{\code{data.frame}。包含 \code{Model} 和 \code{SAE} 列。}
+\item{sae_data}{\code{data.frame} with \code{Model} and \code{SAE} columns.}
 
-\item{weight_data}{\code{data.frame}。包含 \code{Model}, \code{Component}, \code{Estimated_Weight}, 及 \code{True_Value} 列。}
+\item{weight_data}{\code{data.frame} with \code{Model}, \code{Component},
+\code{Estimated_Weight}, and \code{True_Value} columns.}
 
-\item{scen_name}{Character。模拟场景名称（用于总标题）。}
+\item{scen_name}{Character. Simulation scenario name for the title.}
 
-\item{family_name}{Character。GLM 分布族名称（用于总标题）。}
+\item{family_name}{Character. GLM family name for the title.}
 
-\item{custom_palette}{命名字符向量。基于模型名称映射的十六进制颜色字典。若为 \code{NULL}，使用默认学术色板。}
+\item{custom_palette}{Named character vector. Hex color dictionary keyed by
+model name. If \code{NULL}, a default academic palette is used.}
 
-\item{save_path}{Character 或 \code{NULL}。保存高分辨率图片的本地路径。若为 \code{NULL} 则仅在绘图设备中渲染。}
+\item{save_path}{Character or \code{NULL}. File path for saving a
+high-resolution image. If \code{NULL}, only renders to the graphics
+device.}
 
-\item{base_size}{Numeric。基准字体大小，默认为 14。}
+\item{base_size}{Numeric. Base font size. Default is 14.}
 }
 \value{
-隐式返回 \pkg{patchwork} 复合绘图对象。
+Invisibly returns the \pkg{patchwork} composite plot object.
 }
 \description{
-为多模型基准测试 (Benchmarking) 生成达到顶级期刊发表标准的复合可视化图表面板。
-图表集成了雨云图 (Raincloud plots) 与分面箱线图，全景展示各候选模型的稳健性与偏差。
-}
-\details{
-\strong{面板布局与学术解读:}
-\itemize{
-\item \strong{面板 A (模型拟合误差 Deviance):} 通过雨云图展示各模型在多次模拟中的残余偏差分布。长尾分布往往暗示模型在某些模拟设置（如极端共线性或低信噪比）下发生崩溃。
-\item \strong{面板 B (权重提取误差 SAE):} 衡量模型降维和特征选择的准确性。分布越集中于底部（接近 0），表明模型锁定关键毒性物质的能力越稳定。
-\item \strong{面板 C (组分特异性权重恢复):} 以真实权重为水平参考线（虚线），展示每个模型在各个组分上的权重估计分布。能够直观揭示模型是否存在系统性的方向性偏倚（例如总是过度惩罚高方差变量）。
-}
-默认采用了严谨的学术色板，并支持通过 \pkg{patchwork} 动态适应暴露组分的数量进行排版。
+Generates a publication-quality composite visualization panel for
+multi-model benchmarking. Integrates raincloud plots and faceted boxplots
+to display model robustness and bias across simulation scenarios.
 }

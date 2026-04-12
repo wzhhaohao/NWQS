@@ -2,7 +2,7 @@
 % Please edit documentation in R/utils.R
 \name{wqs_nonlinear_expand}
 \alias{wqs_nonlinear_expand}
-\title{WQS 混合物组分的非线性样条扩展}
+\title{Non-Linear Spline Expansion for WQS Mixture Components}
 \usage{
 wqs_nonlinear_expand(
   data,
@@ -13,28 +13,32 @@ wqs_nonlinear_expand(
 )
 }
 \arguments{
-\item{data}{\code{data.frame}。包含混合物变量（通常已经过转换）的数据框。}
+\item{data}{\code{data.frame}. Contains the mixture variables (typically
+already transformed).}
 
-\item{mix_name}{Character vector。需要进行样条扩展的混合物组分列名。}
+\item{mix_name}{Character vector. Column names of mixture components to
+expand.}
 
-\item{df_spline}{Integer。自然样条的自由度，默认为 3。}
+\item{df_spline}{Integer. Degrees of freedom for the natural spline.
+Default is 3.}
 
-\item{knots}{Numeric vector。内部节点位置。为了确保全局尺度对齐，必须显式提供。}
+\item{knots}{Numeric vector. Internal knot positions. Must be explicitly
+provided for global scale alignment.}
 
-\item{boundary}{Numeric vector (长度为 2)。边界节点位置。必须显式提供以固定外推边界。}
+\item{boundary}{Numeric vector (length 2). Boundary knot positions. Must be
+explicitly provided.}
 }
 \value{
-一个数值型矩阵，列名格式为 \code{{Component}_B{BasisIndex}}
-（例如，\code{Component1_B1}, \code{Component1_B2}）。
+A numeric matrix with columns named
+\code{{Component}_B{BasisIndex}}.
 }
 \description{
-使用全局固定的内部节点 (Knots) 和边界节点 (Boundary Knots)，将（已完成分位数转换的）混合物变量
-转换为自然三次样条 (Natural Cubic Splines) 基矩阵。
+Transforms (quantile-transformed) mixture variables into a natural cubic
+spline basis matrix using globally fixed internal and boundary knots.
 }
 \details{
-\strong{严谨性说明 (基函数对齐):} \cr
-在机器学习和统计建模结合的架构中（如 NWQS 采用的 Repeated Holdout 或 Bootstrap），
-绝不能在不同的子样本中动态计算样条节点。此函数强制要求传入预先在全样本上确定的 \code{knots}
-和 \code{boundary}，这确保了训练集、验证集和重抽样集之间基函数的绝对对齐。若不进行这种全局约束，
-极易引发空间漂移偏倚 (Spatial Drift Bias)，导致交叉验证中提取的形状系数在验证集上失效。
+This function enforces the use of pre-computed \code{knots} and
+\code{boundary} to ensure basis function alignment across training,
+validation, and resampled datasets. Dynamically computing knots within
+subsamples would cause spatial drift bias.
 }
