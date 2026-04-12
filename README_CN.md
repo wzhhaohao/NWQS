@@ -142,6 +142,6 @@ GPL-3 许可证。详见 [LICENSE](LICENSE)。
 
 ## 作者
 
-**Wang Zhehao**（[wangzhehao_bill@foxmail.com](mailto:wangzhehao_bill@foxmail.com)）— 暨南大学基础医学与公共卫生学院，广州 510632
-**Chen Shirui**（[chenshr7@bjmu.edu.cn](mailto:chenshr7@bjmu.edu.cn)）— 北京大学公众健康与重大疫情防控战略研究中心，北京 100191
-**Lin Ziqiang**（[linziqiang0314@gmail.com](mailto:linziqiang0314@gmail.com)）— 暨南大学基础医学与公共卫生学院，广州 510632（通讯作者）
+1. **Wang Zhehao**（[wangzhehao_bill@foxmail.com](mailto:wangzhehao_bill@foxmail.com)）— 暨南大学基础医学与公共卫生学院，广州 510632
+2. **Chen Shirui**（[chenshr7@bjmu.edu.cn](mailto:chenshr7@bjmu.edu.cn)）— 北京大学公众健康与重大疫情防控战略研究中心，北京 100191
+3. **Lin Ziqiang**（[linziqiang0314@gmail.com](mailto:linziqiang0314@gmail.com)）— 暨南大学基础医学与公共卫生学院，广州 510632（通讯作者）
