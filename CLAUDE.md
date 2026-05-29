@@ -12,7 +12,7 @@ NWQS is an R package implementing non-linear weighted quantile sum regression fo
 - estimating the final mixture effect through repeated holdout validation,
 - and using an external bootstrap for valid inference.
 
-The package supports `gaussian`, `binomial`, `poisson`, `quasipoisson`, and `clogit` families.
+The package supports `gaussian`, `binomial`, `poisson`, and `quasipoisson` families. (Conditional logistic regression was supported in 0.1.x; it was removed in 0.2.0 and is planned to return as a dedicated `nwqs_clogit()` function in a later release.)
 
 ## Working principles (v0.2.0 refactor in progress)
 
@@ -30,12 +30,12 @@ This package is being refactored toward a 0.2.0 release that supports a companio
 
 ### What is in scope for 0.2.0
 
-- Removing the `clogit` family path entirely (planned; will return later as an independent `nwqs_clogit()` function).
+- [DONE] Removing the `clogit` family path entirely; will return later as an independent `nwqs_clogit()` function.
 - Switching the default exposure transform from discrete `q`-bin quantiles to continuous percentile rank (empirical CDF on the training distribution). `q`-bin remains available as an opt-in.
 - Adding standard S3 methods: `predict`, `vcov`, `confint`, and conditional `broom::tidy` / `glance`.
 - Adding `negbin` and `ordinal` families via `MASS::glm.nb` and `MASS::polr`.
 - Introducing `nwqs_control()` to hold "soft" parameters (`min_shape_sd`, `ties`, `custom_knots`, `custom_boundary`, `zero_weight_action`) outside the main function signature.
-- Building a `tests/testthat/` suite, NEWS.md, an applied-domain vignette, a pkgdown site, and a standard R-CMD-check GitHub Actions workflow.
+- [IN PROGRESS] Building a `tests/testthat/` suite (baseline + clogit-removal regression already in), NEWS.md (drafted), an applied-domain vignette, a pkgdown site, and a standard R-CMD-check GitHub Actions workflow (already in).
 
 ### What is out of scope for 0.2.0
 
@@ -85,14 +85,14 @@ devtools::install()
 
 ### Run tests
 
-`DESCRIPTION` is configured for `testthat` edition 3, but this repository currently does not contain a committed `tests/testthat/` directory.
-
-If tests are added later, use:
+`DESCRIPTION` is configured for `testthat` edition 3. The test suite lives under `tests/testthat/` and is run by:
 
 ```r
 devtools::test()
 testthat::test_file("tests/testthat/test-<name>.R")
 ```
+
+Snapshot ground truth is stored under `tests/testthat/_snaps/` and is tracked in git so that every contributor and CI runner sees the same reference values.
 
 ### Linting
 
@@ -103,7 +103,7 @@ No repo-specific lint command or `lintr` configuration is currently present.
 ### Core modeling pipeline
 
 - `R/nwqs.R`: primary implementation of `nwqs()` and `nwqs_boot()`.
-  - `nwqs()` performs quantile transformation, creates globally fixed spline knots, runs repeated holdout splits, learns shapes/weights on training data, constructs the final `nwqs` index on validation data, and fits the final GLM or `survival::clogit` model.
+  - `nwqs()` performs quantile transformation, creates globally fixed spline knots, runs repeated holdout splits, learns shapes/weights on training data, constructs the final `nwqs` index on validation data, and fits the final GLM.
   - `nwqs_boot()` is the outer bootstrap wrapper used for valid sampling-variance inference.
 - `R/weights.R`: internal scoring engines.
   - `permutation_scorer()` fits a single in-bag model and derives component weights from grouped OOB permutation loss increases.
@@ -156,16 +156,6 @@ A key modeling assumption throughout the repo is that repeated-holdout variabili
 
 Do not “simplify away” that distinction when changing summaries, print methods, or docs.
 
-### `clogit` is a special path
-
-Conditional logistic regression is handled differently from standard GLMs:
-
-- repeated holdout splits occur at the stratum level,
-- bootstrap resampling also occurs at the stratum level,
-- `permutation_scorer()` uses `survival::clogit` / `survival::coxph.fit` logic rather than the standard `glm.fit` path.
-
-Changes that touch sampling, loss evaluation, or indexing should be checked against both the standard GLM path and the `clogit` path.
-
 ## Documentation conventions
 
 - Man pages are generated from roxygen comments in `R/*.R`.
@@ -174,6 +164,6 @@ Changes that touch sampling, loss evaluation, or indexing should be checked agai
 
 ## Current repo state worth knowing
 
-- There is no existing CI or GitHub Actions workflow committed.
-- There is no committed test directory yet, even though `testthat` is listed in `Suggests`.
+- A standard R-CMD-check GitHub Actions workflow lives at `.github/workflows/R-CMD-check.yaml`. It runs on push and pull request against `main`/`master`.
+- The `tests/testthat/` suite currently covers a golden baseline (gaussian/binomial/poisson/quasipoisson fits and bootstrap CI structure) plus a regression test verifying that the removed `clogit` family now errors via `match.arg`.
 - The repo includes both English and Chinese READMEs: `README.md` and `README_CN.md`.

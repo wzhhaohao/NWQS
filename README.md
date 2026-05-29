@@ -13,7 +13,7 @@
 - **Permutation-based variable importance** using out-of-bag (OOB) loss changes to derive relative component weights without regularization bias.
 - **Repeated holdout architecture** for robust weight and shape estimation across random data splits.
 - **External bootstrap inference** (`nwqs_boot()`) providing valid percentile confidence intervals that reflect true sampling variability.
-- **Multiple GLM families**: Gaussian, binomial, Poisson, quasi-Poisson, and conditional logistic regression (`clogit`).
+- **Multiple GLM families**: Gaussian, binomial, Poisson, and quasi-Poisson. (Conditional logistic regression was supported in 0.1.x but has been temporarily removed in 0.2.0; see `NEWS.md`.)
 - **Publication-quality visualizations** including dose-response curves, component weight bar charts, and bootstrap contrast boxplots.
 - **Monte Carlo simulation toolkit** for benchmarking and validating model performance under controlled scenarios.
 - **Automatic parallel computing** via the `future` framework with intelligent load balancing.
@@ -103,7 +103,11 @@ plot(boot_res)
 | `binomial` | Binary (0/1) | Log-Odds / Odds Ratio |
 | `poisson` | Count | Log-Rate / Rate Ratio |
 | `quasipoisson` | Overdispersed Count | Log-Rate / Rate Ratio |
-| `clogit` | Matched Case-Control | Log-Odds / Odds Ratio |
+
+> `clogit` (matched case-control) was supported in 0.1.x. It was removed in
+> 0.2.0 while the rest of the package was refactored toward a paper-ready
+> release. A future minor release will reintroduce conditional logistic
+> regression as an independent `nwqs_clogit()` entry point.
 
 ## Core Functions
 

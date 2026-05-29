@@ -9,8 +9,7 @@ nwqs_boot(
   mix_name,
   covariates = NULL,
   outcome = "y",
-  strata_col = NULL,
-  family = c("gaussian", "binomial", "poisson", "quasipoisson", "clogit"),
+  family = c("gaussian", "binomial", "poisson", "quasipoisson"),
   n_boot = 100,
   rh_inner = 1,
   n_permutation = 10,
@@ -33,11 +32,8 @@ nwqs_boot(
 
 \item{outcome}{Character. Outcome column name. Default is \code{"y"}.}
 
-\item{strata_col}{Character. Stratum ID column name for clogit.}
-
 \item{family}{Character. Error distribution: \code{"gaussian"},
-\code{"binomial"}, \code{"poisson"}, \code{"quasipoisson"},
-\code{"clogit"}.}
+\code{"binomial"}, \code{"poisson"}, or \code{"quasipoisson"}.}
 
 \item{n_boot}{Integer. Number of bootstrap replicates. Default is 100.}
 
@@ -84,17 +80,12 @@ the true sampling variability of model parameters. Extracts effects for
 all model terms and provides publication-quality confidence interval tables.
 }
 \details{
-Resampling strategies:
-\itemize{
-\item For standard GLM families, simple random sampling with replacement.
-\item For conditional logistic regression (\code{family = "clogit"}),
-cluster resampling based on \code{strata_col} with dynamic ID
-reconstruction to preserve matched designs.
-}
+Bootstrap resampling uses simple random sampling with replacement at the
+observation level.
 
 For exponential family models (\code{binomial}, \code{poisson},
-\code{quasipoisson}, \code{clogit}), results are automatically reported
-as exponentiated values (OR or RR) with corresponding CIs.
+\code{quasipoisson}), results are automatically reported as exponentiated
+values (OR or RR) with corresponding CIs.
 }
 \seealso{
 \code{\link{nwqs}}, \code{\link{plot.nwqs_boot}},

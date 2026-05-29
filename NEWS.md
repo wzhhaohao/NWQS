@@ -2,9 +2,21 @@
 
 ## Breaking changes
 
-Planned for this release (none landed yet):
+Landed:
 
-- `family = "clogit"` will be removed from `nwqs()` and `nwqs_boot()`. Conditional logistic regression support is being lifted out of the main pipeline so the GLM path can be audited cleanly. It will return later as a dedicated `nwqs_clogit()` function. To stay on `clogit`, pin to `0.1.0`.
+- **`family = "clogit"` has been removed** from `nwqs()` and `nwqs_boot()`. Conditional logistic regression has been lifted out of the main pipeline so the GLM path can be audited cleanly. A future minor release will reintroduce it as a dedicated `nwqs_clogit()` function. To keep an existing clogit workflow, pin to `0.1.0`.
+- **`strata_col` parameter removed** from both `nwqs()` and `nwqs_boot()`. The argument has no meaning without the clogit family; calls that pass `strata_col = ...` are silently absorbed by `...` and have no effect.
+- **`survival` package no longer in Imports.** Users who relied on `library(NWQS)` to load `survival` indirectly must now `library(survival)` themselves.
+
+Migration: any 0.1.x call of the form
+
+```r
+nwqs(data, mix_name, family = "clogit", strata_col = "match_id", ...)
+```
+
+now errors with `'arg' should be one of "gaussian", "binomial", "poisson", "quasipoisson"`. To preserve the conditional logistic analysis, stay on 0.1.0 (`devtools::install_github("wzhhaohao/NWQS@v0.1.0")` once that tag exists) until `nwqs_clogit()` is released.
+
+Planned for later in this release (none landed yet):
 - The default exposure transform will change from discrete `q`-bin quantiles (`q = 4`) to a continuous percentile rank (empirical CDF on the training distribution, ties handled by average rank). The `q`-bin transform remains available as an opt-in via `transform_type = "q_bin"`, `q = 4`.
 - `n_permutation` default will change from `10` to `30` so OOB importance estimates are more stable on small samples.
 - "Soft" parameters such as `min_shape_sd`, `ties`, and `custom_knots` will move into a new `nwqs_control()` helper rather than living on the main `nwqs()` signature.
