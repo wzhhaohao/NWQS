@@ -42,25 +42,12 @@ run_oob_permutation <- function(data, mix_name, outcome = "y",
   args <- list(...)
 
   fam_arg <- if (!is.null(args$family)) args$family else "gaussian"
-  if (is.character(fam_arg) && fam_arg == "clogit") {
-    fam_obj <- list(family = "clogit")
-  } else if (is.character(fam_arg)) {
+  if (is.character(fam_arg)) {
     fam_obj <- get(fam_arg, mode = "function")()
   } else {
     fam_obj <- fam_arg
   }
   args$family <- NULL
-
-  strata_col <- args$strata_col
-  if (!is.null(strata_col)) {
-    if (!(strata_col %in% names(data))) {
-      stop("strata_col '", strata_col, "' not found in data.")
-    }
-    strata_id <- data[[strata_col]]
-    args$strata_col <- NULL
-  } else {
-    strata_id <- NULL
-  }
 
   boot_strategy <- match.arg(boot_strategy)
 
@@ -124,7 +111,6 @@ run_oob_permutation <- function(data, mix_name, outcome = "y",
           do.call(weight_engine, c(list(
             x = X_matrix,
             y = y_vector,
-            strata_id = strata_id,
             mix_name = mix_name,
             spline_vars = spline_vars,
             family = fam_obj

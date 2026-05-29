@@ -9,7 +9,6 @@ nwqs(
   mix_name,
   covariates = NULL,
   outcome = "y",
-  strata_col = NULL,
   weight_engine = permutation_scorer,
   q = 4,
   df_spline = 3,
@@ -18,7 +17,7 @@ nwqs(
   rh = 10,
   seed = 1234,
   n_permutation = 10,
-  family = c("gaussian", "binomial", "poisson", "quasipoisson", "clogit"),
+  family = c("gaussian", "binomial", "poisson", "quasipoisson"),
   plan_strategy = c("sequential", "multisession", "multicore"),
   n_workers = NULL,
   quiet = FALSE,
@@ -36,9 +35,6 @@ matching variables, and the outcome.}
 
 \item{outcome}{Character. Outcome variable column name. Default is
 \code{"y"}.}
-
-\item{strata_col}{Character. Stratum/matching group ID column name.
-Required when \code{family = "clogit"}.}
 
 \item{weight_engine}{Function. Engine for weight and shape discovery.
 Default is \code{permutation_scorer}.}
@@ -62,8 +58,7 @@ iteration. Default is 0.6.}
 importance. Default is 10.}
 
 \item{family}{Character. Error distribution: \code{"gaussian"},
-\code{"binomial"}, \code{"poisson"}, \code{"quasipoisson"}, or
-\code{"clogit"}.}
+\code{"binomial"}, \code{"poisson"}, or \code{"quasipoisson"}.}
 
 \item{plan_strategy}{Character. Parallel strategy: \code{"sequential"},
 \code{"multicore"}, or \code{"multisession"}.}
@@ -101,9 +96,7 @@ The function implements a robust Repeated Holdout (RH) architecture with
 shape decoupling:
 \enumerate{
 \item \strong{Outer RH splitting:} Data is randomly split into training
-(weight/shape discovery) and validation (effect estimation) sets. For
-conditional logistic regression (\code{family = "clogit"}), splitting is
-performed at the stratum/cluster level to preserve matched designs.
+(weight/shape discovery) and validation (effect estimation) sets.
 \item \strong{Weight and shape discovery:} A multi-parameter engine
 estimates spline basis coefficients (shapes) and derives relative
 importance (weights) via OOB permutation.

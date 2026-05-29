@@ -2,7 +2,7 @@
 % Please edit documentation in R/weights.R
 \name{permutation_scorer}
 \alias{permutation_scorer}
-\title{Fast GLM and Conditional Logistic Regression Permutation Scoring Engine}
+\title{Fast GLM Permutation Scoring Engine}
 \usage{
 permutation_scorer(
   x,
@@ -11,7 +11,6 @@ permutation_scorer(
   spline_vars,
   family,
   n_permutation = 10,
-  strata_id = NULL,
   ...
 )
 }
@@ -26,16 +25,15 @@ adjustment covariates.}
 \item{spline_vars}{Character vector. Column names in \code{x} that belong to
 spline basis functions.}
 
-\item{family}{List. GLM family object (or a pseudo-family list with
-\code{$family = "clogit"}).}
+\item{family}{List. GLM family object (e.g., \code{gaussian()},
+\code{binomial()}, \code{poisson()}, \code{quasipoisson()}).}
 
 \item{n_permutation}{Integer. Number of OOB permutations for stabilizing
 importance scores. Default is 10.}
 
-\item{strata_id}{Vector or \code{NULL}. Stratum/matching group IDs required
-for conditional logistic regression.}
-
-\item{...}{Additional compatibility parameters.}
+\item{...}{Additional compatibility parameters (accepted but ignored, so
+callers that pass extras like \code{strata_id} from older revisions still
+work).}
 }
 \value{
 A list with two elements:
@@ -48,21 +46,20 @@ Coefficients dropped due to collinearity are set to 0.
 }
 \description{
 Core computational engine for a single internal iteration within the NWQS
-framework. Fits an unpenalized GLM or conditional logistic regression model
-on in-bag bootstrap samples, evaluates prediction loss on out-of-bag (OOB)
-samples, and derives relative component importance via random permutation.
+framework. Fits an unpenalized GLM on in-bag bootstrap samples, evaluates
+prediction loss on out-of-bag (OOB) samples, and derives relative
+component importance via random permutation.
 }
 \details{
 Workflow:
 \enumerate{
-\item Adaptive sampling and model fitting on in-bag data.
-\item Baseline loss evaluation on OOB samples (MSE or deviance). For
-clogit, the engine bypasses formula parsing and directly calls
-\code{survival::coxph.fit} with \code{iter.max = 0} for millisecond-level
-partial log-likelihood evaluation.
+\item Adaptive sampling and GLM fitting on in-bag data via
+\code{stats::glm.fit}.
+\item Baseline loss evaluation on OOB samples (MSE for Gaussian,
+deviance for binomial / Poisson / quasi-Poisson).
 \item Grouped permutation importance: for each mixture component, all
-corresponding spline basis columns are jointly shuffled and the OOB loss
-change is measured.
+corresponding spline basis columns are jointly shuffled and the OOB
+loss change is measured.
 }
 
 Weight derivation formula:

@@ -29,8 +29,7 @@ Imports:
     MASS,
     patchwork,
     scales,
-    splines,
-    survival
+    splines
 Suggests:
     ggdist,
     testthat

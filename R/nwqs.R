@@ -13,9 +13,7 @@
 #' shape decoupling:
 #' \enumerate{
 #'   \item \strong{Outer RH splitting:} Data is randomly split into training
-#'     (weight/shape discovery) and validation (effect estimation) sets. For
-#'     conditional logistic regression (\code{family = "clogit"}), splitting is
-#'     performed at the stratum/cluster level to preserve matched designs.
+#'     (weight/shape discovery) and validation (effect estimation) sets.
 #'   \item \strong{Weight and shape discovery:} A multi-parameter engine
 #'     estimates spline basis coefficients (shapes) and derives relative
 #'     importance (weights) via OOB permutation.
@@ -43,8 +41,6 @@
 #'   \code{NULL}, fits an unadjusted model.
 #' @param outcome Character. Outcome variable column name. Default is
 #'   \code{"y"}.
-#' @param strata_col Character. Stratum/matching group ID column name.
-#'   Required when \code{family = "clogit"}.
 #' @param weight_engine Function. Engine for weight and shape discovery.
 #'   Default is \code{permutation_scorer}.
 #' @param q Integer. Number of quantile bins. Default is 4 (quartiles).
@@ -59,8 +55,7 @@
 #' @param n_permutation Integer. Number of internal permutations for variable
 #'   importance. Default is 10.
 #' @param family Character. Error distribution: \code{"gaussian"},
-#'   \code{"binomial"}, \code{"poisson"}, \code{"quasipoisson"}, or
-#'   \code{"clogit"}.
+#'   \code{"binomial"}, \code{"poisson"}, or \code{"quasipoisson"}.
 #' @param plan_strategy Character. Parallel strategy: \code{"sequential"},
 #'   \code{"multicore"}, or \code{"multisession"}.
 #' @param n_workers Integer. Number of parallel workers. If \code{NULL},
@@ -89,28 +84,15 @@
 #' @importFrom future.apply future_lapply
 #' @export
 nwqs <- function(data, mix_name, covariates = NULL, outcome = "y",
-                 strata_col = NULL,
                  weight_engine = permutation_scorer, q = 4, df_spline = 3,
                  transform_fun = NULL,
                  train_prop = 0.6, rh = 10, seed = 1234, n_permutation = 10,
-                 family = c("gaussian", "binomial", "poisson", "quasipoisson", "clogit"),
+                 family = c("gaussian", "binomial", "poisson", "quasipoisson"),
                  plan_strategy = c("sequential", "multisession", "multicore"),
                  n_workers = NULL, quiet = FALSE, ...) {
   family <- match.arg(family)
   plan_strategy <- match.arg(plan_strategy)
   if (length(covariates) == 0) covariates <- NULL
-
-  if (family == "clogit") {
-    if (is.null(strata_col)) {
-      stop("For conditional logistic regression (family = 'clogit'), 'strata_col' must be provided.")
-    }
-    if (!requireNamespace("survival", quietly = TRUE)) {
-      stop("Please install the 'survival' package to use clogit.")
-    }
-    if (!(strata_col %in% names(data))) {
-      stop(paste("strata_col '", strata_col, "' not found in data.", sep = ""))
-    }
-  }
 
   t_start <- Sys.time()
   args <- list(...)
@@ -163,48 +145,26 @@ nwqs <- function(data, mix_name, covariates = NULL, outcome = "y",
   n_obs <- nrow(data)
 
   if (is.null(covariates)) {
-    if (family == "clogit") {
-      formula_str <- paste0(outcome, " ~ nwqs + strata(", strata_col, ")")
-    } else {
-      formula_str <- paste(outcome, "~ nwqs")
-    }
+    formula_str <- paste(outcome, "~ nwqs")
   } else {
     missing_cov <- setdiff(covariates, names(data))
     if (length(missing_cov) > 0) {
       stop(paste("Missing covariates:", paste(missing_cov, collapse = ", ")))
     }
-    if (family == "clogit") {
-      formula_str <- paste0(outcome, " ~ nwqs + ", paste(covariates, collapse = " + "), " + strata(", strata_col, ")")
-    } else {
-      formula_str <- paste(outcome, "~ nwqs +", paste(covariates, collapse = " + "))
-    }
+    formula_str <- paste(outcome, "~ nwqs +", paste(covariates, collapse = " + "))
   }
   formula_final <- as.formula(formula_str)
 
   one_rh <- function(i) {
-    if (family == "clogit") {
-      unique_strata <- unique(data_Q[[strata_col]])
-      n_strata <- length(unique_strata)
-      shuffled_strata <- sample(unique_strata)
-
-      n_train_strata <- max(1, floor(n_strata * train_prop))
-      train_strata <- shuffled_strata[seq_len(n_train_strata)]
-      valid_strata <- shuffled_strata[(n_train_strata + 1):n_strata]
-
-      train_idx <- which(data_Q[[strata_col]] %in% train_strata)
-      valid_idx <- which(data_Q[[strata_col]] %in% valid_strata)
-    } else {
-      idx_all <- sample(seq_len(n_obs))
-      n_train <- floor(n_obs * train_prop)
-      train_idx <- idx_all[seq_len(n_train)]
-      valid_idx <- idx_all[(n_train + 1):n_obs]
-    }
+    idx_all <- sample(seq_len(n_obs))
+    n_train <- floor(n_obs * train_prop)
+    train_idx <- idx_all[seq_len(n_train)]
+    valid_idx <- idx_all[(n_train + 1):n_obs]
 
     data_train <- data_Q[train_idx, , drop = FALSE]
     data_valid <- data_Q[valid_idx, , drop = FALSE]
 
     vars_needed <- unique(c(mix_name, outcome, covariates))
-    if (family == "clogit") vars_needed <- unique(c(vars_needed, strata_col))
 
     boot_res <- run_oob_permutation(
       data = data_train[, vars_needed, drop = FALSE],
@@ -219,7 +179,6 @@ nwqs <- function(data, mix_name, covariates = NULL, outcome = "y",
       model_boundary = model_boundary,
       family = family,
       boot_strategy = "sequential",
-      strata_col = strata_col,
       ...
     )
     valid_res <- Filter(Negate(is.null), boot_res)
@@ -282,21 +241,12 @@ nwqs <- function(data, mix_name, covariates = NULL, outcome = "y",
     nwqs <- as.matrix(valid_trans[, expected_cols, drop = FALSE]) %*% combined_coefs
     data_valid$nwqs <- as.vector(nwqs)
 
-    if (family == "clogit") {
-      fit <- survival::clogit(formula_final, data = data_valid)
-      aic_val <- stats::extractAIC(fit)[2]
-      null_dev <- -2 * fit$loglik[1]
-      res_dev <- -2 * fit$loglik[2]
-      df_n <- length(fit$coefficients)
-      df_r <- fit$n - length(fit$coefficients)
-    } else {
-      fit <- glm(formula_final, data = data_valid, family = family)
-      aic_val <- if (family == "quasipoisson") NA_real_ else AIC(fit)
-      null_dev <- fit$null.deviance
-      res_dev <- fit$deviance
-      df_n <- fit$df.null
-      df_r <- fit$df.residual
-    }
+    fit <- glm(formula_final, data = data_valid, family = family)
+    aic_val <- if (family == "quasipoisson") NA_real_ else AIC(fit)
+    null_dev <- fit$null.deviance
+    res_dev <- fit$deviance
+    df_n <- fit$df.null
+    df_r <- fit$df.residual
 
     coefs_fit <- coef(fit)
 
@@ -369,15 +319,6 @@ nwqs <- function(data, mix_name, covariates = NULL, outcome = "y",
     single_res <- rh_results[[1]]
     final_obj <- single_res$fit_obj
     coef_summary <- as.data.frame(summary(final_obj)$coefficients)
-
-    if (family == "clogit") {
-      if ("coef" %in% names(coef_summary)) names(coef_summary)[names(coef_summary) == "coef"] <- "Estimate"
-      if ("se(coef)" %in% names(coef_summary)) names(coef_summary)[names(coef_summary) == "se(coef)"] <- "Std. Error"
-      if ("z" %in% names(coef_summary)) names(coef_summary)[names(coef_summary) == "z"] <- "z value"
-      if ("Pr(>|z|)" %in% names(coef_summary) == FALSE && "p" %in% names(coef_summary)) {
-        names(coef_summary)[names(coef_summary) == "p"] <- "Pr(>|z|)"
-      }
-    }
 
     fit_obj <- list(
       coefficients = coef_summary, aic = single_res$aic, deviance = single_res$res_dev,
@@ -468,26 +409,19 @@ nwqs <- function(data, mix_name, covariates = NULL, outcome = "y",
 #' all model terms and provides publication-quality confidence interval tables.
 #'
 #' @details
-#' Resampling strategies:
-#' \itemize{
-#'   \item For standard GLM families, simple random sampling with replacement.
-#'   \item For conditional logistic regression (\code{family = "clogit"}),
-#'     cluster resampling based on \code{strata_col} with dynamic ID
-#'     reconstruction to preserve matched designs.
-#' }
+#' Bootstrap resampling uses simple random sampling with replacement at the
+#' observation level.
 #'
 #' For exponential family models (\code{binomial}, \code{poisson},
-#' \code{quasipoisson}, \code{clogit}), results are automatically reported
-#' as exponentiated values (OR or RR) with corresponding CIs.
+#' \code{quasipoisson}), results are automatically reported as exponentiated
+#' values (OR or RR) with corresponding CIs.
 #'
 #' @param data data.frame. Original dataset.
 #' @param mix_name Character vector. Mixture component column names.
 #' @param covariates Character vector or \code{NULL}. Covariates/confounders.
 #' @param outcome Character. Outcome column name. Default is \code{"y"}.
-#' @param strata_col Character. Stratum ID column name for clogit.
 #' @param family Character. Error distribution: \code{"gaussian"},
-#'   \code{"binomial"}, \code{"poisson"}, \code{"quasipoisson"},
-#'   \code{"clogit"}.
+#'   \code{"binomial"}, \code{"poisson"}, or \code{"quasipoisson"}.
 #' @param n_boot Integer. Number of bootstrap replicates. Default is 100.
 #' @param rh_inner Integer. RH iterations per bootstrap replicate. Default
 #'   is 1.
@@ -527,8 +461,7 @@ nwqs_boot <- function(data,
                       mix_name,
                       covariates = NULL,
                       outcome = "y",
-                      strata_col = NULL,
-                      family = c("gaussian", "binomial", "poisson", "quasipoisson", "clogit"),
+                      family = c("gaussian", "binomial", "poisson", "quasipoisson"),
                       n_boot = 100,
                       rh_inner = 1,
                       n_permutation = 10,
@@ -583,27 +516,15 @@ nwqs_boot <- function(data,
   alpha <- 1 - conf_level
 
   one_boot <- function(b) {
-    if (family == "clogit") {
-      unique_strata <- unique(data[[strata_col]])
-      sampled_strata <- sample(unique_strata, size = length(unique_strata), replace = TRUE)
-
-      boot_data_list <- lapply(seq_along(sampled_strata), function(idx) {
-        sub_data <- data[data[[strata_col]] == sampled_strata[idx], , drop = FALSE]
-        sub_data[[strata_col]] <- paste0(sampled_strata[idx], "_boot_", idx)
-        return(sub_data)
-      })
-      data_boot <- do.call(rbind, boot_data_list)
-    } else {
-      idx_boot <- sample(seq_len(n_obs), size = n_obs, replace = TRUE)
-      data_boot <- data[idx_boot, , drop = FALSE]
-    }
+    idx_boot <- sample(seq_len(n_obs), size = n_obs, replace = TRUE)
+    data_boot <- data[idx_boot, , drop = FALSE]
 
     fit_b <- tryCatch(
       {
         nwqs(
           data = data_boot, mix_name = mix_name, covariates = covariates,
           outcome = outcome, q = q,
-          strata_col = strata_col, family = family,
+          family = family,
           plan_strategy = plan_strategy, rh = rh_inner,
           n_permutation = n_permutation, seed = NULL, quiet = TRUE, ...
         )
@@ -709,7 +630,7 @@ nwqs_boot <- function(data,
   ci_table <- merge(ci_table, ci_upper, by = c("Target", "Term"), all.x = TRUE)
   ci_table$N_Success <- n_success
 
-  is_exp_family <- family %in% c("binomial", "poisson", "quasipoisson", "clogit")
+  is_exp_family <- family %in% c("binomial", "poisson", "quasipoisson")
 
   disp_lcl <- ci_table$Boot_CI_Lower
   disp_ucl <- ci_table$Boot_CI_Upper

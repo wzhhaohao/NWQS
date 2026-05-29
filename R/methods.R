@@ -544,7 +544,7 @@ print.nwqs_boot <- function(x, digits = 3, ...) {
   n_total <- x$n_boot
   conf_pct <- if (!is.null(x$conf_level)) sprintf("%.0f%%", x$conf_level * 100) else "95%"
 
-  is_exp_family <- !is.null(x$family) && x$family %in% c("binomial", "poisson", "quasipoisson", "clogit")
+  is_exp_family <- !is.null(x$family) && x$family %in% c("binomial", "poisson", "quasipoisson")
 
   cat("\n--- NWQS Bootstrap Ensemble Results ---\n")
   cat(sprintf(
