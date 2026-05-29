@@ -11,9 +11,8 @@ src/*.so
 # Package tarball
 *.tar.gz
 
-# Test and dev files
+# Dev scratch files (the tests/ directory is now tracked)
 dev_test.R
-tests/
 
 # Data and results
 MCresult/

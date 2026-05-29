@@ -5,3 +5,6 @@
 ^LICENSE\.md$
 ^README_CN\.md$
 ^\.claude/
+^AGENTS\.md$
+^CLAUDE\.md$
+^context\.md$
