@@ -10,7 +10,9 @@ nwqs(
   covariates = NULL,
   outcome = "y",
   weight_engine = permutation_scorer,
+  transform_type = c("percentile_rank", "q_bin"),
   q = 4,
+  ties = c("average", "min", "max", "random"),
   df_spline = 3,
   transform_fun = NULL,
   train_prop = 0.6,
@@ -39,7 +41,18 @@ matching variables, and the outcome.}
 \item{weight_engine}{Function. Engine for weight and shape discovery.
 Default is \code{permutation_scorer}.}
 
-\item{q}{Integer. Number of quantile bins. Default is 4 (quartiles).}
+\item{transform_type}{Character. Either \code{"percentile_rank"} (default;
+continuous empirical CDF on each mixture column) or \code{"q_bin"}
+(legacy 0.1.x behavior: discrete quantile bins).}
+
+\item{q}{Integer. With \code{transform_type = "q_bin"} this is the number
+of discrete bins; with \code{transform_type = "percentile_rank"} it
+controls the number of contrast points used downstream by
+\code{extract_nwqs_effects()} and \code{nwqs_contrast()}. Default is 4.}
+
+\item{ties}{Character. Tie-handling rule for \code{"percentile_rank"};
+passed to \code{rank(ties.method = )}. One of \code{"average"} (default),
+\code{"min"}, \code{"max"}, \code{"random"}.}
 
 \item{df_spline}{Integer. Degrees of freedom for natural cubic splines.
 Default is 3.}

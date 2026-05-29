@@ -2,26 +2,51 @@
 % Please edit documentation in R/utils.R
 \name{trans_quantile}
 \alias{trans_quantile}
-\title{Quantile or Percentile Transformation}
+\title{Quantile or Percentile-Rank Transformation}
 \usage{
-trans_quantile(data, method = c("quantile", "percentile"), q = 4)
+trans_quantile(
+  data,
+  type = c("percentile_rank", "q_bin"),
+  q = NULL,
+  ties = c("average", "min", "max", "random")
+)
 }
 \arguments{
 \item{data}{\code{data.frame}. Contains the mixture variables to transform.}
 
-\item{method}{Character. Transformation method: \code{"quantile"} (default)
-or \code{"percentile"}.}
+\item{type}{Character. Transformation type: \code{"percentile_rank"}
+(default) or \code{"q_bin"}.}
 
-\item{q}{Integer. Number of quantile bins (only used when
-\code{method = "quantile"}). Default is 4 (quartiles).}
+\item{q}{Integer or \code{NULL}. Number of discrete bins used when
+\code{type = "q_bin"}. Has no effect when
+\code{type = "percentile_rank"}. Required (no default) when
+\code{type = "q_bin"}.}
+
+\item{ties}{Character. Tie-handling rule when \code{type = "percentile_rank"};
+passed through to \code{rank(ties.method = )}. One of \code{"average"}
+(default), \code{"min"}, \code{"max"}, \code{"random"}.}
 }
 \value{
 A \code{data.frame} with the same dimensions and column names as the
 input, containing the transformed dimensionless values.
 }
 \description{
-Transforms continuous mixture exposure variables into discrete quantile bins
-or continuous percentile ranks. This standardization step is fundamental to
-weighted quantile sum (WQS) and its extensions for harmonizing exposures
-measured on different scales.
+Transforms continuous mixture exposure variables into either a continuous
+percentile rank (\code{type = "percentile_rank"}, the v0.2.0 default) or
+discrete quantile bins (\code{type = "q_bin"}, the legacy 0.1.x default).
+This standardization step is fundamental to weighted quantile sum (WQS)
+and its extensions for harmonizing exposures measured on different scales.
+}
+\details{
+\strong{Percentile-rank transform.} For each column \eqn{x_1, \ldots, x_n},
+\deqn{u_i = \mathrm{rank}(x_i;\,\mathrm{ties}) / n,}
+so \eqn{u_i \in (0, 1]}. Ties are handled by \code{ties}; the default
+\code{"average"} matches \code{rank(x, ties.method = "average")} and is the
+applied-statistics convention.
+
+\strong{q-bin transform.} For each column, computes empirical quantile
+breaks at \code{seq(0, 1, by = 1/q)} (with the outer breaks pushed to
+\eqn{\pm\infty}) and returns the integer bin index in \code{0:(q-1)}. This
+is the discrete quartile / quintile etc. behavior used by 0.1.x and by
+classical WQS.
 }

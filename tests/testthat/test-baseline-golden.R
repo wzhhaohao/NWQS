@@ -56,15 +56,21 @@ expect_nwqs_contract <- function(fit, family) {
 
 run_nwqs_baseline <- function(family) {
   d <- make_baseline_data(family = family, seed = 42)
+  # transform_type = "q_bin", q = 4 explicitly pins the 0.1.x default
+  # (discrete quartile binning). These snapshots were captured under that
+  # default; they must remain byte-identical after Phase 2 switches the
+  # transform default to continuous percentile rank.
   nwqs(
-    data    = d,
-    mix_name = mix_names,
-    outcome = "y",
-    family  = family,
-    rh      = 5,
-    n_permutation = 5,
-    seed    = 1234,
-    quiet   = TRUE
+    data           = d,
+    mix_name       = mix_names,
+    outcome        = "y",
+    family         = family,
+    rh             = 5,
+    n_permutation  = 5,
+    seed           = 1234,
+    quiet          = TRUE,
+    transform_type = "q_bin",
+    q              = 4
   )
 }
 
@@ -103,15 +109,17 @@ test_that("baseline: quasipoisson nwqs has stable weights and coefs", {
 test_that("baseline: gaussian nwqs_boot returns valid CI structure", {
   d <- make_baseline_data(family = "gaussian", seed = 42)
   boot_fit <- nwqs_boot(
-    data     = d,
-    mix_name = mix_names,
-    outcome  = "y",
-    family   = "gaussian",
-    n_boot   = 10,
-    rh_inner = 1,
-    n_permutation = 5,
-    seed     = 1234,
-    quiet    = TRUE
+    data           = d,
+    mix_name       = mix_names,
+    outcome        = "y",
+    family         = "gaussian",
+    n_boot         = 10,
+    rh_inner       = 1,
+    n_permutation  = 5,
+    seed           = 1234,
+    quiet          = TRUE,
+    transform_type = "q_bin",
+    q              = 4
   )
   expect_s3_class(boot_fit, "nwqs_boot")
   expect_equal(boot_fit$family, "gaussian")

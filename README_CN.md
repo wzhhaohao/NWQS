@@ -63,7 +63,8 @@ fit <- nwqs(
   covariates     = covariates,
   outcome        = "y",
   family         = "gaussian",
-  q              = 4,
+  transform_type = "percentile_rank",  # 0.2.0 默认；传 "q_bin" 复现 0.1.x 行为
+  q              = 4,                  # percentile_rank 模式下表示对比点数量
   df_spline      = 3,
   rh             = 10,
   n_permutation  = 50,

@@ -18,7 +18,9 @@ nwqs_boot(
   keep_fits = FALSE,
   plan_strategy = c("sequential", "multisession", "multicore"),
   n_workers = NULL,
+  transform_type = c("percentile_rank", "q_bin"),
   q = 4,
+  ties = c("average", "min", "max", "random"),
   quiet = TRUE,
   ...
 )
@@ -55,7 +57,17 @@ loop.}
 
 \item{n_workers}{Integer or \code{NULL}. Number of parallel workers.}
 
-\item{q}{Integer. Number of quantile bins. Default is 4.}
+\item{transform_type}{Character. Either \code{"percentile_rank"} (default)
+or \code{"q_bin"}. Forwarded to \code{nwqs()}; see its documentation for
+the precise mathematical contract.}
+
+\item{q}{Integer. Number of quantile bins (when
+\code{transform_type = "q_bin"}) or contrast points (when
+\code{transform_type = "percentile_rank"}). Default is 4.}
+
+\item{ties}{Character. Tie-handling rule for \code{"percentile_rank"};
+passed to \code{rank(ties.method = )}. One of \code{"average"} (default),
+\code{"min"}, \code{"max"}, \code{"random"}.}
 
 \item{quiet}{Logical. If \code{TRUE}, suppresses verbose output. Default
 is \code{TRUE}.}
