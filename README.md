@@ -63,7 +63,8 @@ fit <- nwqs(
   covariates     = covariates,
   outcome        = "y",
   family         = "gaussian",
-  q              = 4,
+  transform_type = "percentile_rank",  # 0.2.0 default; pass "q_bin" to mimic 0.1.x
+  q              = 4,                  # 4 contrast points under percentile_rank
   df_spline      = 3,
   rh             = 10,
   n_permutation  = 50,

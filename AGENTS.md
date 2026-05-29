@@ -31,11 +31,11 @@ This package is being refactored toward a 0.2.0 release that supports a companio
 ### What is in scope for 0.2.0
 
 - [DONE] Removing the `clogit` family path entirely; will return later as an independent `nwqs_clogit()` function.
-- Switching the default exposure transform from discrete `q`-bin quantiles to continuous percentile rank (empirical CDF on the training distribution). `q`-bin remains available as an opt-in.
+- [DONE] Switching the default exposure transform from discrete `q`-bin quantiles to continuous percentile rank (empirical CDF on the training distribution). `q`-bin remains available as an opt-in via `transform_type = "q_bin"`.
 - Adding standard S3 methods: `predict`, `vcov`, `confint`, and conditional `broom::tidy` / `glance`.
 - Adding `negbin` and `ordinal` families via `MASS::glm.nb` and `MASS::polr`.
 - Introducing `nwqs_control()` to hold "soft" parameters (`min_shape_sd`, `ties`, `custom_knots`, `custom_boundary`, `zero_weight_action`) outside the main function signature.
-- [IN PROGRESS] Building a `tests/testthat/` suite (baseline + clogit-removal regression already in), NEWS.md (drafted), an applied-domain vignette, a pkgdown site, and a standard R-CMD-check GitHub Actions workflow (already in).
+- [IN PROGRESS] Building a `tests/testthat/` suite (baseline q_bin, baseline percentile_rank, clogit-removal regression, and transform-layer unit tests already in), NEWS.md (kept current), an applied-domain vignette (pending), a pkgdown site (pending), and a standard R-CMD-check GitHub Actions workflow (already in).
 
 ### What is out of scope for 0.2.0
 

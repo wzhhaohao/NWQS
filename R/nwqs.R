@@ -43,7 +43,16 @@
 #'   \code{"y"}.
 #' @param weight_engine Function. Engine for weight and shape discovery.
 #'   Default is \code{permutation_scorer}.
-#' @param q Integer. Number of quantile bins. Default is 4 (quartiles).
+#' @param transform_type Character. Either \code{"percentile_rank"} (default;
+#'   continuous empirical CDF on each mixture column) or \code{"q_bin"}
+#'   (legacy 0.1.x behavior: discrete quantile bins).
+#' @param q Integer. With \code{transform_type = "q_bin"} this is the number
+#'   of discrete bins; with \code{transform_type = "percentile_rank"} it
+#'   controls the number of contrast points used downstream by
+#'   \code{extract_nwqs_effects()} and \code{nwqs_contrast()}. Default is 4.
+#' @param ties Character. Tie-handling rule for \code{"percentile_rank"};
+#'   passed to \code{rank(ties.method = )}. One of \code{"average"} (default),
+#'   \code{"min"}, \code{"max"}, \code{"random"}.
 #' @param df_spline Integer. Degrees of freedom for natural cubic splines.
 #'   Default is 3.
 #' @param transform_fun Function. Custom transformation for mixture components.
@@ -84,7 +93,11 @@
 #' @importFrom future.apply future_lapply
 #' @export
 nwqs <- function(data, mix_name, covariates = NULL, outcome = "y",
-                 weight_engine = permutation_scorer, q = 4, df_spline = 3,
+                 weight_engine = permutation_scorer,
+                 transform_type = c("percentile_rank", "q_bin"),
+                 q = 4,
+                 ties = c("average", "min", "max", "random"),
+                 df_spline = 3,
                  transform_fun = NULL,
                  train_prop = 0.6, rh = 10, seed = 1234, n_permutation = 10,
                  family = c("gaussian", "binomial", "poisson", "quasipoisson"),
@@ -92,6 +105,8 @@ nwqs <- function(data, mix_name, covariates = NULL, outcome = "y",
                  n_workers = NULL, quiet = FALSE, ...) {
   family <- match.arg(family)
   plan_strategy <- match.arg(plan_strategy)
+  transform_type <- match.arg(transform_type)
+  ties <- match.arg(ties)
   if (length(covariates) == 0) covariates <- NULL
 
   t_start <- Sys.time()
@@ -129,16 +144,26 @@ nwqs <- function(data, mix_name, covariates = NULL, outcome = "y",
   use_parallel <- !inherits(future::plan(), "sequential")
 
   if (is.null(transform_fun)) {
-    transform_fun <- function(x) trans_quantile(x, q = q)
+    transform_fun <- function(x) {
+      trans_quantile(x, type = transform_type, q = q, ties = ties)
+    }
   }
+
+  train_components_sorted <- lapply(mix_name, function(comp) {
+    sort(data[[comp]])
+  })
+  names(train_components_sorted) <- mix_name
 
   data_Q <- data
   data_Q[mix_name] <- transform_fun(data[mix_name])
 
-  eval_points_std <- 0:(q - 1)
-  temp_spline <- splines::ns(eval_points_std, df = df_spline)
-  model_knots <- attr(temp_spline, "knots")
-  model_boundary <- attr(temp_spline, "Boundary.knots")
+  basis_info <- build_spline_basis_knots(
+    transform_type = transform_type,
+    q = q,
+    df_spline = df_spline
+  )
+  model_knots <- basis_info$knots
+  model_boundary <- basis_info$boundary
 
   if (!use_parallel && !is.null(seed)) set.seed(seed)
 
@@ -330,6 +355,8 @@ nwqs <- function(data, mix_name, covariates = NULL, outcome = "y",
       mean_shapes = single_res$shapes, rh_coefs = t(as.matrix(single_res$coefs)),
       rh_weights = t(as.matrix(single_res$weights)), rh_shapes = t(as.matrix(single_res$shapes)),
       rh = 1, b = n_permutation, q = q, df_spline = df_spline, family = family,
+      transform_type = transform_type, ties = ties,
+      train_components_sorted = train_components_sorted,
       spline_knots = model_knots, spline_boundary = model_boundary, call = match.call(), data = final_data
     )
 
@@ -393,6 +420,8 @@ nwqs <- function(data, mix_name, covariates = NULL, outcome = "y",
     fit = fit_obj, final_weights = mean_weights, mean_coefs = mean_coefs, mean_shapes = mean_shapes,
     rh_coefs = coef_mat, rh_weights = weight_mat, rh_shapes = shape_mat,
     rh = rh, b = n_permutation, q = q, df_spline = df_spline, family = family, call = match.call(),
+    transform_type = transform_type, ties = ties,
+    train_components_sorted = train_components_sorted,
     transform_fun = transform_fun, data = final_data, spline_knots = model_knots, spline_boundary = model_boundary
   )
 
@@ -434,7 +463,15 @@ nwqs <- function(data, mix_name, covariates = NULL, outcome = "y",
 #' @param plan_strategy Character. Parallel strategy for the outer bootstrap
 #'   loop.
 #' @param n_workers Integer or \code{NULL}. Number of parallel workers.
-#' @param q Integer. Number of quantile bins. Default is 4.
+#' @param transform_type Character. Either \code{"percentile_rank"} (default)
+#'   or \code{"q_bin"}. Forwarded to \code{nwqs()}; see its documentation for
+#'   the precise mathematical contract.
+#' @param q Integer. Number of quantile bins (when
+#'   \code{transform_type = "q_bin"}) or contrast points (when
+#'   \code{transform_type = "percentile_rank"}). Default is 4.
+#' @param ties Character. Tie-handling rule for \code{"percentile_rank"};
+#'   passed to \code{rank(ties.method = )}. One of \code{"average"} (default),
+#'   \code{"min"}, \code{"max"}, \code{"random"}.
 #' @param quiet Logical. If \code{TRUE}, suppresses verbose output. Default
 #'   is \code{TRUE}.
 #' @param ... Additional arguments passed to \code{nwqs()}.
@@ -470,13 +507,17 @@ nwqs_boot <- function(data,
                       keep_fits = FALSE,
                       plan_strategy = c("sequential", "multisession", "multicore"),
                       n_workers = NULL,
+                      transform_type = c("percentile_rank", "q_bin"),
                       q = 4,
+                      ties = c("average", "min", "max", "random"),
                       quiet = TRUE,
                       ...) {
   start_time <- Sys.time()
 
   family <- match.arg(family)
   plan_strategy <- match.arg(plan_strategy)
+  transform_type <- match.arg(transform_type)
+  ties <- match.arg(ties)
 
   if (n_boot < 20) {
     warning("'n_boot' is quite small; bootstrap percentile CI may be unstable.")
@@ -523,7 +564,8 @@ nwqs_boot <- function(data,
       {
         nwqs(
           data = data_boot, mix_name = mix_name, covariates = covariates,
-          outcome = outcome, q = q,
+          outcome = outcome,
+          transform_type = transform_type, q = q, ties = ties,
           family = family,
           plan_strategy = plan_strategy, rh = rh_inner,
           n_permutation = n_permutation, seed = NULL, quiet = TRUE, ...
@@ -700,7 +742,9 @@ nwqs_boot <- function(data,
     final_weights = avg_weights,
     mean_shapes = avg_shapes,
     family = family,
+    transform_type = transform_type,
     q = q,
+    ties = ties,
     df_spline = first_struct$df_spline,
     spline_knots = first_struct$spline_knots,
     spline_boundary = first_struct$spline_boundary,

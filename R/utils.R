@@ -1,35 +1,70 @@
-#' @title Quantile or Percentile Transformation
+#' @title Quantile or Percentile-Rank Transformation
 #'
 #' @description
-#' Transforms continuous mixture exposure variables into discrete quantile bins
-#' or continuous percentile ranks. This standardization step is fundamental to
-#' weighted quantile sum (WQS) and its extensions for harmonizing exposures
-#' measured on different scales.
+#' Transforms continuous mixture exposure variables into either a continuous
+#' percentile rank (\code{type = "percentile_rank"}, the v0.2.0 default) or
+#' discrete quantile bins (\code{type = "q_bin"}, the legacy 0.1.x default).
+#' This standardization step is fundamental to weighted quantile sum (WQS)
+#' and its extensions for harmonizing exposures measured on different scales.
+#'
+#' @details
+#' \strong{Percentile-rank transform.} For each column \eqn{x_1, \ldots, x_n},
+#' \deqn{u_i = \mathrm{rank}(x_i;\,\mathrm{ties}) / n,}
+#' so \eqn{u_i \in (0, 1]}. Ties are handled by \code{ties}; the default
+#' \code{"average"} matches \code{rank(x, ties.method = "average")} and is the
+#' applied-statistics convention.
+#'
+#' \strong{q-bin transform.} For each column, computes empirical quantile
+#' breaks at \code{seq(0, 1, by = 1/q)} (with the outer breaks pushed to
+#' \eqn{\pm\infty}) and returns the integer bin index in \code{0:(q-1)}. This
+#' is the discrete quartile / quintile etc. behavior used by 0.1.x and by
+#' classical WQS.
 #'
 #' @param data \code{data.frame}. Contains the mixture variables to transform.
-#' @param method Character. Transformation method: \code{"quantile"} (default)
-#'   or \code{"percentile"}.
-#' @param q Integer. Number of quantile bins (only used when
-#'   \code{method = "quantile"}). Default is 4 (quartiles).
+#' @param type Character. Transformation type: \code{"percentile_rank"}
+#'   (default) or \code{"q_bin"}.
+#' @param q Integer or \code{NULL}. Number of discrete bins used when
+#'   \code{type = "q_bin"}. Has no effect when
+#'   \code{type = "percentile_rank"}. Required (no default) when
+#'   \code{type = "q_bin"}.
+#' @param ties Character. Tie-handling rule when \code{type = "percentile_rank"};
+#'   passed through to \code{rank(ties.method = )}. One of \code{"average"}
+#'   (default), \code{"min"}, \code{"max"}, \code{"random"}.
 #'
 #' @return A \code{data.frame} with the same dimensions and column names as the
 #'   input, containing the transformed dimensionless values.
 #'
 #' @importFrom stats quantile
 #' @export
-trans_quantile <- function(data, method = c("quantile", "percentile"), q = 4) {
+trans_quantile <- function(data,
+                           type = c("percentile_rank", "q_bin"),
+                           q = NULL,
+                           ties = c("average", "min", "max", "random")) {
   data <- as.data.frame(data)
-  method <- match.arg(method)
+  type <- match.arg(type)
+  ties <- match.arg(ties)
 
-  if (method == "percentile") {
-    transform_func <- function(x) {
-      rank(x) / (length(x) + 1)
+  if (type == "q_bin") {
+    if (is.null(q)) {
+      stop("`q` must be supplied when type = 'q_bin'.")
     }
-    res_list <- lapply(data, transform_func)
-  } else {
-    if (!is.numeric(q) || q < 1) stop("'q' must be a positive number")
+    if (!is.numeric(q) || length(q) != 1 || q < 1) {
+      stop("`q` must be a single positive number.")
+    }
+  }
 
+  if (type == "percentile_rank") {
     transform_func <- function(x) {
+      if (all(is.na(x))) {
+        stop("Cannot apply percentile_rank to a column that is entirely NA.")
+      }
+      rank(x, ties.method = ties, na.last = "keep") / sum(!is.na(x))
+    }
+  } else {
+    transform_func <- function(x) {
+      if (all(is.na(x))) {
+        stop("Cannot apply q_bin to a column that is entirely NA.")
+      }
       breaks <- unique(quantile(x, probs = seq(0, 1, by = 1 / q), na.rm = TRUE))
       if (length(breaks) == 1) {
         breaks <- c(-Inf, breaks)
@@ -39,12 +74,114 @@ trans_quantile <- function(data, method = c("quantile", "percentile"), q = 4) {
       }
       as.numeric(cut(x, breaks = breaks, labels = FALSE, include.lowest = TRUE)) - 1
     }
-    res_list <- lapply(data, transform_func)
   }
 
+  res_list <- lapply(data, transform_func)
   res_df <- as.data.frame(res_list)
   names(res_df) <- names(data)
-  return(res_df)
+  res_df
+}
+
+
+#' @title Apply a Training-Sample Percentile Rank to New Data
+#'
+#' @description
+#' Maps each element of \code{newdata} to its empirical CDF value under the
+#' training-sample distribution \code{train_x}. Used by \code{predict.nwqs()}
+#' so that newdata is always interpreted on the training distribution's scale,
+#' avoiding train/predict drift.
+#'
+#' @details
+#' For each new observation \eqn{x'},
+#' \deqn{u' = \frac{\#\{i : x_{\text{train},i} \le x'\}}{n_{\text{train}}}.}
+#' Values of \code{newdata} below \code{min(train_x)} map to \code{0}; values
+#' at or above \code{max(train_x)} map to \code{1}.
+#'
+#' @param newdata Numeric vector. Values to be mapped.
+#' @param train_x Numeric vector. Training-sample values (NA values removed
+#'   before computation).
+#'
+#' @return Numeric vector of the same length as \code{newdata}, with values in
+#'   \code{[0, 1]}.
+#'
+#' @export
+apply_percentile_rank <- function(newdata, train_x) {
+  train_x <- train_x[!is.na(train_x)]
+  n <- length(train_x)
+  if (n == 0) {
+    stop("`train_x` is empty after removing NA values.")
+  }
+  sorted <- sort(train_x)
+  findInterval(newdata, sorted, all.inside = FALSE, rightmost.closed = FALSE) / n
+}
+
+
+#' @title Build Globally Aligned Spline Knots for the NWQS Index
+#'
+#' @description
+#' Computes the internal and boundary knots used by every call to
+#' \code{wqs_nonlinear_expand()} inside a single \code{nwqs()} fit. The same
+#' knots are reused across training, validation, and bootstrap splits — that
+#' alignment is a core invariant of the framework.
+#'
+#' @details
+#' When \code{transform_type = "percentile_rank"}, the spline is evaluated on a
+#' 100-point grid covering \code{[0, 1]}; this guarantees stable internal knot
+#' placement regardless of sample size. When \code{transform_type = "q_bin"},
+#' the spline is evaluated on \code{0:(q-1)}, reproducing 0.1.x behavior.
+#'
+#' If \code{custom_knots} or \code{custom_boundary} is supplied, it overrides
+#' the corresponding computed value.
+#'
+#' @param transform_type Character. Either \code{"percentile_rank"} or
+#'   \code{"q_bin"}.
+#' @param q Integer or \code{NULL}. Required when
+#'   \code{transform_type = "q_bin"}.
+#' @param df_spline Integer. Degrees of freedom for the natural cubic spline.
+#' @param custom_knots Numeric or \code{NULL}. Optional user-supplied internal
+#'   knot vector.
+#' @param custom_boundary Numeric (length 2) or \code{NULL}. Optional
+#'   user-supplied boundary knots.
+#'
+#' @return A list with two elements: \code{knots} (internal knot vector) and
+#'   \code{boundary} (length-2 boundary knot vector).
+#'
+#' @importFrom splines ns
+#' @export
+build_spline_basis_knots <- function(transform_type,
+                                     q = NULL,
+                                     df_spline = 3,
+                                     custom_knots = NULL,
+                                     custom_boundary = NULL) {
+  transform_type <- match.arg(
+    transform_type,
+    choices = c("percentile_rank", "q_bin")
+  )
+
+  if (transform_type == "q_bin") {
+    if (is.null(q)) {
+      stop("`q` must be supplied when transform_type = 'q_bin'.")
+    }
+    eval_points <- 0:(q - 1)
+  } else {
+    eval_points <- seq(0, 1, length.out = 100)
+  }
+
+  temp_spline <- splines::ns(eval_points, df = df_spline)
+  knots <- attr(temp_spline, "knots")
+  boundary <- attr(temp_spline, "Boundary.knots")
+
+  if (!is.null(custom_knots)) {
+    knots <- custom_knots
+  }
+  if (!is.null(custom_boundary)) {
+    if (length(custom_boundary) != 2) {
+      stop("`custom_boundary` must be a length-2 numeric vector.")
+    }
+    boundary <- custom_boundary
+  }
+
+  list(knots = knots, boundary = boundary)
 }
 
 
@@ -187,7 +324,18 @@ nwqs_contrast <- function(model, q_target = NULL, q_ref = 0) {
   }
 
   df_spline <- max(as.numeric(sub("^.+_B(\\d+)$", "\\1", names(shapes_vec))))
-  b_target <- splines::ns(c(q_target, q_ref),
+
+  transform_type <- if (!is.null(model$transform_type)) model$transform_type else "q_bin"
+  if (transform_type == "percentile_rank") {
+    q_total <- if (!is.null(model$q)) model$q else 4
+    eval_target <- q_target / (q_total - 1)
+    eval_ref <- q_ref / (q_total - 1)
+  } else {
+    eval_target <- q_target
+    eval_ref <- q_ref
+  }
+
+  b_target <- splines::ns(c(eval_target, eval_ref),
     df = df_spline,
     knots = model$spline_knots, Boundary.knots = model$spline_boundary,
     intercept = FALSE
@@ -287,7 +435,12 @@ extract_nwqs_effects <- function(model_res, return_raw = FALSE) {
   rh <- model_res$rh
   model_knots <- model_res$spline_knots
   model_boundary <- model_res$spline_boundary
-  eval_points_std <- 0:(q_level - 1)
+  transform_type <- if (!is.null(model_res$transform_type)) model_res$transform_type else "q_bin"
+  eval_points_std <- if (transform_type == "percentile_rank") {
+    seq(0, 1, length.out = q_level)
+  } else {
+    0:(q_level - 1)
+  }
 
   basis_std <- splines::ns(eval_points_std,
     df = df_spline, knots = model_knots, Boundary.knots = model_boundary, intercept = FALSE
