@@ -9,7 +9,7 @@ nwqs_boot(
   mix_name,
   covariates = NULL,
   outcome = "y",
-  family = c("gaussian", "binomial", "poisson", "quasipoisson"),
+  family = c("gaussian", "binomial", "poisson", "quasipoisson", "negbin"),
   n_boot = 100,
   rh_inner = 1,
   n_permutation = 30,
@@ -35,7 +35,8 @@ nwqs_boot(
 \item{outcome}{Character. Outcome column name. Default is \code{"y"}.}
 
 \item{family}{Character. Error distribution: \code{"gaussian"},
-\code{"binomial"}, \code{"poisson"}, or \code{"quasipoisson"}.}
+\code{"binomial"}, \code{"poisson"}, \code{"quasipoisson"}, or
+\code{"negbin"}.}
 
 \item{n_boot}{Integer. Number of bootstrap replicates. Default is 100.}
 

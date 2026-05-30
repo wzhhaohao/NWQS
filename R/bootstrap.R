@@ -43,7 +43,14 @@ run_oob_permutation <- function(data, mix_name, outcome = "y",
 
   fam_arg <- if (!is.null(args$family)) args$family else "gaussian"
   if (is.character(fam_arg)) {
-    fam_obj <- get(fam_arg, mode = "function")()
+    # negbin: the in-bag OOB loss uses Poisson as a fast surrogate. The
+    # final NWQS regression in nwqs() still calls MASS::glm.nb on the
+    # validation split; only the importance ranking inside the engine
+    # uses Poisson deviance. The ranking is unchanged because the
+    # negbin and Poisson deviances differ by an additive theta-dependent
+    # constant that drops out of the per-component permutation delta.
+    surrogate <- if (fam_arg == "negbin") "poisson" else fam_arg
+    fam_obj <- get(surrogate, mode = "function")()
   } else {
     fam_obj <- fam_arg
   }

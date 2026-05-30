@@ -374,7 +374,7 @@ print.nwqs <- function(x, digits = max(3L, getOption("digits") - 3L), ...) {
   rownames(eff_mat_str) <- c("Overall", comps)
   colnames(eff_mat_str) <- paste0("Q", 2:q_level, " vs Q1")
 
-  is_exp_family <- x$family %in% c("binomial", "poisson", "quasipoisson")
+  is_exp_family <- x$family %in% c("binomial", "poisson", "quasipoisson", "negbin")
   eff_name <- ifelse(is_exp_family, ifelse(x$family == "binomial", "OR", "RR"), "Delta")
 
   for (q_tgt in 2:q_level) {
@@ -544,7 +544,7 @@ print.nwqs_boot <- function(x, digits = 3, ...) {
   n_total <- x$n_boot
   conf_pct <- if (!is.null(x$conf_level)) sprintf("%.0f%%", x$conf_level * 100) else "95%"
 
-  is_exp_family <- !is.null(x$family) && x$family %in% c("binomial", "poisson", "quasipoisson")
+  is_exp_family <- !is.null(x$family) && x$family %in% c("binomial", "poisson", "quasipoisson", "negbin")
 
   cat("\n--- NWQS Bootstrap Ensemble Results ---\n")
   cat(sprintf(
@@ -727,7 +727,7 @@ plot.nwqs_boot <- function(x,
   }
 
   if (is.null(exponentiate)) {
-    is_exp_family <- x$family %in% c("binomial", "poisson", "quasipoisson")
+    is_exp_family <- x$family %in% c("binomial", "poisson", "quasipoisson", "negbin")
     exponentiate <- if (y_scale == "partial") FALSE else is_exp_family
   }
 

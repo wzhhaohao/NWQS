@@ -12,7 +12,7 @@ NWQS is an R package implementing non-linear weighted quantile sum regression fo
 - estimating the final mixture effect through repeated holdout validation,
 - and using an external bootstrap for valid inference.
 
-The package supports `gaussian`, `binomial`, `poisson`, and `quasipoisson` families. (Conditional logistic regression was supported in 0.1.x; it was removed in 0.2.0 and is planned to return as a dedicated `nwqs_clogit()` function in a later release.)
+The package supports `gaussian`, `binomial`, `poisson`, `quasipoisson`, and `negbin` families. (Conditional logistic regression was supported in 0.1.x; it was removed in 0.2.0 and is planned to return as a dedicated `nwqs_clogit()` function in a later release. Ordinal regression via `MASS::polr` is also planned for a later release.)
 
 ## Working principles (v0.2.0 refactor in progress)
 
@@ -33,7 +33,7 @@ This package is being refactored toward a 0.2.0 release that supports a companio
 - [DONE] Removing the `clogit` family path entirely; will return later as an independent `nwqs_clogit()` function.
 - [DONE] Switching the default exposure transform from discrete `q`-bin quantiles to continuous percentile rank (empirical CDF on the training distribution). `q`-bin remains available as an opt-in via `transform_type = "q_bin"`.
 - [DONE] Adding standard S3 methods: `predict`, `vcov`, `confint`, and conditional `broom::tidy` / `glance` (registered via `.onLoad` when `generics` is installed).
-- Adding `negbin` family via `MASS::glm.nb` (ordinal via `MASS::polr` deferred to a separate plan).
+- [DONE] Adding `negbin` family via `MASS::glm.nb`. (ordinal via `MASS::polr` deferred to a separate plan.)
 - Introducing `nwqs_control()` to hold "soft" parameters (`min_shape_sd`, `ties`, `custom_knots`, `custom_boundary`, `zero_weight_action`) outside the main function signature.
 - [IN PROGRESS] Building a `tests/testthat/` suite (baseline q_bin, baseline percentile_rank, clogit-removal regression, transform-layer unit tests, weights-engine + parallel + nwqs-internals + SNR + predict + vcov + confint + broom tests all in), NEWS.md (kept current), an applied-domain vignette (pending), a pkgdown site (pending), and a standard R-CMD-check GitHub Actions workflow (already in).
 
