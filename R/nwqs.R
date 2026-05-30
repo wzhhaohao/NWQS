@@ -80,6 +80,10 @@
 #'   \code{"multicore"}, or \code{"multisession"}.
 #' @param n_workers Integer. Number of parallel workers. If \code{NULL},
 #'   auto-detected.
+#' @param control Object of class \code{nwqs_control} returned by
+#'   \code{\link{nwqs_control}()}. Bundles advanced knobs that do not live
+#'   on this signature: \code{custom_knots}, \code{custom_boundary},
+#'   \code{zero_weight_action}.
 #' @param quiet Logical. If \code{TRUE}, suppresses RH variance warnings.
 #'   Typically used when called internally by \code{nwqs_boot()}.
 #' @param ... Additional arguments passed to \code{run_oob_permutation} or
@@ -106,15 +110,20 @@
 nwqs <- function(data, mix_name, covariates = NULL, outcome = "y",
                  weight_engine = permutation_scorer,
                  transform_type = c("percentile_rank", "q_bin"),
-                 q = 4,
+                 q = NWQS_DEFAULTS$q,
                  ties = c("average", "min", "max", "random"),
-                 df_spline = 3,
-                 min_shape_sd = 1e-8,
+                 df_spline = NWQS_DEFAULTS$df_spline,
+                 min_shape_sd = NWQS_DEFAULTS$min_shape_sd,
                  transform_fun = NULL,
-                 train_prop = 0.6, rh = 10, seed = 1234, n_permutation = 30,
+                 train_prop = NWQS_DEFAULTS$train_prop,
+                 rh = NWQS_DEFAULTS$rh,
+                 seed = NWQS_DEFAULTS$seed,
+                 n_permutation = NWQS_DEFAULTS$n_permutation,
                  family = c("gaussian", "binomial", "poisson", "quasipoisson", "negbin"),
                  plan_strategy = c("sequential", "multisession", "multicore"),
-                 n_workers = NULL, quiet = FALSE, ...) {
+                 n_workers = NULL,
+                 control = nwqs_control(),
+                 quiet = FALSE, ...) {
   family <- match.arg(family)
   plan_strategy <- match.arg(plan_strategy)
   transform_type <- match.arg(transform_type)
@@ -170,9 +179,11 @@ nwqs <- function(data, mix_name, covariates = NULL, outcome = "y",
   data_Q[mix_name] <- transform_fun(data[mix_name])
 
   basis_info <- build_spline_basis_knots(
-    transform_type = transform_type,
-    q = q,
-    df_spline = df_spline
+    transform_type  = transform_type,
+    q               = q,
+    df_spline       = df_spline,
+    custom_knots    = control$custom_knots,
+    custom_boundary = control$custom_boundary
   )
   model_knots <- basis_info$knots
   model_boundary <- basis_info$boundary
@@ -499,6 +510,9 @@ nwqs <- function(data, mix_name, covariates = NULL, outcome = "y",
 #' @param plan_strategy Character. Parallel strategy for the outer bootstrap
 #'   loop.
 #' @param n_workers Integer or \code{NULL}. Number of parallel workers.
+#' @param control Object of class \code{nwqs_control} returned by
+#'   \code{\link{nwqs_control}()}. Forwarded to the inner \code{nwqs()}
+#'   call on every bootstrap iteration.
 #' @param transform_type Character. Either \code{"percentile_rank"} (default)
 #'   or \code{"q_bin"}. Forwarded to \code{nwqs()}; see its documentation for
 #'   the precise mathematical contract.
@@ -535,17 +549,18 @@ nwqs_boot <- function(data,
                       covariates = NULL,
                       outcome = "y",
                       family = c("gaussian", "binomial", "poisson", "quasipoisson", "negbin"),
-                      n_boot = 100,
-                      rh_inner = 1,
-                      n_permutation = 30,
-                      conf_level = 0.95,
-                      seed = 1234,
+                      n_boot = NWQS_DEFAULTS$n_boot,
+                      rh_inner = NWQS_DEFAULTS$rh_inner,
+                      n_permutation = NWQS_DEFAULTS$n_permutation,
+                      conf_level = NWQS_DEFAULTS$conf_level,
+                      seed = NWQS_DEFAULTS$seed,
                       keep_fits = FALSE,
                       plan_strategy = c("sequential", "multisession", "multicore"),
                       n_workers = NULL,
                       transform_type = c("percentile_rank", "q_bin"),
-                      q = 4,
+                      q = NWQS_DEFAULTS$q,
                       ties = c("average", "min", "max", "random"),
+                      control = nwqs_control(),
                       quiet = TRUE,
                       ...) {
   start_time <- Sys.time()
@@ -604,7 +619,8 @@ nwqs_boot <- function(data,
           transform_type = transform_type, q = q, ties = ties,
           family = family,
           plan_strategy = plan_strategy, rh = rh_inner,
-          n_permutation = n_permutation, seed = NULL, quiet = TRUE, ...
+          n_permutation = n_permutation, seed = NULL,
+          control = control, quiet = TRUE, ...
         )
       },
       error = function(e) {

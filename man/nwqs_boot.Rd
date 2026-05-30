@@ -10,17 +10,18 @@ nwqs_boot(
   covariates = NULL,
   outcome = "y",
   family = c("gaussian", "binomial", "poisson", "quasipoisson", "negbin"),
-  n_boot = 100,
-  rh_inner = 1,
-  n_permutation = 30,
-  conf_level = 0.95,
-  seed = 1234,
+  n_boot = NWQS_DEFAULTS$n_boot,
+  rh_inner = NWQS_DEFAULTS$rh_inner,
+  n_permutation = NWQS_DEFAULTS$n_permutation,
+  conf_level = NWQS_DEFAULTS$conf_level,
+  seed = NWQS_DEFAULTS$seed,
   keep_fits = FALSE,
   plan_strategy = c("sequential", "multisession", "multicore"),
   n_workers = NULL,
   transform_type = c("percentile_rank", "q_bin"),
-  q = 4,
+  q = NWQS_DEFAULTS$q,
   ties = c("average", "min", "max", "random"),
+  control = nwqs_control(),
   quiet = TRUE,
   ...
 )
@@ -69,6 +70,10 @@ the precise mathematical contract.}
 \item{ties}{Character. Tie-handling rule for \code{"percentile_rank"};
 passed to \code{rank(ties.method = )}. One of \code{"average"} (default),
 \code{"min"}, \code{"max"}, \code{"random"}.}
+
+\item{control}{Object of class \code{nwqs_control} returned by
+\code{\link{nwqs_control}()}. Forwarded to the inner \code{nwqs()}
+call on every bootstrap iteration.}
 
 \item{quiet}{Logical. If \code{TRUE}, suppresses verbose output. Default
 is \code{TRUE}.}

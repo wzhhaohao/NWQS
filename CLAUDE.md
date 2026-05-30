@@ -34,7 +34,7 @@ This package is being refactored toward a 0.2.0 release that supports a companio
 - [DONE] Switching the default exposure transform from discrete `q`-bin quantiles to continuous percentile rank (empirical CDF on the training distribution). `q`-bin remains available as an opt-in via `transform_type = "q_bin"`.
 - [DONE] Adding standard S3 methods: `predict`, `vcov`, `confint`, and conditional `broom::tidy` / `glance` (registered via `.onLoad` when `generics` is installed).
 - [DONE] Adding `negbin` family via `MASS::glm.nb`. (ordinal via `MASS::polr` deferred to a separate plan.)
-- Introducing `nwqs_control()` to hold "soft" parameters (`min_shape_sd`, `ties`, `custom_knots`, `custom_boundary`, `zero_weight_action`) outside the main function signature.
+- [DONE] Centralizing every user-facing default in a single `NWQS_DEFAULTS` list (`R/zzz-defaults.R`); introducing `nwqs_control()` to hold "advanced" soft parameters (`custom_knots`, `custom_boundary`, `zero_weight_action`) outside the main function signature. `min_shape_sd` and `ties` stay on the main signature in 0.2.0 for backward compatibility.
 - [IN PROGRESS] Building a `tests/testthat/` suite (baseline q_bin, baseline percentile_rank, clogit-removal regression, transform-layer unit tests, weights-engine + parallel + nwqs-internals + SNR + predict + vcov + confint + broom tests all in), NEWS.md (kept current), an applied-domain vignette (pending), a pkgdown site (pending), and a standard R-CMD-check GitHub Actions workflow (already in).
 
 ### What is out of scope for 0.2.0
