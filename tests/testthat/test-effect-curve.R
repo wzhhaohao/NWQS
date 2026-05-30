@@ -113,3 +113,31 @@ test_that("extract_nwqs_effect_curve rejects grid outside [0,1] in percentile_ra
     "\\[0, 1\\]"
   )
 })
+
+test_that("plot_nwqs_effect_curve returns a ggplot with median-centered defaults", {
+  fit <- make_pr_fit_curve(q = 4, rh = 5)
+  p <- plot_nwqs_effect_curve(fit)
+  expect_s3_class(p, "ggplot")
+  expect_match(p$labels$x, "Joint exposure percentile rank")
+  expect_match(p$labels$y, "Partial effect change relative to P50")
+})
+
+test_that("plot_nwqs_effect_curve(ref=0.25) shows P25 in y-axis label", {
+  fit <- make_pr_fit_curve(q = 4, rh = 5)
+  p <- plot_nwqs_effect_curve(fit, ref = 0.25)
+  expect_match(p$labels$y, "P25")
+})
+
+test_that("plot_nwqs_effect_curve(include_components = TRUE) keeps component layers", {
+  fit <- make_pr_fit_curve(q = 4, rh = 5)
+  p <- plot_nwqs_effect_curve(fit, include_components = TRUE)
+  expect_true("term" %in% names(p$data))
+  expect_true(length(unique(p$data$term)) > 1)
+})
+
+test_that("plot_nwqs_effect_curve dispatches on nwqs_boot", {
+  fit <- make_boot_fit(n_boot = 8)
+  p <- plot_nwqs_effect_curve(fit)
+  expect_s3_class(p, "ggplot")
+  expect_equal(unique(p$data$inference_type), "bootstrap")
+})

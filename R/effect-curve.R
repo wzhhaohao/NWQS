@@ -113,6 +113,80 @@ extract_nwqs_effect_curve.nwqs <- function(model,
   out
 }
 
+#' @title Plot the NWQS Partial-Effect Curve Relative to a Reference Percentile
+#'
+#' @description
+#' Renders the joint partial-effect curve from
+#' \code{extract_nwqs_effect_curve()} as a ggplot. By default only the overall
+#' curve is drawn (median-centered with \code{ref = 0.5}). For \code{nwqs_boot}
+#' inputs the ribbon is a valid bootstrap percentile band; for \code{nwqs}
+#' inputs with \code{rh > 1} the ribbon is the empirical RH band (algorithmic
+#' variance only -- not valid sampling inference).
+#'
+#' @param model An object of class \code{"nwqs"} or \code{"nwqs_boot"}.
+#' @param grid Numeric vector. Default \code{seq(0, 1, by = 0.01)}.
+#' @param ref Numeric scalar. Default \code{0.5}.
+#' @param include_components Logical. If \code{FALSE} (default), only the
+#'   Overall curve is plotted. If \code{TRUE}, component curves are overlaid.
+#' @param label_style One of \code{"auto"}, \code{"P"}, \code{"Q"},
+#'   \code{"numeric"} (mirrors the extractor signature).
+#' @param base_size Integer. Base font size for the ggplot theme. Default 12.
+#'
+#' @return A \code{ggplot} object.
+#'
+#' @export
+plot_nwqs_effect_curve <- function(model,
+                                   grid               = NWQS_DEFAULTS$effect_curve_grid,
+                                   ref                = NULL,
+                                   include_components = FALSE,
+                                   label_style        = c("auto", "P", "Q", "numeric"),
+                                   base_size          = 12) {
+  label_style <- match.arg(label_style)
+  ref_pt    <- .resolve_ref(model, ref)
+  ref_label <- .contrast_point_label(
+    ref_pt,
+    transform_type = model$transform_type,
+    label_style    = .label_style_default(model$transform_type)
+  )
+
+  df <- extract_nwqs_effect_curve(
+    model,
+    grid               = grid,
+    ref                = ref_pt,
+    include_components = include_components,
+    label_style        = label_style
+  )
+
+  x_label <- if (identical(model$transform_type, "percentile_rank")) {
+    "Joint exposure percentile rank"
+  } else {
+    "Quantile index"
+  }
+  y_label <- sprintf("Partial effect change relative to %s", ref_label)
+
+  has_ci <- any(!is.na(df$lower))
+
+  p <- ggplot2::ggplot(df,
+                       ggplot2::aes(x = x, y = estimate,
+                                    color = term, fill = term, group = term)) +
+    ggplot2::geom_hline(yintercept = 0, linetype = "dashed",
+                        color = "#95A5A6", linewidth = 0.5) +
+    ggplot2::theme_minimal(base_size = base_size) +
+    ggplot2::labs(title = "NWQS Partial-Effect Curve",
+                  x = x_label, y = y_label)
+
+  if (has_ci) {
+    p <- p + ggplot2::geom_ribbon(ggplot2::aes(ymin = lower, ymax = upper),
+                                  alpha = 0.15, color = NA)
+  }
+  p <- p + ggplot2::geom_line(linewidth = 1.1)
+
+  if (!include_components) {
+    p <- p + ggplot2::theme(legend.position = "none")
+  }
+  p
+}
+
 #' @export
 extract_nwqs_effect_curve.nwqs_boot <- function(model,
                                                 grid               = NWQS_DEFAULTS$effect_curve_grid,
