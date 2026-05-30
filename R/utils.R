@@ -500,43 +500,90 @@ nwqs_contrast <- function(model, q_target = NULL, q_ref = 0) {
 }
 
 
-#' @title Extract Detailed Quantile Contrast Effects from NWQS Model
+#' @title Extract Detailed Contrast Effects from an NWQS Model
 #'
 #' @description
-#' Computes all possible quantile contrast effects (e.g., Q2 vs Q1, Q3 vs Q1,
-#' Q4 vs Q1), decomposing the overall effect into component-specific
-#' contributions. Standard errors and empirical confidence intervals are
-#' derived from repeated holdout iterations.
+#' Computes joint-exposure contrast effects between user-chosen exposure points
+#' and a reference point, decomposing the overall effect into component-specific
+#' contributions. The contrast points are interpreted on the model's transform
+#' scale: \code{[0, 1]} percentile rank when
+#' \code{model$transform_type = "percentile_rank"}, or quantile-bin indices
+#' \code{0:(q-1)} when \code{model$transform_type = "q_bin"}.
 #'
-#' @param model_res An object of class \code{"nwqs"}.
+#' @details
+#' Default contrast points reproduce the legacy numeric grid of the model
+#' (\code{.nwqs_eval_points(model)}); only the \code{Target} column labels
+#' change from \code{Q*_vs_Q1} (q_bin) to \code{P*_vs_P*} (percentile_rank).
+#' Confidence intervals come from repeated holdout iterations when invoked on
+#' an \code{"nwqs"} object; they come from the bootstrap distribution when
+#' invoked on an \code{"nwqs_boot"} object (S3 dispatch).
+#'
+#' @param model_res An object of class \code{"nwqs"} or \code{"nwqs_boot"}.
+#' @param contrast_points Numeric vector, or \code{NULL}. Points at which to
+#'   evaluate the contrast vs. \code{ref}. When \code{NULL}, defaults to
+#'   \code{.nwqs_eval_points(model_res)}. Must lie in \code{[0, 1]} for
+#'   percentile_rank.
+#' @param ref Numeric scalar, or \code{NULL}. Reference point. When
+#'   \code{NULL}, defaults to \code{0.5} (percentile_rank) or \code{0} (q_bin).
+#'   For paper-style IQR contrasts use \code{ref = 0.25}; for median-centered
+#'   contrasts use \code{ref = 0.5}.
+#' @param label_style One of \code{"auto"}, \code{"P"}, \code{"Q"},
+#'   \code{"numeric"}. \code{"auto"} (default) picks \code{"P"} for
+#'   percentile_rank and \code{"Q"} for q_bin.
 #' @param return_raw Logical. Currently unused; reserved for future extensions.
 #'
-#' @return A \code{data.frame} with columns: Target, Term, Estimate, SE,
-#'   Wald_CI_Lower, Wald_CI_Upper, Empirical_CI_Lower, Empirical_CI_Upper.
+#' @return A \code{data.frame} with columns: \code{Target}, \code{Term},
+#'   \code{Estimate}, \code{SE}, \code{Wald_CI_Lower}, \code{Wald_CI_Upper},
+#'   \code{Empirical_CI_Lower}, \code{Empirical_CI_Upper}. The
+#'   \code{"nwqs_boot"} method instead returns \code{Boot_CI_Lower} and
+#'   \code{Boot_CI_Upper}.
 #'
 #' @importFrom splines ns
 #' @export
-extract_nwqs_effects <- function(model_res, return_raw = FALSE) {
-  q_level <- if (!is.null(model_res$q)) model_res$q else 4
-  df_spline <- model_res$df_spline
-  comps <- colnames(model_res$rh_weights)
-  rh <- model_res$rh
-  model_knots <- model_res$spline_knots
-  model_boundary <- model_res$spline_boundary
-  eval_points_std <- .nwqs_eval_points(model_res)
+extract_nwqs_effects <- function(model_res,
+                                 contrast_points = NULL,
+                                 ref             = NULL,
+                                 label_style     = c("auto", "P", "Q", "numeric"),
+                                 return_raw      = FALSE) {
+  if (inherits(model_res, "nwqs_boot")) {
+    return(.extract_nwqs_effects_boot(model_res, contrast_points, ref, label_style))
+  }
+  label_style <- match.arg(label_style)
+  if (identical(label_style, "auto")) {
+    label_style <- .label_style_default(model_res$transform_type)
+  }
 
-  basis_std <- splines::ns(eval_points_std,
-    df = df_spline, knots = model_knots, Boundary.knots = model_boundary, intercept = FALSE
+  df_spline   <- model_res$df_spline
+  comps       <- colnames(model_res$rh_weights)
+  rh          <- model_res$rh
+  model_knots <- model_res$spline_knots
+  model_bound <- model_res$spline_boundary
+
+  points <- .resolve_contrast_points(model_res, contrast_points)
+  ref_pt <- .resolve_ref(model_res, ref)
+
+  if (is.null(contrast_points) && is.null(ref)) {
+    ref_pt <- points[1]
+    target_points <- points[-1]
+  } else {
+    target_points <- points[!vapply(points, function(p) isTRUE(all.equal(p, ref_pt)),
+                                    logical(1))]
+  }
+  if (length(target_points) == 0) {
+    stop("All `contrast_points` equal `ref`; nothing to contrast.", call. = FALSE)
+  }
+
+  eval_seq <- c(ref_pt, target_points)
+  basis_std <- splines::ns(
+    eval_seq, df = df_spline,
+    knots = model_knots, Boundary.knots = model_bound, intercept = FALSE
   )
 
-  res_list <- list()
+  res_list <- vector("list", length(target_points))
 
-  for (q_tgt in 2:q_level) {
-    b_diff <- basis_std[q_tgt, ] - basis_std[1, ]
-    iter_effects <- matrix(0, nrow = rh, ncol = length(comps) + 1)
-    colnames(iter_effects) <- c("Overall", comps)
-
-    iter_effects <- matrix(NA_real_, nrow = rh, ncol = length(comps) + 1)
+  for (t in seq_along(target_points)) {
+    b_diff <- basis_std[t + 1L, ] - basis_std[1L, ]
+    iter_effects <- matrix(NA_real_, nrow = rh, ncol = length(comps) + 1L)
     colnames(iter_effects) <- c("Overall", comps)
 
     for (i in seq_len(rh)) {
@@ -544,38 +591,45 @@ extract_nwqs_effects <- function(model_res, return_raw = FALSE) {
       if (!is.finite(beta_i)) next
       comp_effs_i <- numeric(length(comps))
       names(comp_effs_i) <- comps
-
       for (comp in comps) {
-        theta_cols <- paste0(comp, "_B", 1:df_spline)
+        theta_cols <- paste0(comp, "_B", seq_len(df_spline))
         theta_i <- model_res$rh_shapes[i, theta_cols]
-        w_i <- model_res$rh_weights[i, comp]
+        w_i     <- model_res$rh_weights[i, comp]
         comp_effs_i[comp] <- beta_i * w_i * sum(b_diff * theta_i)
       }
-
       iter_effects[i, "Overall"] <- sum(comp_effs_i)
-      iter_effects[i, comps] <- comp_effs_i
+      iter_effects[i, comps]     <- comp_effs_i
     }
 
     est_vec <- colMeans(iter_effects, na.rm = TRUE)
-    se_vec <- apply(iter_effects, 2, sd, na.rm = TRUE)
-    emp_ci <- apply(iter_effects, 2, quantile, probs = c(0.025, 0.975), na.rm = TRUE)
+    se_vec  <- apply(iter_effects, 2, sd, na.rm = TRUE)
+    emp_ci  <- apply(iter_effects, 2, quantile, probs = c(0.025, 0.975), na.rm = TRUE)
 
-    res_list[[q_tgt - 1]] <- data.frame(
-      Target = paste0("Q", q_tgt, "_vs_Q1"),
-      Term = names(est_vec),
-      Estimate = est_vec,
-      SE = se_vec,
-      Wald_CI_Lower = est_vec - 1.96 * se_vec,
-      Wald_CI_Upper = est_vec + 1.96 * se_vec,
+    label <- .contrast_pair_label(target_points[t], ref_pt,
+                                  model_res$transform_type, label_style)
+    res_list[[t]] <- data.frame(
+      Target             = label,
+      Term               = names(est_vec),
+      Estimate           = est_vec,
+      SE                 = se_vec,
+      Wald_CI_Lower      = est_vec - 1.96 * se_vec,
+      Wald_CI_Upper      = est_vec + 1.96 * se_vec,
       Empirical_CI_Lower = emp_ci[1, ],
       Empirical_CI_Upper = emp_ci[2, ],
-      stringsAsFactors = FALSE
+      stringsAsFactors   = FALSE
     )
   }
 
   final_df <- do.call(rbind, res_list)
   rownames(final_df) <- NULL
-  return(final_df)
+  final_df
+}
+
+# Stub: real implementation lands in the bootstrap-CI task.
+.extract_nwqs_effects_boot <- function(model, contrast_points, ref, label_style) {
+  stop("extract_nwqs_effects() does not yet support nwqs_boot objects; ",
+       "the bootstrap-CI dispatch is implemented in a follow-up task.",
+       call. = FALSE)
 }
 
 

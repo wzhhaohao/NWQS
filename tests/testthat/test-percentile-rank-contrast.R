@@ -37,3 +37,73 @@ test_that(".validate_pr_points rejects out-of-[0,1] in percentile_rank", {
   expect_silent(NWQS:::.validate_pr_points(c(0, 0.5, 1), "percentile_rank"))
   expect_silent(NWQS:::.validate_pr_points(c(0, 3),     "q_bin"))
 })
+
+make_pr_fit <- function(family = "gaussian", q = 4, rh = 5) {
+  set.seed(2026)
+  n <- 80
+  mix <- data.frame(
+    Component1 = rnorm(n),
+    Component2 = rnorm(n),
+    Component3 = rnorm(n)
+  )
+  beta <- c(0.6, 0.3, 0.1)
+  eta  <- as.matrix(mix) %*% beta + rnorm(n, sd = 0.5)
+  y <- switch(family,
+    gaussian = as.numeric(eta),
+    binomial = rbinom(n, 1, plogis(eta)),
+    poisson  = rpois(n, exp(eta))
+  )
+  dat <- cbind(mix, y = y)
+  nwqs(
+    data = dat, mix_name = paste0("Component", 1:3),
+    outcome = "y", family = family,
+    transform_type = "percentile_rank", q = q,
+    rh = rh, n_permutation = 5, seed = 1234, quiet = TRUE
+  )
+}
+
+make_qbin_fit <- function(q = 4, rh = 5) {
+  set.seed(99)
+  n <- 80
+  mix <- data.frame(C1 = rnorm(n), C2 = rnorm(n))
+  y   <- mix$C1 + rnorm(n, sd = 0.5)
+  dat <- cbind(mix, y = y)
+  nwqs(
+    data = dat, mix_name = c("C1", "C2"), outcome = "y",
+    family = "gaussian",
+    transform_type = "q_bin", q = q, rh = rh,
+    n_permutation = 5, seed = 1234, quiet = TRUE
+  )
+}
+
+test_that("extract_nwqs_effects (percentile_rank) uses P labels by default", {
+  fit <- make_pr_fit(q = 4, rh = 5)
+  eff <- extract_nwqs_effects(fit)
+  expect_true(all(grepl("^P[0-9]+_vs_P[0-9]+$", unique(eff$Target))))
+  expect_false(any(grepl("Q", eff$Target)))
+  expect_equal(sort(unique(eff$Target)),
+               sort(c("P33_vs_P0", "P67_vs_P0", "P100_vs_P0")))
+})
+
+test_that("extract_nwqs_effects respects user contrast_points/ref", {
+  fit <- make_pr_fit(q = 4, rh = 5)
+  eff <- extract_nwqs_effects(fit,
+                              contrast_points = c(0.25, 0.75),
+                              ref = 0.5)
+  expect_equal(sort(unique(eff$Target)), c("P25_vs_P50", "P75_vs_P50"))
+})
+
+test_that("extract_nwqs_effects rejects points outside [0,1] for percentile_rank", {
+  fit <- make_pr_fit(q = 4, rh = 5)
+  expect_error(
+    extract_nwqs_effects(fit, contrast_points = c(0.5, 1.2)),
+    "\\[0, 1\\]"
+  )
+})
+
+test_that("extract_nwqs_effects q_bin keeps Q labels (backward compat)", {
+  fit <- make_qbin_fit(q = 4, rh = 5)
+  eff <- extract_nwqs_effects(fit)
+  expect_equal(sort(unique(eff$Target)),
+               c("Q2_vs_Q1", "Q3_vs_Q1", "Q4_vs_Q1"))
+})
