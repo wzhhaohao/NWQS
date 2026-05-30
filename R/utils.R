@@ -330,37 +330,99 @@ wqs_nonlinear_expand <- function(data, mix_name, df_spline = 3,
 }
 
 
-#' @title Compute NWQS Joint Exposure Quantile Contrast Effects
+#' @title Compute NWQS Joint Exposure Contrast Effects
 #'
 #' @description
-#' Evaluates the overall mixture non-linear effect significance and computes
-#' joint exposure quantile contrasts (e.g., all components simultaneously at
-#' their highest quantile vs. lowest). For logistic and Poisson models, results
-#' are automatically converted to odds ratios (OR) and rate ratios (RR).
+#' Evaluates the overall mixture non-linear effect significance and computes a
+#' joint exposure contrast between a target point and a reference point on the
+#' model's transform scale. For logistic and Poisson models, results are
+#' automatically converted to odds ratios (OR) and rate ratios (RR).
 #'
-#' @param model An object of class \code{"nwqs"}.
-#' @param q_target Integer. Target quantile index (0-based). For example, 3
-#'   represents Q4. If \code{NULL}, automatically set to the maximum quantile.
-#' @param q_ref Integer. Reference quantile index (0-based). Default is 0 (Q1).
+#' @details
+#' When \code{model$transform_type = "percentile_rank"}, \code{target} and
+#' \code{ref} are interpreted as percentile-rank positions in \code{[0, 1]} and
+#' the printed title says \dQuote{Percentile-rank Contrast}; when
+#' \code{transform_type = "q_bin"}, the printed title keeps \dQuote{Quantile
+#' Contrast} and \code{q_target} / \code{q_ref} drive the legacy 0-based
+#' quantile-bin indexing. For applied-paper main tables the recommended choice
+#' is \code{target = 0.75, ref = 0.25} (IQR contrast).
 #'
-#' @return Invisibly returns a list containing \code{delta_eta}, \code{lower},
-#'   and \code{upper}. When \code{rh = 1}, confidence bounds are \code{NA}.
+#' @param model An object of class \code{"nwqs"} (or a bare \code{glm} from
+#'   an \code{rh = 1} fit).
+#' @param target Numeric scalar, or \code{NULL}. Target point on the transform
+#'   scale. When \code{NULL}, defaults to \code{0.75} (percentile_rank) or to
+#'   the maximum eval point \code{q - 1} (q_bin).
+#' @param ref Numeric scalar, or \code{NULL}. Reference point. When
+#'   \code{NULL}, defaults to \code{0.5} (percentile_rank) or \code{0} (q_bin).
+#' @param q_target Legacy 0-based target quantile-bin index, for q_bin
+#'   backward compatibility. Ignored (with a warning) if \code{target} is
+#'   supplied.
+#' @param q_ref Legacy 0-based reference quantile-bin index. Ignored (with a
+#'   warning) if \code{ref} is supplied.
+#' @param label_style One of \code{"auto"}, \code{"P"}, \code{"Q"},
+#'   \code{"numeric"}. \code{"auto"} (default) picks \code{"P"} for
+#'   percentile_rank and \code{"Q"} for q_bin.
+#'
+#' @return Invisibly, a list with \code{delta_eta}, \code{lower}, \code{upper},
+#'   \code{target}, \code{ref}, \code{target_label}, \code{ref_label}, and
+#'   \code{transform_type}. When \code{rh = 1}, CI bounds are \code{NA}.
 #'
 #' @importFrom splines ns
 #' @importFrom stats quantile coef
 #' @export
-nwqs_contrast <- function(model, q_target = NULL, q_ref = 0) {
-  if (is.null(q_target)) {
-    q_target <- if (!is.null(model$q)) model$q - 1 else 3
+nwqs_contrast <- function(model,
+                          target      = NULL,
+                          ref         = NULL,
+                          q_target    = NULL,
+                          q_ref       = NULL,
+                          label_style = c("auto", "P", "Q", "numeric")) {
+  label_style <- match.arg(label_style)
+  is_glm <- inherits(model, "glm")
+  transform_type <- if (is_glm) "q_bin" else model$transform_type
+  if (identical(label_style, "auto")) {
+    label_style <- .label_style_default(transform_type)
   }
 
-  is_binomial <- FALSE
-  if (inherits(model, "glm")) {
-    is_binomial <- model$family$family == "binomial"
-    rh <- 1
+  if (!is.null(target) && !is.null(q_target)) {
+    warning("Both `target` and `q_target` supplied; using `target` and ignoring `q_target`.",
+            call. = FALSE)
+    q_target <- NULL
+  }
+  if (!is.null(ref) && !is.null(q_ref)) {
+    warning("Both `ref` and `q_ref` supplied; using `ref` and ignoring `q_ref`.",
+            call. = FALSE)
+    q_ref <- NULL
+  }
+
+  resolved_target <- if (!is.null(target)) {
+    .validate_pr_points(target, transform_type); as.numeric(target)
+  } else if (!is.null(q_target)) {
+    .nwqs_eval_points(model)[as.integer(q_target) + 1L]
+  } else if (identical(transform_type, "percentile_rank")) {
+    NWQS_DEFAULTS$contrast_target_pr
   } else {
-    is_binomial <- model$family == "binomial"
-    rh <- model$rh
+    qmax <- if (!is.null(model$q)) model$q - 1L else 3L
+    .nwqs_eval_points(model)[qmax + 1L]
+  }
+
+  resolved_ref <- if (!is.null(ref)) {
+    .validate_pr_points(ref, transform_type); as.numeric(ref)
+  } else if (!is.null(q_ref)) {
+    .nwqs_eval_points(model)[as.integer(q_ref) + 1L]
+  } else if (identical(transform_type, "percentile_rank")) {
+    NWQS_DEFAULTS$contrast_ref_pr
+  } else {
+    .nwqs_eval_points(model)[NWQS_DEFAULTS$contrast_ref_q_bin + 1L]
+  }
+
+  target_lbl <- .contrast_point_label(resolved_target, transform_type, label_style)
+  ref_lbl    <- .contrast_point_label(resolved_ref,    transform_type, label_style)
+
+  rh <- if (is_glm) 1L else model$rh
+  is_binomial <- if (is_glm) {
+    model$family$family == "binomial"
+  } else {
+    model$family == "binomial"
   }
 
   cat("\n======================================================\n")
@@ -378,23 +440,17 @@ nwqs_contrast <- function(model, q_target = NULL, q_ref = 0) {
   } else {
     wqs_betas <- model$rh_coefs[, "nwqs"]
     wqs_betas <- wqs_betas[is.finite(wqs_betas)]
-
     if (length(wqs_betas) == 0) {
       stop("All RH 'nwqs' coefficients are NA/NaN/Inf; cannot compute overall mixture significance.")
     }
-
     mean_beta <- mean(wqs_betas, na.rm = TRUE)
-    ci_lower <- quantile(wqs_betas, 0.025, na.rm = TRUE)
-    ci_upper <- quantile(wqs_betas, 0.975, na.rm = TRUE)
-    p_val_emp <- 2 * min(
-      mean(wqs_betas > 0, na.rm = TRUE),
-      mean(wqs_betas < 0, na.rm = TRUE)
-    )
-
+    ci_lower  <- quantile(wqs_betas, 0.025, na.rm = TRUE)
+    ci_upper  <- quantile(wqs_betas, 0.975, na.rm = TRUE)
+    p_val_emp <- 2 * min(mean(wqs_betas > 0, na.rm = TRUE),
+                         mean(wqs_betas < 0, na.rm = TRUE))
     cat(sprintf("Mean Beta across RH iterations :  %.4f\n", mean_beta))
     cat(sprintf("Empirical 95%% CI             : [%.4f, %.4f]\n", ci_lower, ci_upper))
     cat(sprintf("Empirical P-value            :  %.4f\n", p_val_emp))
-
     if (isTRUE(ci_lower > 0 || ci_upper < 0)) {
       cat("\nConclusion: The overall joint mixture effect is significant (95% CI excludes 0).\n")
     } else {
@@ -402,27 +458,21 @@ nwqs_contrast <- function(model, q_target = NULL, q_ref = 0) {
     }
   }
 
+  contrast_title <- if (identical(transform_type, "percentile_rank")) {
+    "Joint Exposure Percentile-rank Contrast"
+  } else {
+    "Joint Exposure Quantile Contrast"
+  }
   cat("\n======================================================\n")
-  cat(sprintf(" Joint Exposure Quantile Contrast: Target Q%d vs. Ref Q%d\n", q_target + 1, q_ref + 1))
+  cat(sprintf(" %s: Target %s vs. Ref %s\n", contrast_title, target_lbl, ref_lbl))
   cat("======================================================\n")
 
-  if (rh == 1) {
-    shapes_vec <- model$mean_shapes
-    weights_vec <- model$final_weights
-    beta_wqs <- coef(model)["nwqs"]
-  } else {
-    shapes_vec <- model$mean_shapes
-    weights_vec <- model$final_weights
-    beta_wqs <- model$mean_coefs["nwqs"]
-  }
+  shapes_vec  <- model$mean_shapes
+  weights_vec <- model$final_weights
+  beta_wqs    <- if (is_glm) coef(model)["nwqs"] else model$mean_coefs["nwqs"]
+  df_spline   <- max(as.numeric(sub("^.+_B(\\d+)$", "\\1", names(shapes_vec))))
 
-  df_spline <- max(as.numeric(sub("^.+_B(\\d+)$", "\\1", names(shapes_vec))))
-
-  eval_points <- .nwqs_eval_points(model)
-  eval_target <- eval_points[q_target + 1]
-  eval_ref <- eval_points[q_ref + 1]
-
-  b_target <- splines::ns(c(eval_target, eval_ref),
+  b_target <- splines::ns(c(resolved_target, resolved_ref),
     df = df_spline,
     knots = model$spline_knots, Boundary.knots = model$spline_boundary,
     intercept = FALSE
@@ -431,41 +481,40 @@ nwqs_contrast <- function(model, q_target = NULL, q_ref = 0) {
   calc_diff <- function(b_mat, w_vec, s_vec) {
     diff_val <- 0
     for (comp in names(w_vec)) {
-      comp_cols <- paste0(comp, "_B", 1:df_spline)
+      comp_cols <- paste0(comp, "_B", seq_len(df_spline))
       theta <- matrix(s_vec[comp_cols], ncol = 1)
       w <- w_vec[comp]
       s_tgt <- b_mat[1, , drop = FALSE] %*% theta
       s_ref <- b_mat[2, , drop = FALSE] %*% theta
       diff_val <- diff_val + (s_tgt - s_ref) * w
     }
-    return(as.numeric(diff_val))
+    as.numeric(diff_val)
   }
 
   if (rh > 1) {
     diff_list <- numeric(rh)
-    for (i in 1:rh) {
-      beta_i <- model$rh_coefs[i, "nwqs"]
+    for (i in seq_len(rh)) {
+      beta_i  <- model$rh_coefs[i, "nwqs"]
       shape_i <- model$rh_shapes[i, ]
-      weight_i <- model$rh_weights[i, ]
-      score_diff_i <- calc_diff(b_target, weight_i, shape_i)
-      diff_list[i] <- score_diff_i * beta_i
+      w_i     <- model$rh_weights[i, ]
+      diff_list[i] <- calc_diff(b_target, w_i, shape_i) * beta_i
     }
-    delta_eta <- mean(diff_list)
+    delta_eta    <- mean(diff_list)
     ci_lower_eta <- quantile(diff_list, 0.025)
     ci_upper_eta <- quantile(diff_list, 0.975)
   } else {
-    score_diff <- calc_diff(b_target, weights_vec, shapes_vec)
-    delta_eta <- score_diff * beta_wqs
-    ci_lower_eta <- NA
-    ci_upper_eta <- NA
+    delta_eta    <- calc_diff(b_target, weights_vec, shapes_vec) * beta_wqs
+    ci_lower_eta <- NA_real_
+    ci_upper_eta <- NA_real_
   }
 
   cat(sprintf("Absolute Partial Effect Change (\u0394 Eta) :  %.4f\n", delta_eta))
   if (rh > 1) {
-    cat(sprintf("95%% CI (\u0394 Eta)                      : [%.4f, %.4f]\n", ci_lower_eta, ci_upper_eta))
+    cat(sprintf("95%% CI (\u0394 Eta)                      : [%.4f, %.4f]\n",
+                ci_lower_eta, ci_upper_eta))
   }
 
-  is_rate_family <- if (inherits(model, "glm")) {
+  is_rate_family <- if (is_glm) {
     model$family$family %in% c("poisson", "quasipoisson") ||
       grepl("^Negative Binomial", model$family$family)
   } else {
@@ -475,28 +524,31 @@ nwqs_contrast <- function(model, q_target = NULL, q_ref = 0) {
   if (is_binomial) {
     cat("\n----------------- Converted to Odds Ratio (OR) -----------------\n")
     cat(sprintf("Overall Joint OR :  %.4f\n", exp(delta_eta)))
-    if (rh > 1) {
-      cat(sprintf("95%% CI (OR)      : [%.4f, %.4f]\n", exp(ci_lower_eta), exp(ci_upper_eta)))
-    }
-    cat(sprintf(
-      "\n[Interpretation]: When all components at Q%d vs Q%d, OR = %.4f.\n",
-      q_target + 1, q_ref + 1, exp(delta_eta)
-    ))
+    if (rh > 1) cat(sprintf("95%% CI (OR)      : [%.4f, %.4f]\n",
+                            exp(ci_lower_eta), exp(ci_upper_eta)))
+    cat(sprintf("\n[Interpretation]: When all components at %s vs %s, OR = %.4f.\n",
+                target_lbl, ref_lbl, exp(delta_eta)))
   } else if (is_rate_family) {
     cat("\n----------------- Converted to Rate Ratio (RR) -----------------\n")
     cat(sprintf("Overall Joint RR :  %.4f\n", exp(delta_eta)))
-    if (rh > 1) {
-      cat(sprintf("95%% CI (RR)      : [%.4f, %.4f]\n", exp(ci_lower_eta), exp(ci_upper_eta)))
-    }
-    cat(sprintf(
-      "\n[Interpretation]: When all components at Q%d vs Q%d, RR = %.4f.\n",
-      q_target + 1, q_ref + 1, exp(delta_eta)
-    ))
+    if (rh > 1) cat(sprintf("95%% CI (RR)      : [%.4f, %.4f]\n",
+                            exp(ci_lower_eta), exp(ci_upper_eta)))
+    cat(sprintf("\n[Interpretation]: When all components at %s vs %s, RR = %.4f.\n",
+                target_lbl, ref_lbl, exp(delta_eta)))
   } else {
     cat("\n[Interpretation]: Absolute predicted increment on the response scale.\n")
   }
 
-  invisible(list(delta_eta = delta_eta, lower = ci_lower_eta, upper = ci_upper_eta))
+  invisible(list(
+    delta_eta      = delta_eta,
+    lower          = ci_lower_eta,
+    upper          = ci_upper_eta,
+    target         = resolved_target,
+    ref            = resolved_ref,
+    target_label   = target_lbl,
+    ref_label      = ref_lbl,
+    transform_type = transform_type
+  ))
 }
 
 

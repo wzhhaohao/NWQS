@@ -107,3 +107,47 @@ test_that("extract_nwqs_effects q_bin keeps Q labels (backward compat)", {
   expect_equal(sort(unique(eff$Target)),
                c("Q2_vs_Q1", "Q3_vs_Q1", "Q4_vs_Q1"))
 })
+
+test_that("nwqs_contrast prints 'Percentile-rank Contrast' in percentile_rank", {
+  fit <- make_pr_fit(q = 4, rh = 5)
+  out <- capture.output(nwqs_contrast(fit, target = 0.75, ref = 0.5))
+  combined <- paste(out, collapse = "\n")
+  expect_true(grepl("Percentile-rank Contrast", combined))
+  expect_true(grepl("Target P75", combined))
+  expect_true(grepl("Ref P50",    combined))
+  expect_false(grepl("Q[0-9]+ vs Q[0-9]+", combined))
+})
+
+test_that("nwqs_contrast default in percentile_rank = target 0.75 vs ref 0.5", {
+  fit <- make_pr_fit(q = 4, rh = 5)
+  out <- capture.output(nwqs_contrast(fit))
+  combined <- paste(out, collapse = "\n")
+  expect_true(grepl("Target P75",  combined))
+  expect_true(grepl("Ref P50",     combined))
+})
+
+test_that("nwqs_contrast q_bin keeps the legacy Q-label printout", {
+  fit <- make_qbin_fit(q = 4, rh = 5)
+  out <- capture.output(nwqs_contrast(fit))
+  combined <- paste(out, collapse = "\n")
+  expect_true(grepl("Quantile Contrast", combined))
+  expect_true(grepl("Target Q4",         combined))
+  expect_true(grepl("Ref Q1",            combined))
+})
+
+test_that("nwqs_contrast warns when both target and q_target are supplied", {
+  fit <- make_pr_fit(q = 4, rh = 5)
+  tmp <- tempfile()
+  conn <- file(tmp, open = "wt")
+  sink(conn)
+  on.exit({ sink(); close(conn); unlink(tmp) }, add = TRUE)
+  expect_warning(
+    nwqs_contrast(fit, target = 0.75, q_target = 3),
+    "Both"
+  )
+})
+
+test_that("nwqs_contrast rejects target outside [0,1] in percentile_rank", {
+  fit <- make_pr_fit(q = 4, rh = 5)
+  expect_error(nwqs_contrast(fit, target = 1.5), "\\[0, 1\\]")
+})
