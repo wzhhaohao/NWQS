@@ -626,7 +626,7 @@ plot_nwqs_contrast_box <- function(model,
   q_levels_str <- paste0("Q", 2:(if (!is.null(model$q)) model$q else 4))
   plot_df$Quantile <- factor(plot_df$Quantile, levels = q_levels_str)
 
-  is_exp_family <- model$family %in% c("binomial", "poisson", "quasipoisson")
+  is_exp_family <- model$family %in% c("binomial", "poisson", "quasipoisson", "negbin")
   if (is.null(exponentiate)) exponentiate <- is_exp_family
 
   if (exponentiate) {

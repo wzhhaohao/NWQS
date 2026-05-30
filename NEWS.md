@@ -26,6 +26,13 @@ Migration:
   ```
 - Numerical results for the percentile-rank default will differ from 0.1.x because the underlying spline basis and `u_i` values differ. Final weights and the `nwqs` index coefficient are not directly comparable across the two transforms; interpret weights relative to each other within a single fit.
 
+Landed in Phase 4 (C): family = "negbin" via MASS::glm.nb
+
+- **`nwqs()` and `nwqs_boot()` now accept `family = "negbin"`** for overdispersed count outcomes. The final NWQS regression on the validation split is fit with `MASS::glm.nb()`; for `rh = 1` the returned `$model_obj` is a `MASS::glm.nb` object, so `predict()`, `vcov()`, `confint()`, and `broom::tidy()` / `glance()` all work without any further wiring.
+- **OOB importance for negbin uses a Poisson surrogate** inside `permutation_scorer()` (via `run_oob_permutation()`). The Poisson and negative binomial deviances differ by an additive theta-dependent constant that drops out of the per-component permutation delta, so the ranking is unchanged; this avoids paying the cost of a theta search on every bootstrap iteration of the inner scorer.
+- **`gen_nbin_data(n_obs, n_vars, beta, intercept, theta, snr_db, seed)`** added to `R/simulate_data.R`. Returns counts with columns `y, V1, V2, ...`; used as the fixture in `tests/testthat/test-family-negbin.R`.
+- The `is_exp_family` test used by `print()` / `summary()` / `plot()` to decide between additive (`Delta`) and exponentiated (`OR / RR`) display now includes `"negbin"` and reports its effects on the rate-ratio scale, matching Poisson.
+
 Landed in Phase 4 (A+B): standard S3 methods
 
 - **`predict.nwqs(object, newdata, type)`** and **`predict.nwqs_boot(object, newdata, type)`** added. `type` is one of `"response"` (default), `"link"`, or `"nwqs_index"`. The training-sample empirical CDF stored as `train_components_sorted` is reused for percentile-rank transforms; the training quantile breaks are reused for `q_bin` transforms. The same globally aligned spline knots that were used during fitting are reused so newdata is scored on the same scale.

@@ -694,3 +694,61 @@ gen_nonlinear_count_data <- function(n_obs = 1000, mu_preds, sigma_preds,
   attr(final_df, "spline_boundary") <- global_boundary
   return(as.data.frame(final_df))
 }
+
+
+#' @title Generate Negative-Binomial Outcome Data with a Linear Predictor
+#'
+#' @description
+#' Lightweight generator for overdispersed count data with a known true
+#' linear predictor. Used as a fixture in \code{tests/testthat/test-family-negbin.R}
+#' and as a starting point for the upcoming applied-domain vignette.
+#'
+#' @details
+#' Samples independent standard-normal predictors \eqn{V_1, \ldots, V_p},
+#' constructs the linear predictor
+#' \deqn{\eta = \alpha + \sum_j \beta_j V_j,}
+#' optionally injects Gaussian noise on the link scale at the requested
+#' \code{snr_db} (see \code{\link{add_noise_by_snr}}), then draws
+#' \eqn{y \sim \mathrm{NB}(\mu = \exp(\eta),\, \theta)} via
+#' \code{MASS::rnegbin}.
+#'
+#' Predictors are returned as columns \code{V1}, \code{V2}, ... to keep
+#' the fixture stable across releases.
+#'
+#' @param n_obs Integer. Sample size.
+#' @param n_vars Integer. Number of predictors. Default is 3.
+#' @param beta Numeric vector of length \code{n_vars}. Coefficients on
+#'   the link scale.
+#' @param intercept Numeric. Intercept on the link scale. Default is 0.
+#' @param theta Numeric. Negative-binomial dispersion parameter (smaller =
+#'   more overdispersion). Default is 2.
+#' @param snr_db Numeric. Link-scale signal-to-noise ratio in dB used by
+#'   \code{add_noise_by_snr()}. Default is \code{Inf} (no noise).
+#' @param seed Integer or \code{NULL}. Random seed.
+#'
+#' @return A \code{data.frame} with columns \code{y, V1, V2, ..., V_{n_vars}}.
+#'
+#' @export
+gen_nbin_data <- function(n_obs = 500, n_vars = 3, beta = rep(0, n_vars),
+                          intercept = 0, theta = 2, snr_db = Inf,
+                          seed = NULL) {
+  if (!is.null(seed)) set.seed(seed)
+  if (!requireNamespace("MASS", quietly = TRUE)) {
+    stop("Package 'MASS' is required for gen_nbin_data().")
+  }
+  if (length(beta) != n_vars) {
+    stop(sprintf("length(beta) must equal n_vars (got %d vs %d).",
+                 length(beta), n_vars))
+  }
+
+  X <- matrix(rnorm(n_obs * n_vars), nrow = n_obs, ncol = n_vars)
+  colnames(X) <- paste0("V", seq_len(n_vars))
+
+  eta <- intercept + as.numeric(X %*% beta)
+  eta_obs <- if (is.finite(snr_db)) add_noise_by_snr(eta, snr_db) else eta
+  mu <- exp(eta_obs)
+
+  y <- MASS::rnegbin(n = n_obs, mu = mu, theta = theta)
+
+  data.frame(y = y, X)
+}

@@ -72,7 +72,10 @@
 #'   importance. Default is 30 (raised from 10 in 0.2.0 for more stable
 #'   weight estimates on small samples).
 #' @param family Character. Error distribution: \code{"gaussian"},
-#'   \code{"binomial"}, \code{"poisson"}, or \code{"quasipoisson"}.
+#'   \code{"binomial"}, \code{"poisson"}, \code{"quasipoisson"}, or
+#'   \code{"negbin"}. \code{"negbin"} fits the final NWQS regression
+#'   with \code{MASS::glm.nb()}; the inner OOB permutation loss uses a
+#'   Poisson surrogate for speed (the importance ranking is unchanged).
 #' @param plan_strategy Character. Parallel strategy: \code{"sequential"},
 #'   \code{"multicore"}, or \code{"multisession"}.
 #' @param n_workers Integer. Number of parallel workers. If \code{NULL},
@@ -109,7 +112,7 @@ nwqs <- function(data, mix_name, covariates = NULL, outcome = "y",
                  min_shape_sd = 1e-8,
                  transform_fun = NULL,
                  train_prop = 0.6, rh = 10, seed = 1234, n_permutation = 30,
-                 family = c("gaussian", "binomial", "poisson", "quasipoisson"),
+                 family = c("gaussian", "binomial", "poisson", "quasipoisson", "negbin"),
                  plan_strategy = c("sequential", "multisession", "multicore"),
                  n_workers = NULL, quiet = FALSE, ...) {
   family <- match.arg(family)
@@ -283,7 +286,18 @@ nwqs <- function(data, mix_name, covariates = NULL, outcome = "y",
     nwqs <- as.matrix(valid_trans[, expected_cols, drop = FALSE]) %*% combined_coefs
     data_valid$nwqs <- as.vector(nwqs)
 
-    fit <- glm(formula_final, data = data_valid, family = family)
+    if (family == "negbin") {
+      if (!requireNamespace("MASS", quietly = TRUE)) {
+        stop("Please install the 'MASS' package to use family = 'negbin'.")
+      }
+      fit <- tryCatch(
+        suppressWarnings(MASS::glm.nb(formula_final, data = data_valid)),
+        error = function(e) NULL
+      )
+      if (is.null(fit)) return(NULL)
+    } else {
+      fit <- glm(formula_final, data = data_valid, family = family)
+    }
     aic_val <- if (family == "quasipoisson") NA_real_ else AIC(fit)
     null_dev <- fit$null.deviance
     res_dev <- fit$deviance
@@ -471,7 +485,8 @@ nwqs <- function(data, mix_name, covariates = NULL, outcome = "y",
 #' @param covariates Character vector or \code{NULL}. Covariates/confounders.
 #' @param outcome Character. Outcome column name. Default is \code{"y"}.
 #' @param family Character. Error distribution: \code{"gaussian"},
-#'   \code{"binomial"}, \code{"poisson"}, or \code{"quasipoisson"}.
+#'   \code{"binomial"}, \code{"poisson"}, \code{"quasipoisson"}, or
+#'   \code{"negbin"}.
 #' @param n_boot Integer. Number of bootstrap replicates. Default is 100.
 #' @param rh_inner Integer. RH iterations per bootstrap replicate. Default
 #'   is 1.
@@ -519,7 +534,7 @@ nwqs_boot <- function(data,
                       mix_name,
                       covariates = NULL,
                       outcome = "y",
-                      family = c("gaussian", "binomial", "poisson", "quasipoisson"),
+                      family = c("gaussian", "binomial", "poisson", "quasipoisson", "negbin"),
                       n_boot = 100,
                       rh_inner = 1,
                       n_permutation = 30,
@@ -699,7 +714,7 @@ nwqs_boot <- function(data,
   ci_table <- merge(ci_table, ci_upper, by = c("Target", "Term"), all.x = TRUE)
   ci_table$N_Success <- n_success
 
-  is_exp_family <- family %in% c("binomial", "poisson", "quasipoisson")
+  is_exp_family <- family %in% c("binomial", "poisson", "quasipoisson", "negbin")
 
   disp_lcl <- ci_table$Boot_CI_Lower
   disp_ucl <- ci_table$Boot_CI_Upper

@@ -20,7 +20,7 @@ nwqs(
   rh = 10,
   seed = 1234,
   n_permutation = 30,
-  family = c("gaussian", "binomial", "poisson", "quasipoisson"),
+  family = c("gaussian", "binomial", "poisson", "quasipoisson", "negbin"),
   plan_strategy = c("sequential", "multisession", "multicore"),
   n_workers = NULL,
   quiet = FALSE,
@@ -81,7 +81,10 @@ importance. Default is 30 (raised from 10 in 0.2.0 for more stable
 weight estimates on small samples).}
 
 \item{family}{Character. Error distribution: \code{"gaussian"},
-\code{"binomial"}, \code{"poisson"}, or \code{"quasipoisson"}.}
+\code{"binomial"}, \code{"poisson"}, \code{"quasipoisson"}, or
+\code{"negbin"}. \code{"negbin"} fits the final NWQS regression
+with \code{MASS::glm.nb()}; the inner OOB permutation loss uses a
+Poisson surrogate for speed (the importance ranking is unchanged).}
 
 \item{plan_strategy}{Character. Parallel strategy: \code{"sequential"},
 \code{"multicore"}, or \code{"multisession"}.}
