@@ -26,6 +26,13 @@ Migration:
   ```
 - Numerical results for the percentile-rank default will differ from 0.1.x because the underlying spline basis and `u_i` values differ. Final weights and the `nwqs` index coefficient are not directly comparable across the two transforms; interpret weights relative to each other within a single fit.
 
+Landed in Phase 4 (E): centralized defaults + `nwqs_control()`
+
+- **`NWQS_DEFAULTS` package-level list** (`R/zzz-defaults.R`) holds every user-facing default value (`q`, `df_spline`, `transform_type`, `ties`, `train_prop`, `rh`, `n_permutation`, `n_boot`, `rh_inner`, `conf_level`, `seed`, `min_shape_sd`, `zero_weight_action`). The formals on `nwqs()` and `nwqs_boot()` read from `NWQS_DEFAULTS$<key>` rather than embedding literals, so a default cannot drift between the two signatures.
+- **`nwqs_control()`** packages "advanced" knobs that previously had no home: `custom_knots`, `custom_boundary`, and `zero_weight_action`. The function validates each argument (numeric, length, allowed values) and returns an `nwqs_control` object. Pass it to `nwqs()` and `nwqs_boot()` via the new `control` argument. Existing soft parameters that already lived on the main signature (`min_shape_sd`, `ties`) are not moved into control in 0.2.0 — keeping them on the signature avoids a needless breaking change.
+- **`nwqs()` and `nwqs_boot()` gain a `control = nwqs_control()` argument** that is forwarded to `build_spline_basis_knots()`, so `custom_knots` and `custom_boundary` actually override the derived spline knots. `nwqs_boot()` passes `control` through to its inner `nwqs()` call.
+- Existing test `test-weights-engine.R` and `test-nwqs-internals.R` updated to `eval(formals(nwqs)$<key>)` because the formals are now language objects referring to the `NWQS_DEFAULTS` list.
+
 Landed in Phase 4 (C): family = "negbin" via MASS::glm.nb
 
 - **`nwqs()` and `nwqs_boot()` now accept `family = "negbin"`** for overdispersed count outcomes. The final NWQS regression on the validation split is fit with `MASS::glm.nb()`; for `rh = 1` the returned `$model_obj` is a `MASS::glm.nb` object, so `predict()`, `vcov()`, `confint()`, and `broom::tidy()` / `glance()` all work without any further wiring.

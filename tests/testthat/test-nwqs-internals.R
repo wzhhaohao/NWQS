@@ -8,7 +8,7 @@
 # ----- min_shape_sd default ----------------------------------------------
 
 test_that("min_shape_sd default is 1e-8 on nwqs()", {
-  expect_equal(formals(nwqs)$min_shape_sd, 1e-8)
+  expect_equal(eval(formals(nwqs)$min_shape_sd), 1e-8)
 })
 
 # ----- Degenerate shape messaging ----------------------------------------

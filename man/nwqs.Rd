@@ -11,18 +11,19 @@ nwqs(
   outcome = "y",
   weight_engine = permutation_scorer,
   transform_type = c("percentile_rank", "q_bin"),
-  q = 4,
+  q = NWQS_DEFAULTS$q,
   ties = c("average", "min", "max", "random"),
-  df_spline = 3,
-  min_shape_sd = 0.00000001,
+  df_spline = NWQS_DEFAULTS$df_spline,
+  min_shape_sd = NWQS_DEFAULTS$min_shape_sd,
   transform_fun = NULL,
-  train_prop = 0.6,
-  rh = 10,
-  seed = 1234,
-  n_permutation = 30,
+  train_prop = NWQS_DEFAULTS$train_prop,
+  rh = NWQS_DEFAULTS$rh,
+  seed = NWQS_DEFAULTS$seed,
+  n_permutation = NWQS_DEFAULTS$n_permutation,
   family = c("gaussian", "binomial", "poisson", "quasipoisson", "negbin"),
   plan_strategy = c("sequential", "multisession", "multicore"),
   n_workers = NULL,
+  control = nwqs_control(),
   quiet = FALSE,
   ...
 )
@@ -91,6 +92,11 @@ Poisson surrogate for speed (the importance ranking is unchanged).}
 
 \item{n_workers}{Integer. Number of parallel workers. If \code{NULL},
 auto-detected.}
+
+\item{control}{Object of class \code{nwqs_control} returned by
+\code{\link{nwqs_control}()}. Bundles advanced knobs that do not live
+on this signature: \code{custom_knots}, \code{custom_boundary},
+\code{zero_weight_action}.}
 
 \item{quiet}{Logical. If \code{TRUE}, suppresses RH variance warnings.
 Typically used when called internally by \code{nwqs_boot()}.}

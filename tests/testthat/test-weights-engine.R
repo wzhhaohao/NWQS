@@ -9,8 +9,8 @@
 # ----- Default n_permutation = 30 ----------------------------------------
 
 test_that("n_permutation default is 30 across nwqs(), nwqs_boot(), permutation_scorer()", {
-  expect_equal(formals(nwqs)$n_permutation, 30)
-  expect_equal(formals(nwqs_boot)$n_permutation, 30)
+  expect_equal(eval(formals(nwqs)$n_permutation), 30)
+  expect_equal(eval(formals(nwqs_boot)$n_permutation), 30)
   expect_equal(formals(permutation_scorer)$n_permutation, 30)
 })
 
