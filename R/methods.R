@@ -176,7 +176,7 @@ plot.nwqs <- function(x, type = c("both", "curves", "weights"),
 
   if (type %in% c("curves", "both")) {
     q_level <- if (!is.null(x$q)) x$q else 4
-    x_seq <- seq(0, q_level - 1, length.out = 100)
+    x_seq <- .nwqs_eval_points(x, n = 100)
     shape_names <- names(x$mean_shapes)
 
     pattern <- "^(.+)_B(\\d+)$"
@@ -228,7 +228,7 @@ plot.nwqs <- function(x, type = c("both", "curves", "weights"),
       if (y_scale == "predicted") {
         if (x$family == "binomial") {
           y_pred_mat <- stats::plogis(y_pred_mat)
-        } else if (x$family %in% c("poisson", "quasipoisson")) y_pred_mat <- exp(y_pred_mat)
+        } else if (x$family %in% c("poisson", "quasipoisson", "negbin")) y_pred_mat <- exp(y_pred_mat)
       }
 
       y_stats <- t(apply(y_pred_mat, 1, function(v) {
@@ -253,6 +253,7 @@ plot.nwqs <- function(x, type = c("both", "curves", "weights"),
         binomial = "Predicted Probability",
         poisson = "Predicted Expected Count",
         quasipoisson = "Predicted Expected Count",
+        negbin = "Predicted Expected Count",
         "Predicted Value"
       )
     } else {
@@ -260,18 +261,24 @@ plot.nwqs <- function(x, type = c("both", "curves", "weights"),
         binomial = "Partial Effect (Log-OR)",
         poisson = "Partial Effect (Log-RR)",
         quasipoisson = "Partial Effect (Log-RR)",
+        negbin = "Partial Effect (Log-RR)",
         "Partial Effect (\u0394Y)"
       )
     }
 
     p_c <- ggplot2::ggplot(final_df, ggplot2::aes(x = x, y = y, color = Component, fill = Component)) +
       ggplot2::theme_minimal(base_size = base_size) +
-      ggplot2::labs(title = "Dose-Response Curves", x = "Quantile Index", y = y_label) +
+      ggplot2::labs(
+        title = "Dose-Response Curves",
+        x = if (identical(x$transform_type, "percentile_rank")) "Percentile Rank" else "Quantile Index",
+        y = y_label
+      ) +
       ggplot2::scale_color_manual(values = curve_colors) +
       ggplot2::scale_fill_manual(values = curve_colors) +
       ggplot2::scale_x_continuous(
-        limits = c(0, q_level - 1),
-        expand = ggplot2::expansion(mult = c(0, 0.02)), breaks = seq(0, q_level - 1, by = 1)
+        limits = range(x_seq),
+        expand = ggplot2::expansion(mult = c(0, 0.02)),
+        breaks = .nwqs_eval_points(x)
       ) +
       ggplot2::theme(
         panel.grid.minor = ggplot2::element_blank(),
@@ -334,12 +341,30 @@ plot.nwqs <- function(x, type = c("both", "curves", "weights"),
 #'
 #' @param x An object of class \code{"nwqs"}.
 #' @param digits Integer. Number of significant digits.
+#' @param contrast_points Numeric vector, or \code{NULL}. Target points on the
+#'   transform scale to display as table columns. For percentile_rank fits, the
+#'   default is \code{c(0.25, 0.75, 0.95)} (paper-style IQR + extreme upper).
+#'   For q_bin fits, the default is \code{1:(q-1)} (legacy Q2..Q\{q\} columns).
+#' @param ref Numeric scalar, or \code{NULL}. Reference point. Defaults to
+#'   \code{0.5} for percentile_rank and \code{0} for q_bin.
+#' @param label_style One of \code{"auto"}, \code{"P"}, \code{"Q"},
+#'   \code{"numeric"}.
 #' @param ... Additional arguments.
 #'
 #' @return Invisibly returns the \code{"nwqs"} object.
 #' @export
 #' @method print nwqs
-print.nwqs <- function(x, digits = max(3L, getOption("digits") - 3L), ...) {
+print.nwqs <- function(x,
+                       digits          = max(3L, getOption("digits") - 3L),
+                       contrast_points = NULL,
+                       ref             = NULL,
+                       label_style     = c("auto", "P", "Q", "numeric"),
+                       ...) {
+  label_style <- match.arg(label_style)
+  if (identical(label_style, "auto")) {
+    label_style <- .label_style_default(x$transform_type)
+  }
+
   cat("\nCall:\n")
   print(x$call)
 
@@ -362,7 +387,33 @@ print.nwqs <- function(x, digits = max(3L, getOption("digits") - 3L), ...) {
 
   q_level <- if (!is.null(x$q)) x$q else 4
   df_spline <- x$df_spline
-  full_basis <- splines::ns(0:(q_level - 1),
+
+  if (is.null(contrast_points)) {
+    contrast_points <- if (identical(x$transform_type, "percentile_rank")) {
+      NWQS_DEFAULTS$contrast_points_print_pr
+    } else {
+      seq_len(q_level - 1L)
+    }
+  } else {
+    .validate_pr_points(contrast_points, x$transform_type)
+    contrast_points <- as.numeric(contrast_points)
+  }
+  ref_pt <- if (is.null(ref)) {
+    if (identical(x$transform_type, "percentile_rank")) {
+      NWQS_DEFAULTS$contrast_ref_pr
+    } else {
+      NWQS_DEFAULTS$contrast_ref_q_bin
+    }
+  } else {
+    .validate_pr_points(ref, x$transform_type); as.numeric(ref)
+  }
+
+  ref_label     <- .contrast_point_label(ref_pt, x$transform_type, label_style)
+  target_labels <- vapply(contrast_points, function(p)
+    .contrast_point_label(p, x$transform_type, label_style), character(1))
+  col_labels    <- paste(target_labels, "vs", ref_label)
+
+  full_basis <- splines::ns(c(ref_pt, contrast_points),
     df = df_spline, knots = x$spline_knots,
     Boundary.knots = x$spline_boundary, intercept = FALSE
   )
@@ -370,15 +421,15 @@ print.nwqs <- function(x, digits = max(3L, getOption("digits") - 3L), ...) {
   comps <- names(x$final_weights)
   rh <- x$rh
 
-  eff_mat_str <- matrix("", nrow = length(comps) + 1, ncol = q_level - 1)
+  eff_mat_str <- matrix("", nrow = length(comps) + 1, ncol = length(contrast_points))
   rownames(eff_mat_str) <- c("Overall", comps)
-  colnames(eff_mat_str) <- paste0("Q", 2:q_level, " vs Q1")
+  colnames(eff_mat_str) <- col_labels
 
   is_exp_family <- x$family %in% c("binomial", "poisson", "quasipoisson", "negbin")
   eff_name <- ifelse(is_exp_family, ifelse(x$family == "binomial", "OR", "RR"), "Delta")
 
-  for (q_tgt in 2:q_level) {
-    b_diff <- full_basis[q_tgt, ] - full_basis[1, ]
+  for (t in seq_along(contrast_points)) {
+    b_diff <- full_basis[t + 1L, ] - full_basis[1L, ]
     iter_effs <- matrix(0, nrow = rh, ncol = length(comps) + 1)
     colnames(iter_effs) <- c("Overall", comps)
 
@@ -388,7 +439,7 @@ print.nwqs <- function(x, digits = max(3L, getOption("digits") - 3L), ...) {
       names(comp_effs_i) <- comps
 
       for (comp in comps) {
-        theta_cols <- paste0(comp, "_B", 1:df_spline)
+        theta_cols <- paste0(comp, "_B", seq_len(df_spline))
         theta_i <- if (rh == 1) x$mean_shapes[theta_cols] else x$rh_shapes[i, theta_cols]
         w_i <- if (rh == 1) x$final_weights[comp] else x$rh_weights[i, comp]
         comp_effs_i[comp] <- beta_i * w_i * sum(b_diff * theta_i)
@@ -411,7 +462,7 @@ print.nwqs <- function(x, digits = max(3L, getOption("digits") - 3L), ...) {
       uci <- exp(uci)
     }
 
-    eff_mat_str[, q_tgt - 1] <- if (rh > 1) {
+    eff_mat_str[, t] <- if (rh > 1) {
       sprintf("%.3f [%.3f, %.3f]", mean_eff, lci, uci)
     } else {
       sprintf("%.3f", mean_eff)
