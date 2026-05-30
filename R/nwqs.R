@@ -109,9 +109,9 @@
 #' @export
 nwqs <- function(data, mix_name, covariates = NULL, outcome = "y",
                  weight_engine = permutation_scorer,
-                 transform_type = c("percentile_rank", "q_bin"),
+                 transform_type = NWQS_DEFAULTS$transform_type,
                  q = NWQS_DEFAULTS$q,
-                 ties = c("average", "min", "max", "random"),
+                 ties = NWQS_DEFAULTS$ties,
                  df_spline = NWQS_DEFAULTS$df_spline,
                  min_shape_sd = NWQS_DEFAULTS$min_shape_sd,
                  transform_fun = NULL,
@@ -126,8 +126,8 @@ nwqs <- function(data, mix_name, covariates = NULL, outcome = "y",
                  quiet = FALSE, ...) {
   family <- match.arg(family)
   plan_strategy <- match.arg(plan_strategy)
-  transform_type <- match.arg(transform_type)
-  ties <- match.arg(ties)
+  transform_type <- match.arg(transform_type, choices = c("percentile_rank", "q_bin"))
+  ties <- match.arg(ties, choices = c("average", "min", "max", "random"))
   if (length(covariates) == 0) covariates <- NULL
 
   t_start <- Sys.time()
@@ -226,6 +226,7 @@ nwqs <- function(data, mix_name, covariates = NULL, outcome = "y",
       model_knots = model_knots,
       model_boundary = model_boundary,
       family = family,
+      zero_weight_action = control$zero_weight_action,
       boot_strategy = "sequential",
       ...
     )
@@ -557,9 +558,9 @@ nwqs_boot <- function(data,
                       keep_fits = FALSE,
                       plan_strategy = c("sequential", "multisession", "multicore"),
                       n_workers = NULL,
-                      transform_type = c("percentile_rank", "q_bin"),
+                      transform_type = NWQS_DEFAULTS$transform_type,
                       q = NWQS_DEFAULTS$q,
-                      ties = c("average", "min", "max", "random"),
+                      ties = NWQS_DEFAULTS$ties,
                       control = nwqs_control(),
                       quiet = TRUE,
                       ...) {
@@ -567,8 +568,8 @@ nwqs_boot <- function(data,
 
   family <- match.arg(family)
   plan_strategy <- match.arg(plan_strategy)
-  transform_type <- match.arg(transform_type)
-  ties <- match.arg(ties)
+  transform_type <- match.arg(transform_type, choices = c("percentile_rank", "q_bin"))
+  ties <- match.arg(ties, choices = c("average", "min", "max", "random"))
 
   if (n_boot < 20) {
     warning("'n_boot' is quite small; bootstrap percentile CI may be unstable.")
@@ -701,6 +702,13 @@ nwqs_boot <- function(data,
     warning("Complex shape structure detected; could not average shapes.")
   }
 
+  shapes_mat <- tryCatch(
+    do.call(rbind, lapply(valid_shapes, function(v) {
+      if (is.numeric(v) && !is.null(names(v))) v else as.numeric(v)
+    })),
+    error = function(e) NULL
+  )
+
   valid_coefs <- lapply(valid_results, function(x) x$Coefs)
   coefs_mat <- do.call(rbind, valid_coefs)
   avg_coefs <- colMeans(coefs_mat, na.rm = TRUE)
@@ -817,6 +825,7 @@ nwqs_boot <- function(data,
     mean_coefs = avg_coefs,
     rh_coefs_boot = coefs_mat,
     rh_weights_boot = weights_mat,
+    rh_shapes_boot = shapes_mat,
     data = data,
     call = match.call()
   )
