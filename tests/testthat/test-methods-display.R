@@ -142,3 +142,18 @@ test_that("summary.nwqs_boot stability table reads largest target dynamically", 
   expect_match(combined,
                "Note: P100_vs_P0_Effect_SD = SD of P100_vs_P0 effect")
 })
+
+test_that("plot_nwqs_contrast_box uses P-labelled facets in percentile_rank", {
+  fit <- make_boot_fit_display(n_boot = 8)
+  p <- plot_nwqs_contrast_box(fit)
+  jitter_data <- p$layers[[1]]$data
+  expect_true(any(grepl("^P[0-9]+$", levels(jitter_data$Quantile))))
+  expect_false(any(grepl("^Q[0-9]+$", levels(jitter_data$Quantile))))
+  expect_match(p$labels$x, "Percentile|percentile")
+})
+
+test_that("plot.nwqs percentile_rank x-axis label is percentile rank", {
+  fit <- make_display_fit(transform_type = "percentile_rank")
+  p <- plot(fit, type = "curves")
+  expect_match(p$labels$x, "Percentile rank|percentile rank|Percentile Rank")
+})

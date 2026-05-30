@@ -270,7 +270,7 @@ plot.nwqs <- function(x, type = c("both", "curves", "weights"),
       ggplot2::theme_minimal(base_size = base_size) +
       ggplot2::labs(
         title = "Dose-Response Curves",
-        x = if (identical(x$transform_type, "percentile_rank")) "Percentile Rank" else "Quantile Index",
+        x = if (identical(x$transform_type, "percentile_rank")) "Joint exposure percentile rank" else "Quantile Index",
         y = y_label
       ) +
       ggplot2::scale_color_manual(values = curve_colors) +

@@ -879,8 +879,12 @@ plot_nwqs_contrast_box <- function(model,
     levels = c("Overall", selected_clean)
   )
 
-  q_levels_str <- paste0("Q", 2:(if (!is.null(model$q)) model$q else 4))
-  plot_df$Quantile <- factor(plot_df$Quantile, levels = q_levels_str)
+  target_levels <- unique(plot_df$Quantile)
+  numeric_targets <- suppressWarnings(
+    as.numeric(sub("^[PQ]([0-9.]+).*", "\\1", target_levels))
+  )
+  ordered <- target_levels[order(numeric_targets, na.last = TRUE)]
+  plot_df$Quantile <- factor(plot_df$Quantile, levels = ordered)
 
   is_exp_family <- model$family %in% c("binomial", "poisson", "quasipoisson", "negbin")
   if (is.null(exponentiate)) exponentiate <- is_exp_family
@@ -961,7 +965,10 @@ plot_nwqs_contrast_box <- function(model,
         "Boxplots: Median [IQR]; Whiskers: 2.5th to 97.5th Percentiles (95%% CI); n=%d",
         model$n_success
       ),
-      x = "Exposure Quantile Index",
+      x = if (identical(model$transform_type, "percentile_rank"))
+            "Joint exposure percentile rank"
+          else
+            "Exposure Quantile Index",
       y = y_label
     ) +
     ggplot2::theme_minimal(base_size = base_size) +
