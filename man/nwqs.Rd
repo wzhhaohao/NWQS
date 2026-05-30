@@ -14,11 +14,12 @@ nwqs(
   q = 4,
   ties = c("average", "min", "max", "random"),
   df_spline = 3,
+  min_shape_sd = 0.00000001,
   transform_fun = NULL,
   train_prop = 0.6,
   rh = 10,
   seed = 1234,
-  n_permutation = 10,
+  n_permutation = 30,
   family = c("gaussian", "binomial", "poisson", "quasipoisson"),
   plan_strategy = c("sequential", "multisession", "multicore"),
   n_workers = NULL,
@@ -57,6 +58,14 @@ passed to \code{rank(ties.method = )}. One of \code{"average"} (default),
 \item{df_spline}{Integer. Degrees of freedom for natural cubic splines.
 Default is 3.}
 
+\item{min_shape_sd}{Numeric. When a component's training-set partial
+linear-predictor standard deviation falls below this threshold, the
+per-component shape normalization is bypassed (the component is
+treated as carrying no information that iteration). Defaults to
+\code{1e-8}. When the threshold fires and \code{quiet = FALSE}, a
+one-line \code{message()} reports which component and which RH
+iteration was affected.}
+
 \item{transform_fun}{Function. Custom transformation for mixture components.
 If \code{NULL}, uses \code{trans_quantile}.}
 
@@ -68,7 +77,8 @@ iteration. Default is 0.6.}
 \item{seed}{Integer. Random seed for reproducible splits. Default is 1234.}
 
 \item{n_permutation}{Integer. Number of internal permutations for variable
-importance. Default is 10.}
+importance. Default is 30 (raised from 10 in 0.2.0 for more stable
+weight estimates on small samples).}
 
 \item{family}{Character. Error distribution: \code{"gaussian"},
 \code{"binomial"}, \code{"poisson"}, or \code{"quasipoisson"}.}
