@@ -151,3 +151,33 @@ test_that("nwqs_contrast rejects target outside [0,1] in percentile_rank", {
   fit <- make_pr_fit(q = 4, rh = 5)
   expect_error(nwqs_contrast(fit, target = 1.5), "\\[0, 1\\]")
 })
+
+make_boot_fit_pr <- function(n_boot = 8) {
+  set.seed(2026)
+  n <- 80
+  mix <- data.frame(
+    Component1 = rnorm(n),
+    Component2 = rnorm(n),
+    Component3 = rnorm(n)
+  )
+  beta <- c(0.6, 0.3, 0.1)
+  eta  <- as.matrix(mix) %*% beta + rnorm(n, sd = 0.5)
+  dat <- cbind(mix, y = as.numeric(eta))
+  nwqs_boot(
+    data = dat, mix_name = paste0("Component", 1:3),
+    outcome = "y", family = "gaussian",
+    transform_type = "percentile_rank", q = 4,
+    n_boot = n_boot, rh_inner = 1, n_permutation = 5,
+    seed = 1234, quiet = TRUE
+  )
+}
+
+test_that("extract_nwqs_effects on nwqs_boot returns bootstrap CI columns", {
+  fit <- make_boot_fit_pr(n_boot = 8)
+  eff <- extract_nwqs_effects(fit, contrast_points = c(0.25, 0.75), ref = 0.5)
+  expect_true(all(c("Target", "Term", "Estimate",
+                    "Boot_CI_Lower", "Boot_CI_Upper") %in% names(eff)))
+  expect_equal(sort(unique(eff$Target)), c("P25_vs_P50", "P75_vs_P50"))
+  expect_true(all(eff$Boot_CI_Lower <= eff$Estimate))
+  expect_true(all(eff$Estimate      <= eff$Boot_CI_Upper))
+})

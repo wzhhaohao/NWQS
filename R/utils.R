@@ -677,11 +677,78 @@ extract_nwqs_effects <- function(model_res,
   final_df
 }
 
-# Stub: real implementation lands in the bootstrap-CI task.
-.extract_nwqs_effects_boot <- function(model, contrast_points, ref, label_style) {
-  stop("extract_nwqs_effects() does not yet support nwqs_boot objects; ",
-       "the bootstrap-CI dispatch is implemented in a follow-up task.",
-       call. = FALSE)
+.extract_nwqs_effects_boot <- function(model,
+                                       contrast_points = NULL,
+                                       ref             = NULL,
+                                       label_style     = c("auto", "P", "Q", "numeric")) {
+  label_style <- match.arg(label_style)
+  if (identical(label_style, "auto")) {
+    label_style <- .label_style_default(model$transform_type)
+  }
+  if (is.null(model$rh_shapes_boot) || is.null(model$rh_weights_boot) ||
+      is.null(model$rh_coefs_boot)) {
+    stop("`model` lacks per-bootstrap fields (rh_shapes_boot / rh_weights_boot / rh_coefs_boot). ",
+         "Refit with the current version of nwqs_boot().", call. = FALSE)
+  }
+
+  points  <- .resolve_contrast_points(model, contrast_points)
+  ref_pt  <- .resolve_ref(model, ref)
+  targets <- points[!vapply(points, function(p) isTRUE(all.equal(p, ref_pt)),
+                            logical(1))]
+  if (length(targets) == 0) {
+    stop("All `contrast_points` equal `ref`; nothing to contrast.", call. = FALSE)
+  }
+
+  df_spline <- model$df_spline
+  comps     <- names(model$final_weights)
+  basis_std <- splines::ns(
+    c(ref_pt, targets), df = df_spline,
+    knots = model$spline_knots, Boundary.knots = model$spline_boundary,
+    intercept = FALSE
+  )
+
+  n_boot <- nrow(model$rh_shapes_boot)
+  res_list <- vector("list", length(targets))
+
+  for (t in seq_along(targets)) {
+    b_diff <- basis_std[t + 1L, ] - basis_std[1L, ]
+    boot_effects <- matrix(NA_real_, nrow = n_boot, ncol = length(comps) + 1L)
+    colnames(boot_effects) <- c("Overall", comps)
+
+    for (i in seq_len(n_boot)) {
+      beta_i <- model$rh_coefs_boot[i, "nwqs"]
+      if (!is.finite(beta_i)) next
+      comp_effs_i <- numeric(length(comps))
+      names(comp_effs_i) <- comps
+      for (comp in comps) {
+        theta_cols <- paste0(comp, "_B", seq_len(df_spline))
+        theta_i <- model$rh_shapes_boot[i, theta_cols]
+        w_i     <- model$rh_weights_boot[i, comp]
+        comp_effs_i[comp] <- beta_i * w_i * sum(b_diff * theta_i)
+      }
+      boot_effects[i, "Overall"] <- sum(comp_effs_i)
+      boot_effects[i, comps]     <- comp_effs_i
+    }
+
+    est_vec  <- colMeans(boot_effects, na.rm = TRUE)
+    ci_lower <- apply(boot_effects, 2, quantile, probs = 0.025, na.rm = TRUE)
+    ci_upper <- apply(boot_effects, 2, quantile, probs = 0.975, na.rm = TRUE)
+
+    label <- .contrast_pair_label(targets[t], ref_pt,
+                                  model$transform_type, label_style)
+    res_list[[t]] <- data.frame(
+      Target         = label,
+      Term           = names(est_vec),
+      Estimate       = est_vec,
+      Boot_CI_Lower  = ci_lower,
+      Boot_CI_Upper  = ci_upper,
+      stringsAsFactors = FALSE
+    )
+  }
+
+  final_df <- do.call(rbind, res_list)
+  rownames(final_df) <- NULL
+  final_df
 }
 
 
