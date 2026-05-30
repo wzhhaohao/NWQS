@@ -374,7 +374,9 @@ nwqs <- function(data, mix_name, covariates = NULL, outcome = "y",
       rh = 1, b = n_permutation, q = q, df_spline = df_spline, family = family,
       transform_type = transform_type, ties = ties,
       train_components_sorted = train_components_sorted,
-      spline_knots = model_knots, spline_boundary = model_boundary, call = match.call(), data = final_data
+      spline_knots = model_knots, spline_boundary = model_boundary,
+      formula = formula_final, model_obj = single_res$fit_obj,
+      call = match.call(), data = final_data
     )
 
     class(results) <- c("nwqs", "list")
@@ -439,7 +441,9 @@ nwqs <- function(data, mix_name, covariates = NULL, outcome = "y",
     rh = rh, b = n_permutation, q = q, df_spline = df_spline, family = family, call = match.call(),
     transform_type = transform_type, ties = ties,
     train_components_sorted = train_components_sorted,
-    transform_fun = transform_fun, data = final_data, spline_knots = model_knots, spline_boundary = model_boundary
+    transform_fun = transform_fun, data = final_data,
+    spline_knots = model_knots, spline_boundary = model_boundary,
+    formula = formula_final, model_obj = NULL
   )
 
   class(results) <- c("nwqs", "list")
@@ -611,10 +615,12 @@ nwqs_boot <- function(data,
       Effects = eff_b_clean,
       Weights = fit_b$final_weights,
       Shapes = fit_b$mean_shapes,
+      Coefs = fit_b$mean_coefs,
       Struct = list(
         df_spline = fit_b$df_spline,
         spline_knots = fit_b$spline_knots,
-        spline_boundary = fit_b$spline_boundary
+        spline_boundary = fit_b$spline_boundary,
+        formula = fit_b$formula
       ),
       Fit = if (keep_fits) fit_b else NULL
     )
@@ -663,6 +669,10 @@ nwqs_boot <- function(data,
     avg_shapes <- NULL
     warning("Complex shape structure detected; could not average shapes.")
   }
+
+  valid_coefs <- lapply(valid_results, function(x) x$Coefs)
+  coefs_mat <- do.call(rbind, valid_coefs)
+  avg_coefs <- colMeans(coefs_mat, na.rm = TRUE)
 
   ci_lower <- aggregate(
     Estimate ~ Target + Term,
@@ -745,6 +755,9 @@ nwqs_boot <- function(data,
 
   boot_fits <- if (keep_fits) lapply(valid_results, function(x) x$Fit) else NULL
 
+  train_components_sorted <- lapply(mix_name, function(comp) sort(data[[comp]]))
+  names(train_components_sorted) <- mix_name
+
   out <- list(
     ci_table = ci_table,
     formatted_table = formatted_table,
@@ -765,6 +778,14 @@ nwqs_boot <- function(data,
     df_spline = first_struct$df_spline,
     spline_knots = first_struct$spline_knots,
     spline_boundary = first_struct$spline_boundary,
+    train_components_sorted = train_components_sorted,
+    mix_name = mix_name,
+    covariates = covariates,
+    outcome = outcome,
+    formula = first_struct$formula,
+    mean_coefs = avg_coefs,
+    rh_coefs_boot = coefs_mat,
+    rh_weights_boot = weights_mat,
     data = data,
     call = match.call()
   )

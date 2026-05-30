@@ -26,6 +26,15 @@ Migration:
   ```
 - Numerical results for the percentile-rank default will differ from 0.1.x because the underlying spline basis and `u_i` values differ. Final weights and the `nwqs` index coefficient are not directly comparable across the two transforms; interpret weights relative to each other within a single fit.
 
+Landed in Phase 4 (A+B): standard S3 methods
+
+- **`predict.nwqs(object, newdata, type)`** and **`predict.nwqs_boot(object, newdata, type)`** added. `type` is one of `"response"` (default), `"link"`, or `"nwqs_index"`. The training-sample empirical CDF stored as `train_components_sorted` is reused for percentile-rank transforms; the training quantile breaks are reused for `q_bin` transforms. The same globally aligned spline knots that were used during fitting are reused so newdata is scored on the same scale.
+- **`vcov.nwqs()` and `confint.nwqs()`** added. For `rh = 1` they wrap the stored inner GLM directly (real sampling-variance inference); for `rh > 1` they emit the standard "rh > 1 reflects algorithmic variance only" warning and return the RH-derived covariance / quantile CI.
+- **`vcov.nwqs_boot()` and `confint.nwqs_boot()`** added. They return the bootstrap-iteration covariance and the percentile bootstrap CIs, respectively — both real sampling-variance inference.
+- **Conditional `broom::tidy()` / `broom::glance()` registration** via `.onLoad`. NWQS does not add `broom` to Imports; the methods register only if `generics` is available at load time. Returned objects are plain `data.frame`s in the canonical broom column layout (`term / estimate / std.error / statistic / p.value`, optional `conf.low / conf.high`).
+- **Fit object enrichment**: `nwqs()` now stores `formula` (the regression formula) and, for `rh = 1`, `model_obj` (the inner GLM). `nwqs_boot()` stores `mean_coefs` (boot-averaged regression coefs), `rh_coefs_boot` / `rh_weights_boot` (per-iteration matrices), `train_components_sorted`, `mix_name`, `covariates`, `outcome`, and `formula` so that all of the new S3 methods can run without re-fitting.
+- **Version bump**: `DESCRIPTION` advanced to `0.2.0.9000` (development version of 0.2.0). `Suggests:` gained `broom` and `generics`. The "conditional logistic regression" line was removed from `Description:` to match the actual feature set.
+
 Landed in Phase 3:
 
 - **`n_permutation` default raised from `10` to `30`** across `nwqs()`, `nwqs_boot()`, `permutation_scorer()`, and `run_oob_permutation()`. OOB importance estimates are more stable on small samples; the additional compute is bounded (permutation is the inner loop of an already-OOB-bounded scorer).
