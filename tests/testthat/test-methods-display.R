@@ -102,3 +102,43 @@ test_that("print.nwqs honors user contrast_points/ref overrides", {
   expect_true(grepl("P10 vs P50", combined))
   expect_true(grepl("P90 vs P50", combined))
 })
+
+make_boot_fit_display <- function(family = "gaussian", n_boot = 8) {
+  set.seed(2026)
+  n <- 80
+  mix <- data.frame(
+    Component1 = rnorm(n),
+    Component2 = rnorm(n),
+    Component3 = rnorm(n)
+  )
+  beta <- c(0.6, 0.3, 0.1)
+  eta  <- as.matrix(mix) %*% beta + rnorm(n, sd = 0.5)
+  y <- if (family == "gaussian") as.numeric(eta) else rbinom(n, 1, plogis(eta))
+  dat <- cbind(mix, y = y)
+  nwqs_boot(
+    data = dat, mix_name = paste0("Component", 1:3),
+    outcome = "y", family = family,
+    transform_type = "percentile_rank", q = 4,
+    n_boot = n_boot, rh_inner = 1, n_permutation = 5,
+    seed = 1234, quiet = TRUE
+  )
+}
+
+test_that("print.nwqs_boot percentile_rank fit prints P-label columns, no Q", {
+  fit <- make_boot_fit_display(n_boot = 8)
+  out <- capture.output(print(fit))
+  combined <- paste(out, collapse = "\n")
+  expect_true(grepl("P[0-9]+_vs_P[0-9]+", combined))
+  expect_false(grepl("Q[0-9]+_vs_Q[0-9]+", combined))
+})
+
+test_that("summary.nwqs_boot stability table reads largest target dynamically", {
+  fit <- make_boot_fit_display(n_boot = 8)
+  out <- capture.output(summary(fit))
+  combined <- paste(out, collapse = "\n")
+  expect_false(grepl("Q[0-9]+_Effect_SD", combined))
+  # Largest percentile_rank target with default q=4 grid is P100_vs_P0
+  expect_true(grepl("P100_vs_P0_Effect_SD", combined))
+  expect_match(combined,
+               "Note: P100_vs_P0_Effect_SD = SD of P100_vs_P0 effect")
+})

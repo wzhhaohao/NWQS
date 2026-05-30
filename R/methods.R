@@ -660,23 +660,33 @@ summary.nwqs_boot <- function(object, digits = 4, ...) {
     Ensemble_Weight = round(point_w, digits), row.names = NULL
   )
 
-  max_target <- paste0("Q", object$q, "_vs_Q1")
+  target_levels <- unique(object$boot_table$Target)
+  numeric_targets <- if (identical(object$transform_type, "percentile_rank")) {
+    suppressWarnings(as.numeric(sub("^P([0-9]+)_vs_P[0-9]+$", "\\1", target_levels)))
+  } else {
+    suppressWarnings(as.numeric(sub("^Q([0-9]+)_vs_Q[0-9]+$", "\\1", target_levels)))
+  }
+  max_target <- if (any(is.finite(numeric_targets))) {
+    target_levels[which.max(numeric_targets)]
+  } else {
+    target_levels[1]
+  }
   top_effs <- object$boot_table[
     object$boot_table$Target == max_target &
-      object$boot_table$Term != "Overall",
+      object$boot_table$Term  != "Overall", , drop = FALSE
   ]
 
   if (nrow(top_effs) > 0) {
     eff_sd <- aggregate(Estimate ~ Term, data = top_effs, FUN = sd)
-    col_label <- paste0("Q", object$q, "_Effect_SD")
+    col_label <- paste0(max_target, "_Effect_SD")
     names(eff_sd)[2] <- col_label
     eff_sd[[col_label]] <- round(eff_sd[[col_label]], digits)
     stability_df <- merge(point_w_df, eff_sd, by.x = "Component", by.y = "Term", all.x = TRUE)
     stability_df <- stability_df[order(-stability_df$Ensemble_Weight), ]
     print(stability_df, row.names = FALSE)
     cat(sprintf(
-      "    Note: %s = SD of Q%d vs Q1 effect across bootstrap replicates\n",
-      col_label, object$q
+      "    Note: %s = SD of %s effect across bootstrap replicates\n",
+      col_label, max_target
     ))
     cat("    (Set keep_fits=TRUE in nwqs_boot() for full weight distributions)\n")
   } else {
