@@ -57,3 +57,59 @@ test_that("nwqs_boot stores per-bootstrap shape coefficients (rh_shapes_boot)", 
   )
   expect_setequal(expected_cols, colnames(fit$rh_shapes_boot))
 })
+
+test_that("extract_nwqs_effect_curve.nwqs returns tidy frame with required columns", {
+  fit <- make_pr_fit_curve(q = 4, rh = 5)
+  curve <- extract_nwqs_effect_curve(fit, ref = 0.5)
+  required <- c("term", "x", "ref", "estimate", "lower", "upper",
+                "transform_type", "inference_type")
+  expect_true(all(required %in% names(curve)))
+  expect_equal(unique(curve$transform_type), "percentile_rank")
+  expect_equal(unique(curve$inference_type), "repeated_holdout")
+  expect_true("Overall" %in% unique(curve$term))
+  expect_true(all(paste0("Component", 1:3) %in% unique(curve$term)))
+})
+
+test_that("extract_nwqs_effect_curve.nwqs gives estimate=0 at x=ref for every term", {
+  fit <- make_pr_fit_curve(q = 4, rh = 5)
+  curve <- extract_nwqs_effect_curve(fit, grid = c(0, 0.25, 0.5, 0.75, 1), ref = 0.5)
+  at_ref <- curve[curve$x == 0.5, ]
+  expect_equal(at_ref$estimate, rep(0, nrow(at_ref)), tolerance = 1e-10)
+})
+
+test_that("extract_nwqs_effect_curve.nwqs has NA CI when rh = 1", {
+  set.seed(7)
+  n <- 80
+  mix <- data.frame(C1 = rnorm(n), C2 = rnorm(n))
+  y   <- mix$C1 + rnorm(n, sd = 0.5)
+  fit <- nwqs(data = cbind(mix, y = y), mix_name = c("C1", "C2"),
+              outcome = "y", family = "gaussian",
+              transform_type = "percentile_rank", q = 4,
+              rh = 1, n_permutation = 5, seed = 1234, quiet = TRUE)
+  curve <- extract_nwqs_effect_curve(fit, ref = 0.5)
+  expect_true(all(is.na(curve$lower)))
+  expect_true(all(is.na(curve$upper)))
+})
+
+test_that("extract_nwqs_effect_curve.nwqs_boot returns bootstrap CI", {
+  fit <- make_boot_fit(n_boot = 8)
+  curve <- extract_nwqs_effect_curve(fit, ref = 0.5)
+  expect_equal(unique(curve$inference_type), "bootstrap")
+  overall <- curve[curve$term == "Overall", ]
+  expect_true(all(overall$lower <= overall$estimate))
+  expect_true(all(overall$estimate <= overall$upper))
+})
+
+test_that("extract_nwqs_effect_curve include_components = FALSE returns only Overall", {
+  fit <- make_pr_fit_curve(q = 4, rh = 5)
+  curve <- extract_nwqs_effect_curve(fit, ref = 0.5, include_components = FALSE)
+  expect_equal(unique(curve$term), "Overall")
+})
+
+test_that("extract_nwqs_effect_curve rejects grid outside [0,1] in percentile_rank", {
+  fit <- make_pr_fit_curve(q = 4, rh = 5)
+  expect_error(
+    extract_nwqs_effect_curve(fit, grid = c(0, 0.5, 1.1)),
+    "\\[0, 1\\]"
+  )
+})
