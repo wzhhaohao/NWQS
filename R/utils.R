@@ -83,36 +83,129 @@ trans_quantile <- function(data,
 }
 
 
-#' @title Apply a Training-Sample Percentile Rank to New Data
+#' @title Apply a Fit-Sample Percentile Rank to New Data
 #'
 #' @description
 #' Maps each element of \code{newdata} to its empirical CDF value under the
-#' training-sample distribution \code{train_x}. Used by \code{predict.nwqs()}
-#' so that newdata is always interpreted on the training distribution's scale,
+#' fit-sample distribution \code{train_x}. Used by \code{predict.nwqs()} so
+#' that newdata is always interpreted on the fitted model's empirical scale,
 #' avoiding train/predict drift.
 #'
 #' @details
-#' For each new observation \eqn{x'},
-#' \deqn{u' = \frac{\#\{i : x_{\text{train},i} \le x'\}}{n_{\text{train}}}.}
-#' Values of \code{newdata} below \code{min(train_x)} map to \code{0}; values
-#' at or above \code{max(train_x)} map to \code{1}.
+#' For non-tied values, each new observation \eqn{x'} is mapped by the
+#' right-continuous empirical CDF,
+#' \deqn{u' = \frac{\#\{i : x_{\text{fit},i} \le x'\}}{n_{\text{fit}}}.}
+#' If \eqn{x'} exactly equals tied fit-sample values, the requested
+#' \code{ties} rule is used for the tied rank, matching
+#' \code{trans_quantile(type = "percentile_rank")}. Values below
+#' \code{min(train_x)} map to \code{0}; values at or above
+#' \code{max(train_x)} map to \code{1}.
 #'
 #' @param newdata Numeric vector. Values to be mapped.
-#' @param train_x Numeric vector. Training-sample values (NA values removed
-#'   before computation).
+#' @param train_x Numeric vector. Fit-sample values (NA values removed before
+#'   computation).
+#' @param ties Character. Exact-tie rule: one of \code{"average"},
+#'   \code{"min"}, \code{"max"}, or \code{"random"}.
 #'
 #' @return Numeric vector of the same length as \code{newdata}, with values in
 #'   \code{[0, 1]}.
 #'
 #' @export
-apply_percentile_rank <- function(newdata, train_x) {
+apply_percentile_rank <- function(newdata, train_x,
+                                  ties = c("average", "min", "max", "random")) {
+  ties <- match.arg(ties)
   train_x <- train_x[!is.na(train_x)]
   n <- length(train_x)
   if (n == 0) {
     stop("`train_x` is empty after removing NA values.")
   }
   sorted <- sort(train_x)
-  findInterval(newdata, sorted, all.inside = FALSE, rightmost.closed = FALSE) / n
+  out <- findInterval(newdata, sorted, all.inside = FALSE, rightmost.closed = FALSE) / n
+
+  exact <- !is.na(newdata) & newdata %in% sorted
+  if (any(exact)) {
+    first_pos <- match(newdata[exact], sorted)
+    last_pos <- findInterval(newdata[exact], sorted, all.inside = FALSE, rightmost.closed = FALSE)
+    tied_rank <- switch(
+      ties,
+      average = (first_pos + last_pos) / 2,
+      min = first_pos,
+      max = last_pos,
+      random = mapply(function(lo, hi) sample(lo:hi, 1), first_pos, last_pos)
+    )
+    out[exact] <- tied_rank / n
+  }
+
+  out
+}
+
+.label_style_default <- function(transform_type) {
+  if (identical(transform_type, "percentile_rank")) "P" else "Q"
+}
+
+.contrast_point_label <- function(point, transform_type, label_style) {
+  if (identical(label_style, "numeric")) {
+    return(format(point, scientific = FALSE, trim = TRUE))
+  }
+  if (identical(label_style, "P") ||
+      (identical(label_style, "auto") &&
+         identical(transform_type, "percentile_rank"))) {
+    return(sprintf("P%d", as.integer(round(point * 100))))
+  }
+  sprintf("Q%d", as.integer(round(point)) + 1L)
+}
+
+.contrast_pair_label <- function(target, ref, transform_type, label_style) {
+  paste0(
+    .contrast_point_label(target, transform_type, label_style),
+    "_vs_",
+    .contrast_point_label(ref, transform_type, label_style)
+  )
+}
+
+.validate_pr_points <- function(points, transform_type) {
+  if (identical(transform_type, "percentile_rank")) {
+    if (any(points < 0 | points > 1, na.rm = TRUE)) {
+      stop("`contrast_points`/`ref` must lie in [0, 1] when transform_type = 'percentile_rank'.",
+           call. = FALSE)
+    }
+  }
+  invisible(points)
+}
+
+.resolve_contrast_points <- function(model, contrast_points = NULL) {
+  if (!is.null(contrast_points)) {
+    .validate_pr_points(contrast_points, model$transform_type)
+    return(as.numeric(contrast_points))
+  }
+  .nwqs_eval_points(model)
+}
+
+.resolve_ref <- function(model, ref = NULL) {
+  if (!is.null(ref)) {
+    .validate_pr_points(ref, model$transform_type)
+    return(as.numeric(ref))
+  }
+  if (identical(model$transform_type, "percentile_rank")) {
+    return(NWQS_DEFAULTS$contrast_ref_pr)
+  }
+  NWQS_DEFAULTS$contrast_ref_q_bin
+}
+
+.nwqs_eval_points <- function(model, n = NULL) {
+  q_level <- if (!is.null(model$q)) model$q else NWQS_DEFAULTS$q
+  transform_type <- if (!is.null(model$transform_type)) model$transform_type else "q_bin"
+
+  if (transform_type == "percentile_rank") {
+    if (is.null(n)) n <- q_level
+    return(seq(0, 1, length.out = n))
+  }
+
+  if (is.null(n)) {
+    0:(q_level - 1)
+  } else {
+    seq(0, q_level - 1, length.out = n)
+  }
 }
 
 
@@ -325,15 +418,9 @@ nwqs_contrast <- function(model, q_target = NULL, q_ref = 0) {
 
   df_spline <- max(as.numeric(sub("^.+_B(\\d+)$", "\\1", names(shapes_vec))))
 
-  transform_type <- if (!is.null(model$transform_type)) model$transform_type else "q_bin"
-  if (transform_type == "percentile_rank") {
-    q_total <- if (!is.null(model$q)) model$q else 4
-    eval_target <- q_target / (q_total - 1)
-    eval_ref <- q_ref / (q_total - 1)
-  } else {
-    eval_target <- q_target
-    eval_ref <- q_ref
-  }
+  eval_points <- .nwqs_eval_points(model)
+  eval_target <- eval_points[q_target + 1]
+  eval_ref <- eval_points[q_ref + 1]
 
   b_target <- splines::ns(c(eval_target, eval_ref),
     df = df_spline,
@@ -379,9 +466,10 @@ nwqs_contrast <- function(model, q_target = NULL, q_ref = 0) {
   }
 
   is_rate_family <- if (inherits(model, "glm")) {
-    model$family$family %in% c("poisson", "quasipoisson")
+    model$family$family %in% c("poisson", "quasipoisson") ||
+      grepl("^Negative Binomial", model$family$family)
   } else {
-    model$family %in% c("poisson", "quasipoisson")
+    model$family %in% c("poisson", "quasipoisson", "negbin")
   }
 
   if (is_binomial) {
@@ -435,12 +523,7 @@ extract_nwqs_effects <- function(model_res, return_raw = FALSE) {
   rh <- model_res$rh
   model_knots <- model_res$spline_knots
   model_boundary <- model_res$spline_boundary
-  transform_type <- if (!is.null(model_res$transform_type)) model_res$transform_type else "q_bin"
-  eval_points_std <- if (transform_type == "percentile_rank") {
-    seq(0, 1, length.out = q_level)
-  } else {
-    0:(q_level - 1)
-  }
+  eval_points_std <- .nwqs_eval_points(model_res)
 
   basis_std <- splines::ns(eval_points_std,
     df = df_spline, knots = model_knots, Boundary.knots = model_boundary, intercept = FALSE
