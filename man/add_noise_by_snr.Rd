@@ -2,21 +2,44 @@
 % Please edit documentation in R/simulate_data.R
 \name{add_noise_by_snr}
 \alias{add_noise_by_snr}
-\title{Add Gaussian Noise Given Target Signal-to-Noise Ratio}
+\title{Add Gaussian Noise on the Linear-Predictor Scale at a Target SNR}
 \usage{
 add_noise_by_snr(signal_vec, snr_db)
 }
 \arguments{
-\item{signal_vec}{Numeric vector. The noise-free signal (e.g., the true
-linear predictor \eqn{\eta}).}
+\item{signal_vec}{Numeric vector. The noise-free linear predictor
+\eqn{\eta = X\beta}. Length must be at least 2.}
 
-\item{snr_db}{Numeric. Target signal-to-noise ratio in dB. Higher values
-mean cleaner signal; \code{Inf} adds no noise.}
+\item{snr_db}{Numeric. Target link-scale signal-to-noise ratio in
+decibels. Higher values mean cleaner signal; \code{Inf} returns
+\code{signal_vec} unchanged.}
 }
 \value{
-Numeric vector. The observed signal with added noise.
+Numeric vector of the same length as \code{signal_vec}: the noisy
+linear predictor.
 }
 \description{
-Computes the power of a clean signal and injects normally distributed white
-noise according to a specified target SNR in decibels.
+Injects independent \eqn{N(0, \sigma^2)} noise onto a clean signal vector
+so that the resulting signal-to-noise ratio (on whatever scale
+\code{signal_vec} represents) matches the requested target.
+}
+\details{
+The signal-to-noise ratio used by this function is the \strong{link-scale SNR}:
+\deqn{\mathrm{SNR} \;=\; \frac{\mathrm{Var}(X\beta)}{\mathrm{Var}(\varepsilon)},
+      \qquad \mathrm{SNR}_{\mathrm{dB}} \;=\; 10\,\log_{10}\!\bigl(\mathrm{SNR}\bigr).}
+Given a target \code{snr_db}, the noise standard deviation is solved from
+\deqn{\sigma_{\varepsilon} \;=\; \sqrt{\mathrm{Var}(X\beta) \;/\; 10^{\mathrm{snr\_db}/10}}.}
+
+Callers are expected to pass the linear predictor \eqn{\eta = X\beta} as
+\code{signal_vec}. The result is then \eqn{\eta + \varepsilon}; the caller
+is responsible for applying the family's inverse link and any
+family-specific sampling step. For Gaussian \code{family} with identity
+link the link-scale SNR coincides with the outcome-scale SNR. For
+non-Gaussian families it does not: the response variance also includes
+the family's inherent sampling variability (Bernoulli, Poisson, ...).
+
+This contract is verified by the cross-family test
+\code{tests/testthat/test-snr.R}, which asserts
+\eqn{\mathrm{Var}(\eta)/\mathrm{Var}(\varepsilon) \approx 10^{\mathrm{snr\_db}/10}}
+at the noise injection site for each generator path.
 }

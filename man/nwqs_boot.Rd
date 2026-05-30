@@ -12,7 +12,7 @@ nwqs_boot(
   family = c("gaussian", "binomial", "poisson", "quasipoisson"),
   n_boot = 100,
   rh_inner = 1,
-  n_permutation = 10,
+  n_permutation = 30,
   conf_level = 0.95,
   seed = 1234,
   keep_fits = FALSE,
@@ -43,7 +43,7 @@ nwqs_boot(
 is 1.}
 
 \item{n_permutation}{Integer. Permutation count for variable importance.
-Default is 10.}
+Default is 30 (raised from 10 in 0.2.0).}
 
 \item{conf_level}{Numeric. Confidence level. Default is 0.95.}
 

@@ -30,7 +30,8 @@
 #' @param family List. GLM family object (e.g., \code{gaussian()},
 #'   \code{binomial()}, \code{poisson()}, \code{quasipoisson()}).
 #' @param n_permutation Integer. Number of OOB permutations for stabilizing
-#'   importance scores. Default is 10.
+#'   importance scores. Default is 30 (raised from 10 in 0.2.0 to give more
+#'   stable weight estimates on small samples).
 #' @param ... Additional compatibility parameters (accepted but ignored, so
 #'   callers that pass extras like \code{strata_id} from older revisions still
 #'   work).
@@ -46,7 +47,7 @@
 #' @importFrom stats coef predict glm.fit as.formula
 #' @export
 permutation_scorer <- function(x, y, mix_name, spline_vars, family,
-                               n_permutation = 10, ...) {
+                               n_permutation = 30, ...) {
   n_obs <- nrow(x)
   fam_name <- family$family
   linkinv <- family$linkinv
@@ -69,33 +70,25 @@ permutation_scorer <- function(x, y, mix_name, spline_vars, family,
     x_oob_net <- x_oob
   }
 
-  calc_loss <- function(y_true, mu_pred) {
-    if (fam_name == "gaussian") return(mean((y_true - mu_pred)^2))
-    if (fam_name == "binomial") {
-      mu_pred <- pmax(pmin(mu_pred, 1 - 1e-7), 1e-7)
-      return(-2 * mean(y_true * log(mu_pred) + (1 - y_true) * log(1 - mu_pred)))
-    }
-    if (fam_name %in% c("poisson", "quasipoisson")) {
-      mu_pred <- pmax(mu_pred, 1e-7)
-      term1 <- ifelse(y_true == 0, 0, y_true * log(y_true / mu_pred))
-      return(2 * mean(term1 - (y_true - mu_pred)))
-    }
-    return(mean((y_true - mu_pred)^2))
-  }
-
   x_train_glm <- cbind(Intercept = 1, as.matrix(x_train_net))
   x_oob_glm <- cbind(Intercept = 1, as.matrix(x_oob_net))
 
   fit <- stats::glm.fit(x = x_train_glm, y = y_train, family = family)
   coef_all <- fit$coefficients
-  coef_all[is.na(coef_all)] <- 0
+  if (any(is.na(coef_all))) {
+    warning(
+      "permutation_scorer: in-bag GLM fit produced ", sum(is.na(coef_all)),
+      " NA coefficient(s) (rank deficiency); iteration skipped."
+    )
+    return(NULL)
+  }
 
   intercept_val <- unname(coef_all[1])
   coefs_no_int <- coef_all[-1]
 
   eta_oob <- as.numeric(x_oob_glm %*% coef_all)
   mu_oob <- linkinv(eta_oob)
-  base_loss <- calc_loss(y_oob, mu_oob)
+  base_loss <- .calc_loss(y_oob, mu_oob, fam_name)
 
   importance_scores <- numeric(length(mix_name))
   names(importance_scores) <- mix_name
@@ -119,7 +112,7 @@ permutation_scorer <- function(x, y, mix_name, spline_vars, family,
 
       eta_shuffled <- intercept_val + as.numeric(as.matrix(x_oob_shuffled) %*% coefs_no_int)
       mu_shuffled <- linkinv(eta_shuffled)
-      shuffled_loss_list[k] <- calc_loss(y_oob, mu_shuffled)
+      shuffled_loss_list[k] <- .calc_loss(y_oob, mu_shuffled, fam_name)
     }
 
     x_oob_shuffled[, target_cols] <- x_oob_net[, target_cols, drop = FALSE]
@@ -138,4 +131,31 @@ permutation_scorer <- function(x, y, mix_name, spline_vars, family,
   }
 
   return(list(weights = weights, shapes = shape_coefs))
+}
+
+
+# Internal: family-specific OOB loss. Exposed only to tests/testthat through
+# NWQS:::.calc_loss so refactors cannot silently break Poisson mu = 0 or
+# binomial p = 0 / 1 boundaries.
+#
+# Contract:
+#   gaussian: mean((y - mu)^2)               (MSE)
+#   binomial: -2 * mean(BCE),                mu clipped to [1e-7, 1 - 1e-7]
+#   poisson / quasipoisson:                  unit deviance,
+#                                            mu clipped to >= 1e-7,
+#                                            y log(y / mu) = 0 when y == 0
+.calc_loss <- function(y_true, mu_pred, fam_name) {
+  if (fam_name == "gaussian") {
+    return(mean((y_true - mu_pred)^2))
+  }
+  if (fam_name == "binomial") {
+    mu_pred <- pmax(pmin(mu_pred, 1 - 1e-7), 1e-7)
+    return(-2 * mean(y_true * log(mu_pred) + (1 - y_true) * log(1 - mu_pred)))
+  }
+  if (fam_name %in% c("poisson", "quasipoisson")) {
+    mu_pred <- pmax(mu_pred, 1e-7)
+    term1 <- ifelse(y_true == 0, 0, y_true * log(y_true / mu_pred))
+    return(2 * mean(term1 - (y_true - mu_pred)))
+  }
+  mean((y_true - mu_pred)^2)
 }

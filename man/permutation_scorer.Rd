@@ -10,7 +10,7 @@ permutation_scorer(
   mix_name,
   spline_vars,
   family,
-  n_permutation = 10,
+  n_permutation = 30,
   ...
 )
 }
@@ -29,7 +29,8 @@ spline basis functions.}
 \code{binomial()}, \code{poisson()}, \code{quasipoisson()}).}
 
 \item{n_permutation}{Integer. Number of OOB permutations for stabilizing
-importance scores. Default is 10.}
+importance scores. Default is 30 (raised from 10 in 0.2.0 to give more
+stable weight estimates on small samples).}
 
 \item{...}{Additional compatibility parameters (accepted but ignored, so
 callers that pass extras like \code{strata_id} from older revisions still

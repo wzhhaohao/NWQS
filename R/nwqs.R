@@ -43,6 +43,13 @@
 #'   \code{"y"}.
 #' @param weight_engine Function. Engine for weight and shape discovery.
 #'   Default is \code{permutation_scorer}.
+#' @param min_shape_sd Numeric. When a component's training-set partial
+#'   linear-predictor standard deviation falls below this threshold, the
+#'   per-component shape normalization is bypassed (the component is
+#'   treated as carrying no information that iteration). Defaults to
+#'   \code{1e-8}. When the threshold fires and \code{quiet = FALSE}, a
+#'   one-line \code{message()} reports which component and which RH
+#'   iteration was affected.
 #' @param transform_type Character. Either \code{"percentile_rank"} (default;
 #'   continuous empirical CDF on each mixture column) or \code{"q_bin"}
 #'   (legacy 0.1.x behavior: discrete quantile bins).
@@ -62,7 +69,8 @@
 #' @param rh Integer. Number of repeated holdout iterations. Default is 10.
 #' @param seed Integer. Random seed for reproducible splits. Default is 1234.
 #' @param n_permutation Integer. Number of internal permutations for variable
-#'   importance. Default is 10.
+#'   importance. Default is 30 (raised from 10 in 0.2.0 for more stable
+#'   weight estimates on small samples).
 #' @param family Character. Error distribution: \code{"gaussian"},
 #'   \code{"binomial"}, \code{"poisson"}, or \code{"quasipoisson"}.
 #' @param plan_strategy Character. Parallel strategy: \code{"sequential"},
@@ -98,8 +106,9 @@ nwqs <- function(data, mix_name, covariates = NULL, outcome = "y",
                  q = 4,
                  ties = c("average", "min", "max", "random"),
                  df_spline = 3,
+                 min_shape_sd = 1e-8,
                  transform_fun = NULL,
-                 train_prop = 0.6, rh = 10, seed = 1234, n_permutation = 10,
+                 train_prop = 0.6, rh = 10, seed = 1234, n_permutation = 30,
                  family = c("gaussian", "binomial", "poisson", "quasipoisson"),
                  plan_strategy = c("sequential", "multisession", "multicore"),
                  n_workers = NULL, quiet = FALSE, ...) {
@@ -256,7 +265,15 @@ nwqs <- function(data, mix_name, covariates = NULL, outcome = "y",
 
       partial_eta <- as.vector(as.matrix(train_trans[, comp_cols, drop = FALSE]) %*% theta_raw)
       sd_eta <- sd(partial_eta, na.rm = TRUE)
-      if (is.na(sd_eta) || sd_eta < 1e-8) sd_eta <- 1
+      if (is.na(sd_eta) || sd_eta < min_shape_sd) {
+        if (!isTRUE(quiet)) {
+          message(sprintf(
+            "nwqs: component '%s' degenerate at RH iteration %d (sd_eta < %g); shape normalization skipped.",
+            comp, i, min_shape_sd
+          ))
+        }
+        sd_eta <- 1
+      }
 
       theta_norm <- theta_raw / sd_eta
       normalized_shapes_iter[comp_cols] <- theta_norm
@@ -455,7 +472,7 @@ nwqs <- function(data, mix_name, covariates = NULL, outcome = "y",
 #' @param rh_inner Integer. RH iterations per bootstrap replicate. Default
 #'   is 1.
 #' @param n_permutation Integer. Permutation count for variable importance.
-#'   Default is 10.
+#'   Default is 30 (raised from 10 in 0.2.0).
 #' @param conf_level Numeric. Confidence level. Default is 0.95.
 #' @param seed Integer or \code{NULL}. Random seed.
 #' @param keep_fits Logical. Whether to retain all bootstrap model objects.
@@ -501,7 +518,7 @@ nwqs_boot <- function(data,
                       family = c("gaussian", "binomial", "poisson", "quasipoisson"),
                       n_boot = 100,
                       rh_inner = 1,
-                      n_permutation = 10,
+                      n_permutation = 30,
                       conf_level = 0.95,
                       seed = 1234,
                       keep_fits = FALSE,

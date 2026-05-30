@@ -26,9 +26,16 @@ Migration:
   ```
 - Numerical results for the percentile-rank default will differ from 0.1.x because the underlying spline basis and `u_i` values differ. Final weights and the `nwqs` index coefficient are not directly comparable across the two transforms; interpret weights relative to each other within a single fit.
 
+Landed in Phase 3:
+
+- **`n_permutation` default raised from `10` to `30`** across `nwqs()`, `nwqs_boot()`, `permutation_scorer()`, and `run_oob_permutation()`. OOB importance estimates are more stable on small samples; the additional compute is bounded (permutation is the inner loop of an already-OOB-bounded scorer).
+- **`permutation_scorer()` now reports in-bag rank deficiency instead of silently filling NA coefficients with zero.** When `glm.fit` returns any NA coefficient on a bootstrap sample, the iteration emits a warning ("rank deficiency; iteration skipped") and returns `NULL`. The outer RH loop ignores `NULL` iterations, matching the existing failure-tolerant aggregation logic. Side effect: the golden q_bin and percentile_rank snapshot values changed slightly (<5%) because previously silently-zeroed iterations are now skipped. The updated snapshots are the new ground truth.
+- **`min_shape_sd` parameter exposed on `nwqs()`** (default `1e-8`, matching the prior hard-coded literal). When a component's training-set partial linear-predictor standard deviation drops below this threshold, the per-component shape normalization is bypassed and, under `quiet = FALSE`, a `message()` names the component and RH iteration.
+- **`add_noise_by_snr()` documented as link-scale SNR** with the explicit formula `SNR = Var(Xβ) / Var(ε)`. A new test (`tests/testthat/test-snr.R`) pins `Var(η) / Var(noise) ≈ 10^(snr_db / 10)` to within 5% across multiple `snr_db` levels.
+- **`.calc_loss(y_true, mu_pred, fam_name)` extracted** as an internal function so the Poisson `mu → 0` clipping and the binomial `p → 0/1` clipping have direct unit-test coverage.
+
 Planned for later in this release (none landed yet):
 
-- `n_permutation` default will change from `10` to `30` so OOB importance estimates are more stable on small samples.
 - "Soft" parameters such as `min_shape_sd`, `ties`, and `custom_knots` will move into a new `nwqs_control()` helper rather than living on the main `nwqs()` signature.
 - All user-facing defaults will be sourced from a package-level `NWQS_DEFAULTS` list (`R/zzz-defaults.R`), so the same value is not declared twice in `nwqs()` and `nwqs_boot()`.
 
