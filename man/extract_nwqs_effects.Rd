@@ -2,22 +2,55 @@
 % Please edit documentation in R/utils.R
 \name{extract_nwqs_effects}
 \alias{extract_nwqs_effects}
-\title{Extract Detailed Quantile Contrast Effects from NWQS Model}
+\title{Extract Detailed Contrast Effects from an NWQS Model}
 \usage{
-extract_nwqs_effects(model_res, return_raw = FALSE)
+extract_nwqs_effects(
+  model_res,
+  contrast_points = NULL,
+  ref = NULL,
+  label_style = c("auto", "P", "Q", "numeric"),
+  return_raw = FALSE
+)
 }
 \arguments{
-\item{model_res}{An object of class \code{"nwqs"}.}
+\item{model_res}{An object of class \code{"nwqs"} or \code{"nwqs_boot"}.}
+
+\item{contrast_points}{Numeric vector, or \code{NULL}. Points at which to
+evaluate the contrast vs. \code{ref}. When \code{NULL}, defaults to
+\code{.nwqs_eval_points(model_res)}. Must lie in \code{[0, 1]} for
+percentile_rank.}
+
+\item{ref}{Numeric scalar, or \code{NULL}. Reference point. When
+\code{NULL}, defaults to \code{0.5} (percentile_rank) or \code{0} (q_bin).
+For paper-style IQR contrasts use \code{ref = 0.25}; for median-centered
+contrasts use \code{ref = 0.5}.}
+
+\item{label_style}{One of \code{"auto"}, \code{"P"}, \code{"Q"},
+\code{"numeric"}. \code{"auto"} (default) picks \code{"P"} for
+percentile_rank and \code{"Q"} for q_bin.}
 
 \item{return_raw}{Logical. Currently unused; reserved for future extensions.}
 }
 \value{
-A \code{data.frame} with columns: Target, Term, Estimate, SE,
-Wald_CI_Lower, Wald_CI_Upper, Empirical_CI_Lower, Empirical_CI_Upper.
+A \code{data.frame} with columns: \code{Target}, \code{Term},
+\code{Estimate}, \code{SE}, \code{Wald_CI_Lower}, \code{Wald_CI_Upper},
+\code{Empirical_CI_Lower}, \code{Empirical_CI_Upper}. The
+\code{"nwqs_boot"} method instead returns \code{Boot_CI_Lower} and
+\code{Boot_CI_Upper}.
 }
 \description{
-Computes all possible quantile contrast effects (e.g., Q2 vs Q1, Q3 vs Q1,
-Q4 vs Q1), decomposing the overall effect into component-specific
-contributions. Standard errors and empirical confidence intervals are
-derived from repeated holdout iterations.
+Computes joint-exposure contrast effects between user-chosen exposure points
+and a reference point, decomposing the overall effect into component-specific
+contributions. The contrast points are interpreted on the model's transform
+scale: \code{[0, 1]} percentile rank when
+\code{model$transform_type = "percentile_rank"}, or quantile-bin indices
+\code{0:(q-1)} when \code{model$transform_type = "q_bin"}.
+}
+\details{
+Default contrast points reproduce the legacy numeric grid of the model
+(\code{.nwqs_eval_points(model)}); only the \code{Target} column labels
+change from \code{Q*_vs_Q1} (q_bin) to \code{P*_vs_P*} (percentile_rank).
+Confidence intervals come from repeated holdout iterations when invoked on
+an \code{"nwqs"} object; they come from the bootstrap distribution when
+invoked on an \code{"nwqs_boot"} object (S3 dispatch).
 }

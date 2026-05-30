@@ -1,4 +1,4 @@
-# NWQS 0.2.0 (in development)
+# NWQS 0.2.0
 
 ## Breaking changes
 
@@ -8,10 +8,11 @@ Landed:
 - **`strata_col` parameter removed** from both `nwqs()` and `nwqs_boot()`. The argument has no meaning without the clogit family; calls that pass `strata_col = ...` are silently absorbed by `...` and have no effect.
 - **`survival` package no longer in Imports.** Users who relied on `library(NWQS)` to load `survival` indirectly must now `library(survival)` themselves.
 - **Default exposure transform changed from discrete `q`-bin (q = 4) to continuous percentile rank.** Each mixture column is now mapped by `u_i = rank(x_i, ties = "average") / n`, so `u_i ∈ (0, 1]`. The spline basis is evaluated on a 100-point grid over `[0, 1]`. This matches the applied-statistics convention and aligns NWQS with the percentile-rank mode of `gWQS`.
+- **Nonlinear simulation generators now default to a percentile-rank DGP.** `gen_nonlinear_data()`, `gen_nonlinear_bio_data()`, and `gen_nonlinear_count_data()` transform mixture columns with the same percentile-rank convention used by `nwqs()` unless a custom `transform_fun` is supplied. They also attach `true_effect_curve`, a full link-scale dose-response truth matrix over `0, 0.01, ..., 1`, so simulation benchmarks can recover weights from the complete percentile curve rather than only Q4 vs Q1.
 - **`trans_quantile()` signature changed.** The old `method = c("quantile", "percentile")` argument has been renamed to `type = c("percentile_rank", "q_bin")` and a new `ties = c("average", "min", "max", "random")` argument has been added. Calls using `method = ...` will now error with `unused argument`.
 - **`nwqs()` and `nwqs_boot()` gained `transform_type` and `ties` parameters.** Defaults: `transform_type = "percentile_rank"`, `ties = "average"`. The `q` argument is retained (default 4): under `q_bin` it controls bin count; under `percentile_rank` it controls how many contrast points `extract_nwqs_effects()` and `nwqs_contrast()` evaluate.
-- **Fit object gained three fields**: `transform_type`, `ties`, and `train_components_sorted` (the per-component sorted training values, used by the upcoming `predict.nwqs()` to map newdata onto the training empirical CDF). `nwqs_boot()` results also gained `transform_type` and `ties`.
-- **New helpers in `R/utils.R`**: `apply_percentile_rank(newdata, train_x)` for mapping new data onto a training distribution, and `build_spline_basis_knots(transform_type, q, df_spline, custom_knots, custom_boundary)` for centralized, globally aligned spline knot construction.
+- **Fit object gained three fields**: `transform_type`, `ties`, and `train_components_sorted` (the per-component sorted fit-sample values, used by `predict.nwqs()` to map `newdata` onto the fitted empirical CDF). `nwqs_boot()` results also gained `transform_type` and `ties`.
+- **New helpers in `R/utils.R`**: `apply_percentile_rank(newdata, train_x, ties)` for mapping new data onto the fitted empirical distribution, and `build_spline_basis_knots(transform_type, q, df_spline, custom_knots, custom_boundary)` for centralized, globally aligned spline knot construction.
 
 Migration:
 
@@ -19,10 +20,14 @@ Migration:
   ```r
   nwqs(data, mix_name, family = "clogit", strata_col = "match_id", ...)
   ```
-  now errors with `'arg' should be one of "gaussian", "binomial", "poisson", "quasipoisson"`. To preserve the conditional logistic analysis, stay on 0.1.0 until `nwqs_clogit()` is released.
+  now errors during family validation because `clogit` is no longer part of the supported family set. To preserve the conditional logistic analysis, stay on 0.1.0 until `nwqs_clogit()` is released.
 - To reproduce 0.1.x's discrete quartile behavior, pass
   ```r
   nwqs(data, mix_name, transform_type = "q_bin", q = 4, ...)
+  ```
+- To reproduce the legacy q-bin nonlinear simulation DGP, pass
+  ```r
+  gen_nonlinear_data(..., transform_type = "q_bin", q = 4)
   ```
 - Numerical results for the percentile-rank default will differ from 0.1.x because the underlying spline basis and `u_i` values differ. Final weights and the `nwqs` index coefficient are not directly comparable across the two transforms; interpret weights relative to each other within a single fit.
 
@@ -42,12 +47,12 @@ Landed in Phase 4 (C): family = "negbin" via MASS::glm.nb
 
 Landed in Phase 4 (A+B): standard S3 methods
 
-- **`predict.nwqs(object, newdata, type)`** and **`predict.nwqs_boot(object, newdata, type)`** added. `type` is one of `"response"` (default), `"link"`, or `"nwqs_index"`. The training-sample empirical CDF stored as `train_components_sorted` is reused for percentile-rank transforms; the training quantile breaks are reused for `q_bin` transforms. The same globally aligned spline knots that were used during fitting are reused so newdata is scored on the same scale.
+- **`predict.nwqs(object, newdata, type)`** and **`predict.nwqs_boot(object, newdata, type)`** added. `type` is one of `"response"` (default), `"link"`, or `"nwqs_index"`. The fit-sample empirical CDF stored as `train_components_sorted` is reused for percentile-rank transforms; the fit-sample quantile breaks are reused for `q_bin` transforms. The same globally aligned spline knots that were used during fitting are reused so newdata is scored on the same scale.
 - **`vcov.nwqs()` and `confint.nwqs()`** added. For `rh = 1` they wrap the stored inner GLM directly (real sampling-variance inference); for `rh > 1` they emit the standard "rh > 1 reflects algorithmic variance only" warning and return the RH-derived covariance / quantile CI.
 - **`vcov.nwqs_boot()` and `confint.nwqs_boot()`** added. They return the bootstrap-iteration covariance and the percentile bootstrap CIs, respectively — both real sampling-variance inference.
 - **Conditional `broom::tidy()` / `broom::glance()` registration** via `.onLoad`. NWQS does not add `broom` to Imports; the methods register only if `generics` is available at load time. Returned objects are plain `data.frame`s in the canonical broom column layout (`term / estimate / std.error / statistic / p.value`, optional `conf.low / conf.high`).
 - **Fit object enrichment**: `nwqs()` now stores `formula` (the regression formula) and, for `rh = 1`, `model_obj` (the inner GLM). `nwqs_boot()` stores `mean_coefs` (boot-averaged regression coefs), `rh_coefs_boot` / `rh_weights_boot` (per-iteration matrices), `train_components_sorted`, `mix_name`, `covariates`, `outcome`, and `formula` so that all of the new S3 methods can run without re-fitting.
-- **Version bump**: `DESCRIPTION` advanced to `0.2.0.9000` (development version of 0.2.0). `Suggests:` gained `broom` and `generics`. The "conditional logistic regression" line was removed from `Description:` to match the actual feature set.
+- **Version / metadata update**: `DESCRIPTION` now targets `0.2.0`. `Suggests:` gained `broom`, `generics`, `knitr`, and `rmarkdown`; `VignetteBuilder: knitr` was added; and the package description was updated to match the current family set.
 
 Landed in Phase 3:
 
@@ -57,10 +62,29 @@ Landed in Phase 3:
 - **`add_noise_by_snr()` documented as link-scale SNR** with the explicit formula `SNR = Var(Xβ) / Var(ε)`. A new test (`tests/testthat/test-snr.R`) pins `Var(η) / Var(noise) ≈ 10^(snr_db / 10)` to within 5% across multiple `snr_db` levels.
 - **`.calc_loss(y_true, mu_pred, fam_name)` extracted** as an internal function so the Poisson `mu → 0` clipping and the binomial `p → 0/1` clipping have direct unit-test coverage.
 
-Planned for later in this release (none landed yet):
+Landed in Phase 6: percentile-rank display unification + effect-curve API
 
-- "Soft" parameters such as `min_shape_sd`, `ties`, and `custom_knots` will move into a new `nwqs_control()` helper rather than living on the main `nwqs()` signature.
-- All user-facing defaults will be sourced from a package-level `NWQS_DEFAULTS` list (`R/zzz-defaults.R`), so the same value is not declared twice in `nwqs()` and `nwqs_boot()`.
+- **Display uniformly switches from Q-labels to P-labels in percentile_rank mode.** `nwqs()` and `nwqs_boot()` no longer emit `Q*_vs_Q*` strings when `transform_type = "percentile_rank"`: `extract_nwqs_effects()`, `nwqs_contrast()`, `print.nwqs()`, `print.nwqs_boot()`, `summary.nwqs_boot()`, `plot.nwqs()`, and `plot_nwqs_contrast_box()` all label contrasts as `P0`, `P25`, `P50`, `P75`, `P95`, `P100` etc. `q_bin` fits keep every legacy `Q*_vs_Q1` label.
+- **`extract_nwqs_effects()` gains `contrast_points`, `ref`, and `label_style`.** Default behavior (no args) preserves the legacy numeric grid; users can now request arbitrary contrasts via `contrast_points = c(0.25, 0.75), ref = 0.5`. Validation rejects points outside `[0, 1]` for percentile_rank. Now also accepts `nwqs_boot` objects (S3 dispatch) and returns bootstrap-percentile CIs from `rh_shapes_boot`/`rh_weights_boot`/`rh_coefs_boot`.
+- **`nwqs_contrast()` gains `target`, `ref`, and `label_style`.** Legacy `q_target`/`q_ref` continue to work for q_bin backward compatibility; supplying both `target` and `q_target` raises a clear warning and prefers the new arg. percentile_rank default is `target = 0.75, ref = 0.5` (paper-style P75 vs P50). The printed header now says "Percentile-rank Contrast" or "Quantile Contrast" based on `transform_type`. The invisible return list gains `target`, `ref`, `target_label`, `ref_label`, and `transform_type`.
+- **`print.nwqs()` gains `contrast_points`, `ref`, and `label_style`.** In percentile_rank mode the default table columns are now `P25 vs P50`, `P75 vs P50`, `P95 vs P50` (paper-style IQR + extreme upper). q_bin keeps the legacy `Q2 vs Q1` ... `Q{q} vs Q1` columns.
+- **`summary.nwqs_boot()` no longer hard-codes `Q*_vs_Q1` for its stability table.** It now reads the largest target dynamically from `boot_table$Target` and labels the per-component effect SD with the actual contrast string (e.g., `P100_vs_P0_Effect_SD`).
+- **`plot_nwqs_contrast_box()` and `plot.nwqs()` x-axis labels are transform-aware.** percentile_rank fits show "Joint exposure percentile rank"; q_bin fits keep "Exposure Quantile Index" / "Quantile Index". Boxplot facet ordering is derived from the numeric percentile/quantile parsed from each `Target` string instead of a hard-coded `Q2:Qn` factor.
+- **New `extract_nwqs_effect_curve(model, grid, ref, include_components, label_style)`.** Returns a tidy `data.frame` with `term`, `x`, `ref`, `estimate`, `lower`, `upper`, `transform_type`, and `inference_type` of the joint and per-component partial-effect curve relative to the chosen reference percentile. For `nwqs` inputs the band is the RH empirical quantile (algorithmic variance only, `inference_type = "repeated_holdout"`, NA when `rh = 1`); for `nwqs_boot` inputs the band is the bootstrap percentile CI (`inference_type = "bootstrap"`).
+- **New `plot_nwqs_effect_curve(model, grid, ref, include_components, label_style, base_size)`.** Wraps the extractor into a ggplot. Median-centered by default (`ref = 0.5`); set `include_components = TRUE` for component overlays. The y-axis label reports the actual reference, e.g., "Partial effect change relative to P50".
+- **`nwqs_boot()` stores `rh_shapes_boot`**, a per-replicate matrix of shape coefficients. This is required for bootstrap-percentile CIs on the effect curve and for `extract_nwqs_effects.nwqs_boot()` to recompute contrasts at user-specified points.
+- **`NWQS_DEFAULTS` gains** `contrast_target_pr = 0.75`, `contrast_ref_pr = 0.5`, `contrast_ref_q_bin = 0`, `contrast_points_print_pr = c(0.25, 0.75, 0.95)`, `effect_curve_grid = seq(0, 1, by = 0.01)`, `label_style = "auto"`. Every new default is the single source of truth referenced by the relevant function `formals`.
+
+Recommended usage:
+
+- Paper main-table contrast: `nwqs_contrast(fit, target = 0.75, ref = 0.25)` (IQR).
+- Paper main-figure curve: `plot_nwqs_effect_curve(fit, ref = 0.5)` (median-centered).
+- The extreme `P100 vs P0` contrast is allowed but not recommended as a paper main result.
+
+Landed in Phase 5: applied documentation + pkgdown
+
+- **Applied vignette**: `vignettes/nwqs-applied.Rmd` walks through an environmental-mixture example end to end: simulate a metals cohort, fit `nwqs()`, obtain valid inference with `nwqs_boot()`, score `newdata` with `predict()`, and show a count-outcome example with `family = "negbin"`.
+- **pkgdown configuration**: `_pkgdown.yml` now organizes reference topics, articles, and site navigation around the 0.2.0 API. A matching GitHub Actions workflow (`.github/workflows/pkgdown.yaml`) builds and deploys the site to GitHub Pages.
 
 ## New features
 
@@ -70,12 +94,9 @@ Landed:
 - GitHub Actions R-CMD-check workflow on macOS / Windows / Ubuntu × R-release / R-devel / R-oldrel-1.
 - `apply_percentile_rank()` and `build_spline_basis_knots()` helpers (exported).
 
-Planned for later in this release:
+Deferred beyond 0.2.0:
 
-- `predict()`, `vcov()`, `confint()` methods for `nwqs` and `nwqs_boot` objects, plus conditional `broom::tidy()` / `broom::glance()` registrations.
-- New families `negbin` (via `MASS::glm.nb`) and `ordinal` (via `MASS::polr`).
-- Applied-domain vignette demonstrating an environmental-exposure-to-health-outcome workflow.
-- pkgdown site.
+- `family = "ordinal"` via `MASS::polr` remains intentionally deferred to a separate plan.
 
 # NWQS 0.1.0
 

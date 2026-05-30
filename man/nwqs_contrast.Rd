@@ -2,25 +2,56 @@
 % Please edit documentation in R/utils.R
 \name{nwqs_contrast}
 \alias{nwqs_contrast}
-\title{Compute NWQS Joint Exposure Quantile Contrast Effects}
+\title{Compute NWQS Joint Exposure Contrast Effects}
 \usage{
-nwqs_contrast(model, q_target = NULL, q_ref = 0)
+nwqs_contrast(
+  model,
+  target = NULL,
+  ref = NULL,
+  q_target = NULL,
+  q_ref = NULL,
+  label_style = c("auto", "P", "Q", "numeric")
+)
 }
 \arguments{
-\item{model}{An object of class \code{"nwqs"}.}
+\item{model}{An object of class \code{"nwqs"} (or a bare \code{glm} from
+an \code{rh = 1} fit).}
 
-\item{q_target}{Integer. Target quantile index (0-based). For example, 3
-represents Q4. If \code{NULL}, automatically set to the maximum quantile.}
+\item{target}{Numeric scalar, or \code{NULL}. Target point on the transform
+scale. When \code{NULL}, defaults to \code{0.75} (percentile_rank) or to
+the maximum eval point \code{q - 1} (q_bin).}
 
-\item{q_ref}{Integer. Reference quantile index (0-based). Default is 0 (Q1).}
+\item{ref}{Numeric scalar, or \code{NULL}. Reference point. When
+\code{NULL}, defaults to \code{0.5} (percentile_rank) or \code{0} (q_bin).}
+
+\item{q_target}{Legacy 0-based target quantile-bin index, for q_bin
+backward compatibility. Ignored (with a warning) if \code{target} is
+supplied.}
+
+\item{q_ref}{Legacy 0-based reference quantile-bin index. Ignored (with a
+warning) if \code{ref} is supplied.}
+
+\item{label_style}{One of \code{"auto"}, \code{"P"}, \code{"Q"},
+\code{"numeric"}. \code{"auto"} (default) picks \code{"P"} for
+percentile_rank and \code{"Q"} for q_bin.}
 }
 \value{
-Invisibly returns a list containing \code{delta_eta}, \code{lower},
-and \code{upper}. When \code{rh = 1}, confidence bounds are \code{NA}.
+Invisibly, a list with \code{delta_eta}, \code{lower}, \code{upper},
+\code{target}, \code{ref}, \code{target_label}, \code{ref_label}, and
+\code{transform_type}. When \code{rh = 1}, CI bounds are \code{NA}.
 }
 \description{
-Evaluates the overall mixture non-linear effect significance and computes
-joint exposure quantile contrasts (e.g., all components simultaneously at
-their highest quantile vs. lowest). For logistic and Poisson models, results
-are automatically converted to odds ratios (OR) and rate ratios (RR).
+Evaluates the overall mixture non-linear effect significance and computes a
+joint exposure contrast between a target point and a reference point on the
+model's transform scale. For logistic and Poisson models, results are
+automatically converted to odds ratios (OR) and rate ratios (RR).
+}
+\details{
+When \code{model$transform_type = "percentile_rank"}, \code{target} and
+\code{ref} are interpreted as percentile-rank positions in \code{[0, 1]} and
+the printed title says \dQuote{Percentile-rank Contrast}; when
+\code{transform_type = "q_bin"}, the printed title keeps \dQuote{Quantile
+Contrast} and \code{q_target} / \code{q_ref} drive the legacy 0-based
+quantile-bin indexing. For applied-paper main tables the recommended choice
+is \code{target = 0.75, ref = 0.25} (IQR contrast).
 }

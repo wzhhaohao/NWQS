@@ -4,12 +4,30 @@
 \alias{print.nwqs}
 \title{Print NWQS Model Summary}
 \usage{
-\method{print}{nwqs}(x, digits = max(3L, getOption("digits") - 3L), ...)
+\method{print}{nwqs}(
+  x,
+  digits = max(3L, getOption("digits") - 3L),
+  contrast_points = NULL,
+  ref = NULL,
+  label_style = c("auto", "P", "Q", "numeric"),
+  ...
+)
 }
 \arguments{
 \item{x}{An object of class \code{"nwqs"}.}
 
 \item{digits}{Integer. Number of significant digits.}
+
+\item{contrast_points}{Numeric vector, or \code{NULL}. Target points on the
+transform scale to display as table columns. For percentile_rank fits, the
+default is \code{c(0.25, 0.75, 0.95)} (paper-style IQR + extreme upper).
+For q_bin fits, the default is \code{1:(q-1)} (legacy Q2..Q\{q\} columns).}
+
+\item{ref}{Numeric scalar, or \code{NULL}. Reference point. Defaults to
+\code{0.5} for percentile_rank and \code{0} for q_bin.}
+
+\item{label_style}{One of \code{"auto"}, \code{"P"}, \code{"Q"},
+\code{"numeric"}.}
 
 \item{...}{Additional arguments.}
 }
