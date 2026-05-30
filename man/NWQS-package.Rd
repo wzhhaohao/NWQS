@@ -6,7 +6,7 @@
 \alias{NWQS-package}
 \title{NWQS: Non-Linear Weighted Quantile Sum Regression}
 \description{
-Fits non-linear weighted quantile sum (NWQS) regression models for assessing the joint effect and relative importance of correlated mixture exposures. Extends classical WQS by incorporating natural cubic splines to capture non-linear dose-response relationships (e.g., threshold, U-shaped, S-shaped curves). Supports Gaussian, binomial, Poisson, quasi-Poisson, and conditional logistic regression families. Provides repeated holdout estimation, external bootstrap inference, permutation-based variable importance, and publication-quality diagnostic plots.
+Fits non-linear weighted quantile sum (NWQS) regression models for assessing the joint effect and relative importance of correlated mixture exposures. Extends classical WQS by incorporating natural cubic splines to capture non-linear dose-response relationships (e.g., threshold, U-shaped, S-shaped curves). Supports Gaussian, binomial, Poisson, and quasi-Poisson families. Provides repeated holdout estimation, external bootstrap inference, permutation-based variable importance, and publication-quality diagnostic plots.
 }
 \author{
 \strong{Maintainer}: Zhehao Wang \email{wangzhehao_bill@foxmail.com}

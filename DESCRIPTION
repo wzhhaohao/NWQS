@@ -1,6 +1,6 @@
 Package: NWQS
 Title: Non-Linear Weighted Quantile Sum Regression
-Version: 0.1.0
+Version: 0.2.0.9000
 Author: Zhehao Wang [aut, cre], Shirui Chen [aut], Ziqiang Lin [aut]
 Maintainer: Zhehao Wang <wangzhehao_bill@foxmail.com>
 Authors@R:
@@ -13,10 +13,9 @@ Description: Fits non-linear weighted quantile sum (NWQS) regression models
     mixture exposures. Extends classical WQS by incorporating natural cubic
     splines to capture non-linear dose-response relationships (e.g.,
     threshold, U-shaped, S-shaped curves). Supports Gaussian, binomial,
-    Poisson, quasi-Poisson, and conditional logistic regression families.
-    Provides repeated holdout estimation, external bootstrap inference,
-    permutation-based variable importance, and publication-quality
-    diagnostic plots.
+    Poisson, and quasi-Poisson families. Provides repeated holdout
+    estimation, external bootstrap inference, permutation-based variable
+    importance, and publication-quality diagnostic plots.
 License: GPL-3 + file LICENSE
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
@@ -31,6 +30,8 @@ Imports:
     scales,
     splines
 Suggests:
+    broom,
+    generics,
     ggdist,
     testthat
 Config/testthat/edition: 3
