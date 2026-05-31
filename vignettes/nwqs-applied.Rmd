@@ -1,0 +1,231 @@
+---
+title: "Non-Linear WQS for Mixture Exposures: an applied walkthrough"
+output:
+  rmarkdown::html_vignette:
+    toc: true
+    toc_depth: 2
+vignette: >
+  %\VignetteIndexEntry{Non-Linear WQS for Mixture Exposures: an applied walkthrough}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment  = "#>",
+  fig.width  = 6,
+  fig.height = 4,
+  dpi    = 96,
+  warning = FALSE
+)
+set.seed(2026)
+```
+
+```{r load}
+library(NWQS)
+```
+
+## When to use NWQS
+
+Environmental-health studies routinely have to summarize the joint effect of a
+*set* of correlated exposures — urinary metals, phthalate metabolites, PFAS
+analytes, indoor air pollutants — on a health endpoint. Classical weighted
+quantile sum (WQS) regression collapses the mixture into a single index. NWQS
+extends WQS in two practical ways:
+
+1. each component is expanded into a natural cubic spline basis on the
+   percentile-rank scale, so a non-linear dose-response (threshold, U-shape,
+   S-shape) is preserved instead of being forced into a single linear term;
+2. component weights are learned by **out-of-bag permutation importance**
+   inside repeated holdout splits, which avoids the regularization bias of
+   constrained-optimization WQS.
+
+The package supports `gaussian`, `binomial`, `poisson`, `quasipoisson`, and
+`negbin` outcomes. This vignette walks through a small simulated study from
+end to end.
+
+## A simulated metals → lung function cohort
+
+We construct a cohort of $n = 400$ adults with seven correlated urinary metal
+biomarkers (As, Cd, Pb, Hg, Mn, Ni, Se), age, and sex. The "true" mixture
+effect is non-linear: As and Cd drive a meaningful drop in lung function once
+their exposure exceeds the population median, while the other five metals are
+essentially noise.
+
+```{r data}
+gen_metals_cohort <- function(n = 400, seed = 11) {
+  set.seed(seed)
+  p <- 7
+  metals <- c("As", "Cd", "Pb", "Hg", "Mn", "Ni", "Se")
+  rho <- 0.45
+  Sigma <- matrix(rho, p, p); diag(Sigma) <- 1
+  L <- chol(Sigma)
+  X <- matrix(rnorm(n * p), n, p) %*% L
+  colnames(X) <- metals
+  # Percentile-rank to mimic biomarker scaling, then a non-linear effect on As/Cd
+  U <- apply(X, 2, function(col) rank(col, ties.method = "average") / n)
+  shape <- function(u) pmin(u, 0.5) * 0 + pmax(u - 0.5, 0) * (-2)
+  eta_mix <- shape(U[, "As"]) * 0.7 + shape(U[, "Cd"]) * 0.5
+  age <- rnorm(n, mean = 50, sd = 12)
+  sex <- factor(sample(c("F", "M"), n, replace = TRUE))
+  fev1 <- 3.5 - 0.012 * (age - 50) + ifelse(sex == "M", 0.45, 0) +
+          eta_mix + rnorm(n, sd = 0.30)
+  data.frame(fev1 = fev1, as.data.frame(X), age = age, sex = sex)
+}
+cohort <- gen_metals_cohort()
+head(cohort, 3)
+```
+
+## Fitting an NWQS model
+
+`nwqs()` does the heavy lifting in one call. The 0.2.0 defaults are
+`transform_type = "percentile_rank"`, `n_permutation = 30`, `rh = 10`. For the
+vignette we set `rh = 5` so the chunk runs quickly.
+
+```{r fit}
+metals <- c("As", "Cd", "Pb", "Hg", "Mn", "Ni", "Se")
+
+fit <- nwqs(
+  data           = cohort,
+  mix_name       = metals,
+  covariates     = c("age", "sex"),
+  outcome        = "fev1",
+  family         = "gaussian",
+  transform_type = "percentile_rank",
+  q              = 4,
+  rh             = 5,
+  n_permutation  = 5,
+  seed           = 1234,
+  quiet          = TRUE
+)
+print(fit)
+```
+
+The `final_weights` field gives each component's share of the mixture index;
+As and Cd should dominate by construction.
+
+```{r weights}
+round(sort(fit$final_weights, decreasing = TRUE), 3)
+```
+
+`plot(fit)` produces dose-response and weight diagnostics in one shot.
+
+```{r plot, fig.alt = "Dose-response curves and weight bars for the NWQS fit"}
+plot(fit)
+```
+
+## Valid sampling-variance inference: `nwqs_boot()`
+
+`fit$fit$coefficients` reports standard errors derived from the repeated
+holdout splits. Those are **algorithmic variance** — the spread across data
+splits with the original sample held fixed. They are not valid for inference.
+Use `nwqs_boot()` to get a real percentile bootstrap.
+
+```{r boot}
+boot_fit <- nwqs_boot(
+  data           = cohort,
+  mix_name       = metals,
+  covariates     = c("age", "sex"),
+  outcome        = "fev1",
+  family         = "gaussian",
+  transform_type = "percentile_rank",
+  q              = 4,
+  n_boot         = 30,
+  rh_inner       = 1,
+  n_permutation  = 5,
+  seed           = 1234,
+  quiet          = TRUE
+)
+print(boot_fit)
+```
+
+Bootstrap percentile CIs for every term are in `boot_fit$ci_table`.
+
+```{r boot-ci}
+boot_fit$ci_table
+```
+
+`confint(boot_fit)` returns the same intervals in `confint.glm()`-compatible
+matrix form, ready for table assembly.
+
+```{r boot-confint}
+confint(boot_fit)
+```
+
+## Predictions on new data
+
+The 0.2.0 `predict.nwqs()` method scores new observations on the **training**
+empirical distribution, so there is no train/predict drift. `type` selects the
+scale: `"nwqs_index"`, `"link"`, or `"response"` (the default).
+
+```{r predict}
+newdat <- gen_metals_cohort(n = 30, seed = 99)
+preds <- predict(fit, newdata = newdat, type = "response")
+head(data.frame(observed = newdat$fev1, predicted = preds), 5)
+```
+
+## Reporting with `broom`
+
+If `broom` (and `generics`) are installed, NWQS dispatches through the broom
+S3 generics automatically. `tidy(fit, conf.int = TRUE)` is publication-ready.
+
+```{r broom, eval = requireNamespace("broom", quietly = TRUE)}
+broom::tidy(boot_fit)
+broom::glance(boot_fit)
+```
+
+## A count-outcome example with `family = "negbin"`
+
+Many environmental endpoints are overdispersed counts — visits to a clinic,
+days with reported symptoms. `family = "negbin"` dispatches the final
+regression to `MASS::glm.nb()`; the rest of the pipeline (transforms,
+permutation importance, bootstrap CIs, predict, confint, tidy) is unchanged.
+
+```{r negbin}
+nb_dat <- gen_nbin_data(
+  n_obs     = 400,
+  n_vars    = 5,
+  beta      = c(0.7, -0.4, 0.0, 0.0, 0.0),
+  intercept = 1.0,
+  theta     = 2.0,
+  snr_db    = 15,
+  seed      = 7
+)
+
+nb_fit <- nwqs(
+  data           = nb_dat,
+  mix_name       = paste0("V", 1:5),
+  outcome        = "y",
+  family         = "negbin",
+  rh             = 5,
+  n_permutation  = 5,
+  seed           = 1234,
+  quiet          = TRUE
+)
+round(sort(nb_fit$final_weights, decreasing = TRUE), 3)
+```
+
+## Reproducing the 0.1.x defaults
+
+If a published analysis used 0.1.x, you can reproduce its discrete-quartile
+transform by passing the explicit opt-in arguments:
+
+```{r legacy, eval = FALSE}
+nwqs(
+  ...,
+  transform_type = "q_bin",
+  q              = 4
+)
+```
+
+See `NEWS.md` for the full list of breaking changes between 0.1.x and 0.2.0
+and for the migration recipes.
+
+## Where to go next
+
+- `?nwqs` for the full parameter list.
+- `?nwqs_boot` for bootstrap-specific options.
+- `?nwqs_control` for advanced knobs (`custom_knots`, `custom_boundary`).
+- `tests/testthat/` in the source tree for runnable contract examples of
+  every public method.

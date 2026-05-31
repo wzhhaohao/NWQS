@@ -1,0 +1,90 @@
+url: https://wzhhaohao.github.io/NWQS/
+
+template:
+  bootstrap: 5
+  bslib:
+    primary: "#1B6E73"
+    base_font: {google: "Inter"}
+    heading_font: {google: "Inter"}
+
+home:
+  title: Non-Linear Weighted Quantile Sum Regression for Mixture Exposures
+  description: >
+    NWQS extends classical WQS regression by quantile-transforming exposures,
+    expanding each component into a natural cubic spline basis, learning weights
+    with out-of-bag permutation importance under repeated holdout, and
+    delivering valid inference through an external bootstrap.
+
+navbar:
+  structure:
+    left:  [intro, reference, articles, news]
+    right: [search, github]
+
+reference:
+  - title: "Fitting"
+    desc: "Main entry points for fitting NWQS models and bootstrap inference."
+    contents:
+      - nwqs
+      - nwqs_boot
+      - nwqs_control
+
+  - title: "S3 methods"
+    desc: "Standard model-extraction methods for `nwqs` and `nwqs_boot` objects."
+    contents:
+      - predict.nwqs
+      - predict.nwqs_boot
+      - vcov.nwqs
+      - vcov.nwqs_boot
+      - confint.nwqs
+      - confint.nwqs_boot
+      - starts_with("print.")
+      - starts_with("summary.")
+      - starts_with("plot.")
+      - starts_with("coef.")
+
+  - title: "Transform layer"
+    desc: "Quantile / percentile-rank transforms and spline-knot helpers."
+    contents:
+      - trans_quantile
+      - apply_percentile_rank
+      - build_spline_basis_knots
+      - wqs_nonlinear_expand
+
+  - title: "Engines"
+    desc: "Permutation scoring and OOB orchestration."
+    contents:
+      - permutation_scorer
+      - run_oob_permutation
+
+  - title: "Effect extraction"
+    contents:
+      - extract_nwqs_effects
+      - extract_nwqs_effect_curve
+      - nwqs_contrast
+      - plot_nwqs_contrast_box
+      - plot_nwqs_effect_curve
+
+  - title: "Parallel"
+    contents:
+      - configure_parallel_plan
+
+  - title: "Data generation"
+    desc: "Synthetic generators used in tests and the applied vignette."
+    contents:
+      - starts_with("gen_")
+      - starts_with("generate_")
+      - add_noise_by_snr
+
+  - title: "Monte Carlo helpers"
+    contents:
+      - calc_true_importance
+      - calc_weight_error
+      - check_coverage
+      - check_boot_coverage
+      - evaluate_sim_performance
+      - plot_monte_carlo_benchmark
+
+articles:
+  - title: "Walkthroughs"
+    contents:
+      - nwqs-applied
