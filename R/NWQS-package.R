@@ -16,5 +16,8 @@ utils::globalVariables(c(
   "Component", "Weight", "Lower", "Upper",
   "y", "ymin", "ymax", "lower", "middle", "upper",
   "Model", "Deviance", "SAE", "Estimated_Weight",
-  "Quantile", "Effect"
+  "Quantile", "Effect",
+
+  # effect-curve plot aes() variables (R/effect-curve.R)
+  "x", "estimate", "term"
 ))

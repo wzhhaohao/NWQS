@@ -167,9 +167,8 @@ plot_nwqs_effect_curve <- function(model,
   has_ci <- any(!is.na(df$lower))
 
   p <- ggplot2::ggplot(df,
-                       ggplot2::aes(x = .data$x, y = .data$estimate,
-                                    color = .data$term, fill = .data$term,
-                                    group = .data$term)) +
+                       ggplot2::aes(x = x, y = estimate,
+                                    color = term, fill = term, group = term)) +
     ggplot2::geom_hline(yintercept = 0, linetype = "dashed",
                         color = "#95A5A6", linewidth = 0.5) +
     ggplot2::theme_minimal(base_size = base_size) +
@@ -177,8 +176,7 @@ plot_nwqs_effect_curve <- function(model,
                   x = x_label, y = y_label)
 
   if (has_ci) {
-    p <- p + ggplot2::geom_ribbon(ggplot2::aes(ymin = .data$lower,
-                                               ymax = .data$upper),
+    p <- p + ggplot2::geom_ribbon(ggplot2::aes(ymin = lower, ymax = upper),
                                   alpha = 0.15, color = NA)
   }
   p <- p + ggplot2::geom_line(linewidth = 1.1)
