@@ -108,7 +108,7 @@ test_that("baseline: quasipoisson nwqs has stable weights and coefs", {
 
 test_that("baseline: gaussian nwqs_boot returns valid CI structure", {
   d <- make_baseline_data(family = "gaussian", seed = 42)
-  boot_fit <- nwqs_boot(
+  boot_fit <- expect_small_boot_warning(nwqs_boot(
     data           = d,
     mix_name       = mix_names,
     outcome        = "y",
@@ -120,7 +120,7 @@ test_that("baseline: gaussian nwqs_boot returns valid CI structure", {
     quiet          = TRUE,
     transform_type = "q_bin",
     q              = 4
-  )
+  ))
   expect_s3_class(boot_fit, "nwqs_boot")
   expect_equal(boot_fit$family, "gaussian")
   expect_true(boot_fit$n_success > 0)

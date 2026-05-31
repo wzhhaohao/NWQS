@@ -26,21 +26,24 @@ test_that("nwqs() emits a message when min_shape_sd fires and quiet = FALSE", {
     X2 = rnorm(n),
     X3 = rnorm(n)
   )
-  expect_message(
-    nwqs(
-      data           = d,
-      mix_name       = c("X1", "X2", "X3"),
-      outcome        = "y",
-      family         = "gaussian",
-      rh             = 2,
-      n_permutation  = 3,
-      seed           = 1,
-      quiet          = FALSE,
-      transform_type = "q_bin",
-      q              = 4,
-      min_shape_sd   = 1e6  # force the trigger
+  expect_warning(
+    expect_message(
+      nwqs(
+        data           = d,
+        mix_name       = c("X1", "X2", "X3"),
+        outcome        = "y",
+        family         = "gaussian",
+        rh             = 2,
+        n_permutation  = 3,
+        seed           = 1,
+        quiet          = FALSE,
+        transform_type = "q_bin",
+        q              = 4,
+        min_shape_sd   = 1e6  # force the trigger
+      ),
+      regexp = "degenerate"
     ),
-    regexp = "degenerate"
+    regexp = "When rh > 1"
   )
 })
 

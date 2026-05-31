@@ -20,12 +20,17 @@
 
 ## Installation
 
-Install the development version from GitHub:
+Install the current source release from GitHub:
 
 ```r
 # install.packages("devtools")
 devtools::install_github("wzhhaohao/NWQS")
 ```
+
+## Documentation
+
+- Applied walkthrough: [`vignettes/nwqs-applied.Rmd`](vignettes/nwqs-applied.Rmd)
+- Release notes / migration guide: [`NEWS.md`](NEWS.md)
 
 ## Quick Start
 
@@ -93,7 +98,10 @@ boot_res <- nwqs_boot(
 )
 
 print(boot_res)
+confint(boot_res)
 plot(boot_res)
+
+predict(fit, newdata = dat[1:5, ], type = "response")
 ```
 
 ## Supported Families
@@ -117,6 +125,9 @@ plot(boot_res)
 |---|---|
 | `nwqs()` | Fit a Non-Linear WQS model with repeated holdout |
 | `nwqs_boot()` | Bootstrap confidence intervals for valid inference |
+| `predict()` | Score `newdata` on the fitted NWQS scale |
+| `vcov()` / `confint()` | Extract covariance matrices and confidence intervals |
+| `nwqs_control()` | Bundle advanced spline / weight-handling options |
 | `nwqs_contrast()` | Joint exposure quantile contrast significance test |
 | `extract_nwqs_effects()` | Extract component-specific quantile contrast effects |
 | `plot.nwqs()` | Dose-response curves and weight diagnostics |
@@ -132,6 +143,11 @@ plot(boot_res)
 | `generate_linear_data()` | Linear mixture effects (baseline comparison) |
 | `generate_sigma()` | Correlation matrices (low/medium/high/mixed) |
 
+The three non-linear generators default to the same percentile-rank DGP used
+by `nwqs()` and attach both `true_effect_mat` and a full `true_effect_curve`
+over `0, 0.01, ..., 1`. Pass `transform_type = "q_bin"` to reproduce the
+legacy discrete-bin simulation DGP.
+
 ## Method Overview
 
 The NWQS algorithm follows a three-stage architecture:
@@ -141,6 +157,8 @@ The NWQS algorithm follows a three-stage architecture:
 3. **1-DoF Effect Estimation** (Validation Set): Normalized shapes and weights are projected into a single `nwqs` index, and a standard GLM estimates the overall mixture effect.
 
 When `rh > 1`, the standard errors from `nwqs()` reflect only data-splitting variance. Use `nwqs_boot()` for valid statistical inference.
+
+Advanced spline controls such as `custom_knots`, `custom_boundary`, and `zero_weight_action` are supplied through `nwqs_control()` rather than being spread across the main model signature.
 
 ## License
 

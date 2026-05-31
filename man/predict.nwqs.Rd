@@ -37,8 +37,7 @@ A numeric vector with one element per row of newdata.
 }
 \description{
 Computes the NWQS latent index, the linear predictor, or the response-scale
-prediction for new data. The training-sample empirical distribution (saved
-as \code{train_components_sorted}) and the globally aligned spline knots
-are reused so that newdata is interpreted on the same scale used during
-fitting.
+prediction for new data. The fit-sample empirical distribution (saved as
+\code{train_components_sorted}) and the globally aligned spline knots are
+reused so that newdata is interpreted on the same scale used during fitting.
 }

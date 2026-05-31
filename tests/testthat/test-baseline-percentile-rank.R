@@ -95,7 +95,7 @@ test_that("percentile_rank baseline: quasipoisson", {
 
 test_that("percentile_rank baseline: gaussian nwqs_boot returns valid CI structure", {
   d <- make_pr_data(family = "gaussian", seed = 42)
-  boot_fit <- nwqs_boot(
+  boot_fit <- expect_small_boot_warning(nwqs_boot(
     data           = d,
     mix_name       = pr_mix_names,
     outcome        = "y",
@@ -107,7 +107,7 @@ test_that("percentile_rank baseline: gaussian nwqs_boot returns valid CI structu
     quiet          = TRUE,
     transform_type = "percentile_rank",
     q              = 4
-  )
+  ))
   expect_s3_class(boot_fit, "nwqs_boot")
   expect_equal(boot_fit$transform_type, "percentile_rank")
   expect_equal(boot_fit$family, "gaussian")

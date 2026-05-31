@@ -115,13 +115,13 @@ make_boot_fit_display <- function(family = "gaussian", n_boot = 8) {
   eta  <- as.matrix(mix) %*% beta + rnorm(n, sd = 0.5)
   y <- if (family == "gaussian") as.numeric(eta) else rbinom(n, 1, plogis(eta))
   dat <- cbind(mix, y = y)
-  nwqs_boot(
+  expect_small_boot_warning(nwqs_boot(
     data = dat, mix_name = paste0("Component", 1:3),
     outcome = "y", family = family,
     transform_type = "percentile_rank", q = 4,
     n_boot = n_boot, rh_inner = 1, n_permutation = 5,
     seed = 1234, quiet = TRUE
-  )
+  ))
 }
 
 test_that("print.nwqs_boot percentile_rank fit prints P-label columns, no Q", {

@@ -11,6 +11,7 @@ permutation_scorer(
   spline_vars,
   family,
   n_permutation = 30,
+  zero_weight_action = c("na", "uniform"),
   ...
 )
 }
@@ -31,6 +32,10 @@ spline basis functions.}
 \item{n_permutation}{Integer. Number of OOB permutations for stabilizing
 importance scores. Default is 30 (raised from 10 in 0.2.0 to give more
 stable weight estimates on small samples).}
+
+\item{zero_weight_action}{Character. One of \code{"na"} or
+\code{"uniform"}. Determines how zero total importance is converted to
+weights.}
 
 \item{...}{Additional compatibility parameters (accepted but ignored, so
 callers that pass extras like \code{strata_id} from older revisions still
@@ -65,4 +70,7 @@ loss change is measured.
 
 Weight derivation formula:
 \deqn{w_i = \frac{\sqrt{\max(0, \Delta Loss_i)}}{\sum \sqrt{\max(0, \Delta Loss)}}}
+If every component has non-positive OOB loss delta, \code{zero_weight_action}
+controls the degenerate case: \code{"na"} returns all-NA weights, while
+\code{"uniform"} returns \eqn{w_i = 1 / p} for \eqn{p} mixture components.
 }

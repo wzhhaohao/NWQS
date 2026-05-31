@@ -233,6 +233,190 @@ generate_linear_data <- function(n_obs = 1000,
 }
 
 
+.validate_nonlinear_q <- function(q) {
+  if (!is.numeric(q) || length(q) != 1 || is.na(q) || q < 2 || q != floor(q)) {
+    stop("`q` must be a single integer greater than or equal to 2.")
+  }
+  as.integer(q)
+}
+
+.validate_nonlinear_grid <- function(x, arg, transform_type, q = NULL) {
+  if (!is.numeric(x) || anyNA(x) || length(x) < 2) {
+    stop(sprintf("`%s` must be a numeric vector of length at least 2 with no NA values.", arg))
+  }
+  if (!is.null(q) && length(x) != q) {
+    stop(sprintf("`%s` must have length equal to `q`.", arg))
+  }
+  if (is.unsorted(x, strictly = TRUE)) {
+    stop(sprintf("`%s` must be strictly increasing.", arg))
+  }
+  if (identical(transform_type, "percentile_rank") && (min(x) < 0 || max(x) > 1)) {
+    stop(sprintf("`%s` must lie within [0, 1] when transform_type = 'percentile_rank'.", arg))
+  }
+  x
+}
+
+.default_nonlinear_eval_points <- function(transform_type, q, eval_points) {
+  if (is.null(eval_points)) {
+    eval_points <- if (identical(transform_type, "percentile_rank")) {
+      seq(0, 1, length.out = q)
+    } else {
+      0:(q - 1)
+    }
+  }
+  .validate_nonlinear_grid(eval_points, "eval_points", transform_type, q = q)
+}
+
+.effect_grid_names <- function(effect_grid, transform_type) {
+  if (identical(transform_type, "percentile_rank") &&
+      all(effect_grid >= 0 & effect_grid <= 1)) {
+    return(make.unique(sprintf("P%03d", round(effect_grid * 100))))
+  }
+  paste0("G", seq_along(effect_grid))
+}
+
+.shape_pattern <- function(shape, df_spline) {
+  pattern <- switch(
+    shape,
+    linear_like = c(1, 2, 3),
+    neg_linear = c(-1, -2, -3),
+    u_shape = c(1.5, -3.0, 1.5),
+    inv_u_shape = c(-1.5, 3.0, -1.5),
+    s_shape = c(1, -1, 1),
+    threshold = c(0, 0.5, 4.0),
+    inv_threshold = c(0, -0.5, -4.0),
+    rep(1, df_spline)
+  )
+  rep_len(pattern, df_spline)
+}
+
+.build_nonlinear_dgp <- function(preds_scaled, beta_wqs, beta_preds,
+                                 transform_fun, transform_type, ties,
+                                 q, df_spline, shape, eval_points,
+                                 effect_grid, allow_pure_linear) {
+  transform_type <- match.arg(transform_type, c("percentile_rank", "q_bin"))
+  ties <- match.arg(ties, c("average", "min", "max", "random"))
+  q <- .validate_nonlinear_q(q)
+  eval_points <- .default_nonlinear_eval_points(transform_type, q, eval_points)
+  effect_grid <- .validate_nonlinear_grid(effect_grid, "effect_grid", transform_type)
+
+  if (!is.null(transform_fun) && !is.function(transform_fun)) {
+    stop("`transform_fun` must be a function or NULL.")
+  }
+
+  preds_trans <- if (!is.null(transform_fun)) {
+    transform_fun(preds_scaled)
+  } else {
+    trans_quantile(preds_scaled, type = transform_type, q = q, ties = ties)
+  }
+  preds_trans <- as.data.frame(preds_trans)
+
+  n_vars <- ncol(preds_scaled)
+  if (length(beta_preds) != n_vars) {
+    stop("Length of 'beta_preds' must match n_vars.")
+  }
+  if (length(shape) == 1) shape <- rep(shape, n_vars)
+  if (length(shape) != n_vars) {
+    stop("Length of `shape` must be 1 or match the number of mixture components.")
+  }
+
+  basis_info <- build_spline_basis_knots(
+    transform_type = transform_type,
+    q = q,
+    df_spline = df_spline
+  )
+  global_knots <- basis_info$knots
+  global_boundary <- basis_info$boundary
+
+  mat_spline_list <- lapply(preds_trans, function(x) {
+    splines::ns(x,
+      df = df_spline,
+      knots = global_knots,
+      Boundary.knots = global_boundary
+    )
+  })
+  basis_eval <- splines::ns(eval_points,
+    df = df_spline,
+    knots = global_knots,
+    Boundary.knots = global_boundary,
+    intercept = FALSE
+  )
+  basis_curve <- splines::ns(effect_grid,
+    df = df_spline,
+    knots = global_knots,
+    Boundary.knots = global_boundary,
+    intercept = FALSE
+  )
+
+  comp_names <- names(preds_scaled)
+  eta_components_raw <- matrix(0, nrow = nrow(preds_scaled), ncol = n_vars)
+  baseline_components <- numeric(n_vars)
+
+  true_eff_mat <- matrix(0, nrow = n_vars + 1, ncol = q - 1)
+  rownames(true_eff_mat) <- c("Overall", comp_names)
+  colnames(true_eff_mat) <- paste0("Q", 2:q, "_vs_Q1")
+
+  true_effect_curve <- matrix(0, nrow = n_vars + 1, ncol = length(effect_grid))
+  rownames(true_effect_curve) <- c("Overall", comp_names)
+  colnames(true_effect_curve) <- .effect_grid_names(effect_grid, transform_type)
+
+  for (i in seq_len(n_vars)) {
+    current_shape <- shape[i]
+    b <- beta_preds[i] * beta_wqs
+
+    if (allow_pure_linear && identical(current_shape, "pure_linear")) {
+      eta_components_raw[, i] <- preds_trans[[i]] * b
+      baseline_components[i] <- effect_grid[1] * b
+      true_eff_mat[i + 1, ] <- (eval_points[-1] - eval_points[1]) * b
+      true_effect_curve[i + 1, ] <- (effect_grid - effect_grid[1]) * b
+    } else {
+      comp_beta <- b * .shape_pattern(current_shape, df_spline)
+      eta_components_raw[, i] <- as.vector(mat_spline_list[[i]] %*% comp_beta)
+      baseline_components[i] <- as.numeric(basis_curve[1, , drop = FALSE] %*% comp_beta)
+
+      for (k in 2:q) {
+        b_diff <- basis_eval[k, ] - basis_eval[1, ]
+        true_eff_mat[i + 1, k - 1] <- sum(b_diff * comp_beta)
+      }
+
+      curve_diff <- sweep(basis_curve, 2, basis_curve[1, ], FUN = "-")
+      true_effect_curve[i + 1, ] <- as.vector(curve_diff %*% comp_beta)
+    }
+  }
+
+  true_eff_mat["Overall", ] <- colSums(true_eff_mat[comp_names, , drop = FALSE])
+  true_effect_curve["Overall", ] <- colSums(true_effect_curve[comp_names, , drop = FALSE])
+
+  list(
+    transform_type = transform_type,
+    ties = ties,
+    q = q,
+    eval_points = eval_points,
+    effect_grid = effect_grid,
+    preds_trans = preds_trans,
+    eta_components_raw = eta_components_raw,
+    baseline_components = baseline_components,
+    true_effect_mat = true_eff_mat,
+    true_effect_curve = true_effect_curve,
+    spline_knots = global_knots,
+    spline_boundary = global_boundary
+  )
+}
+
+.attach_nonlinear_dgp_attrs <- function(final_df, dgp) {
+  attr(final_df, "transform_type") <- dgp$transform_type
+  attr(final_df, "ties") <- dgp$ties
+  attr(final_df, "q") <- dgp$q
+  attr(final_df, "eval_points") <- dgp$eval_points
+  attr(final_df, "effect_grid") <- dgp$effect_grid
+  attr(final_df, "true_effect_mat") <- dgp$true_effect_mat
+  attr(final_df, "true_effect_curve") <- dgp$true_effect_curve
+  attr(final_df, "spline_knots") <- dgp$spline_knots
+  attr(final_df, "spline_boundary") <- dgp$spline_boundary
+  final_df
+}
+
+
 #' @title Generate Non-Linear Spline Dose-Response Data (Continuous Outcome)
 #'
 #' @description
@@ -249,8 +433,20 @@ generate_linear_data <- function(n_obs = 1000,
 #' @param beta_preds Numeric vector. Component-specific effect weights.
 #' @param snr_db Numeric. Signal-to-noise ratio in dB. Default is 10.
 #' @param transform_fun Function or \code{NULL}. Custom transformation for
-#'   exposures.
-#' @param q Integer. Number of quantile bins. Default is 4.
+#'   exposures. If supplied, it is used instead of \code{transform_type}.
+#' @param transform_type Character. Either \code{"percentile_rank"} (default)
+#'   or \code{"q_bin"}. The default aligns the simulation DGP with the
+#'   default \code{\link{nwqs}} exposure transform.
+#' @param q Integer. Number of contrast/evaluation points. With
+#'   \code{transform_type = "q_bin"} it is also the number of discrete bins.
+#'   Default is 4.
+#' @param ties Character. Tie handling passed to \code{\link{trans_quantile}}
+#'   when \code{transform_type = "percentile_rank"}.
+#' @param eval_points Numeric vector or \code{NULL}. Points used to construct
+#'   the compact \code{true_effect_mat}. If \code{NULL}, percentile-rank uses
+#'   \code{seq(0, 1, length.out = q)} and q-bin uses \code{0:(q - 1)}.
+#' @param effect_grid Numeric vector. Grid used to construct the full
+#'   \code{true_effect_curve}; default is every percentile from 0 to 1.
 #' @param df_spline Integer. Degrees of freedom for natural cubic splines.
 #'   Default is 3.
 #' @param seed Integer or \code{NULL}. Random seed.
@@ -267,7 +463,11 @@ gen_nonlinear_data <- function(n_obs = 1000,
                                beta_preds,
                                snr_db = 10,
                                transform_fun = NULL,
-                               q = 4,
+                               transform_type = NWQS_DEFAULTS$transform_type,
+                               q = NWQS_DEFAULTS$q,
+                               ties = NWQS_DEFAULTS$ties,
+                               eval_points = NULL,
+                               effect_grid = seq(0, 1, by = 0.01),
                                df_spline = 3,
                                seed = NULL,
                                shape = "linear_like",
@@ -281,78 +481,24 @@ gen_nonlinear_data <- function(n_obs = 1000,
   n_vars <- ncol(preds_scaled)
   names(preds_scaled) <- paste0("Component", 1:n_vars)
 
-  if (!is.null(transform_fun) && is.function(transform_fun)) {
-    preds_trans <- transform_fun(preds_scaled)
-  } else {
-    preds_trans <- preds_scaled
-  }
-
-  mat_spline_list <- lapply(preds_trans, function(x) splines::ns(x, df = df_spline))
-
-  if (length(beta_preds) != n_vars) stop("Length of 'beta_preds' must match n_vars.")
+  dgp <- .build_nonlinear_dgp(
+    preds_scaled = preds_scaled,
+    beta_wqs = beta_wqs,
+    beta_preds = beta_preds,
+    transform_fun = transform_fun,
+    transform_type = transform_type,
+    ties = ties,
+    q = q,
+    df_spline = df_spline,
+    shape = shape,
+    eval_points = eval_points,
+    effect_grid = effect_grid,
+    allow_pure_linear = FALSE
+  )
 
   cov_list <- generate_covariates(n_obs = n_obs, ...)
-
-  eval_pts <- 0:(q - 1)
-
-  temp_spline <- splines::ns(eval_pts, df = df_spline)
-  global_knots <- attr(temp_spline, "knots")
-  global_boundary <- attr(temp_spline, "Boundary.knots")
-
-  mat_spline_list <- lapply(preds_trans, function(x) {
-    splines::ns(x, df = df_spline, knots = global_knots, Boundary.knots = global_boundary)
-  })
-
-  basis_std_true <- splines::ns(eval_pts, df = df_spline, knots = global_knots, Boundary.knots = global_boundary, intercept = FALSE)
-
-  if (length(shape) == 1) shape <- rep(shape, n_vars)
-
-  eta_components_raw <- matrix(0, nrow = n_obs, ncol = n_vars)
-  baseline_components <- numeric(n_vars)
-
-  true_eff_mat <- matrix(0, nrow = n_vars + 1, ncol = q - 1)
-  rownames(true_eff_mat) <- c("Overall", names(preds_scaled))
-  colnames(true_eff_mat) <- paste0("Q", 2:q, "_vs_Q1")
-
-  for (i in 1:n_vars) {
-    current_shape <- shape[i]
-    b <- beta_preds[i] * beta_wqs
-    min_x <- min(preds_trans[, i])
-
-    if (current_shape == "linear_like") {
-      pattern <- c(1, 2, 3)
-    } else if (current_shape == "neg_linear") {
-      pattern <- c(-1, -2, -3)
-    } else if (current_shape == "u_shape") {
-      pattern <- c(1.5, -3.0, 1.5)
-    } else if (current_shape == "inv_u_shape") {
-      pattern <- c(-1.5, 3.0, -1.5)
-    } else if (current_shape == "s_shape") {
-      pattern <- c(1, -1, 1)
-    } else if (current_shape == "threshold") {
-      pattern <- c(0, 0.5, 4.0)
-    } else if (current_shape == "inv_threshold") {
-      pattern <- c(0, -0.5, -4.0)
-    } else {
-      pattern <- rep(1, df_spline)
-    }
-
-    comp_beta <- b * pattern
-    eta_components_raw[, i] <- as.vector(mat_spline_list[[i]] %*% comp_beta)
-    baseline_components[i] <- as.vector(predict(mat_spline_list[[i]], newx = min_x) %*% comp_beta)
-
-    for (k in 2:q) {
-      b_diff <- basis_std_true[k, ] - basis_std_true[1, ]
-      true_eff_mat[i + 1, k - 1] <- sum(b_diff * comp_beta)
-    }
-  }
-
-  for (k in 2:q) {
-    true_eff_mat[1, k - 1] <- sum(true_eff_mat[2:(n_vars + 1), k - 1])
-  }
-
-  eta_spline_raw <- rowSums(eta_components_raw)
-  baseline_effect <- sum(baseline_components)
+  eta_spline_raw <- rowSums(dgp$eta_components_raw)
+  baseline_effect <- sum(dgp$baseline_components)
 
   eta_spline_adjusted <- eta_spline_raw - baseline_effect
   y_clean <- eta_spline_adjusted + cov_list$eta_cov
@@ -360,13 +506,8 @@ gen_nonlinear_data <- function(n_obs = 1000,
   y_observed <- add_noise_by_snr(as.vector(y_clean), snr_db = snr_db)
 
   cols_cov <- setdiff(names(cov_list$mm), "eta_cov")
-  final_df <- cbind(y = y_observed, preds_scaled, cov_list$mm[, cols_cov, drop = FALSE])
-
-  attr(final_df, "true_effect_mat") <- true_eff_mat
-  attr(final_df, "spline_knots") <- global_knots
-  attr(final_df, "spline_boundary") <- global_boundary
-
-  return(as.data.frame(final_df))
+  final_df <- as.data.frame(cbind(y = y_observed, preds_scaled, cov_list$mm[, cols_cov, drop = FALSE]))
+  .attach_nonlinear_dgp_attrs(final_df, dgp)
 }
 
 #' @title Generate Non-Linear Binary Outcome Data
@@ -391,8 +532,20 @@ gen_nonlinear_data <- function(n_obs = 1000,
 #' @param snr_db Numeric. Signal-to-noise ratio in dB. Default is
 #'   \code{Inf} (no noise).
 #' @param transform_fun Function or \code{NULL}. Custom transformation for
-#'   exposures.
-#' @param q Integer. Number of quantile bins. Default is 4.
+#'   exposures. If supplied, it is used instead of \code{transform_type}.
+#' @param transform_type Character. Either \code{"percentile_rank"} (default)
+#'   or \code{"q_bin"}. The default aligns the simulation DGP with the
+#'   default \code{\link{nwqs}} exposure transform.
+#' @param q Integer. Number of contrast/evaluation points. With
+#'   \code{transform_type = "q_bin"} it is also the number of discrete bins.
+#'   Default is 4.
+#' @param ties Character. Tie handling passed to \code{\link{trans_quantile}}
+#'   when \code{transform_type = "percentile_rank"}.
+#' @param eval_points Numeric vector or \code{NULL}. Points used to construct
+#'   the compact \code{true_effect_mat}. If \code{NULL}, percentile-rank uses
+#'   \code{seq(0, 1, length.out = q)} and q-bin uses \code{0:(q - 1)}.
+#' @param effect_grid Numeric vector. Grid used to construct the full
+#'   \code{true_effect_curve}; default is every percentile from 0 to 1.
 #' @param df_spline Integer. Degrees of freedom for natural cubic splines.
 #'   Default is 3.
 #' @param seed Integer or \code{NULL}. Random seed.
@@ -405,7 +558,12 @@ gen_nonlinear_bio_data <- function(n_obs = 1000, mu_preds, sigma_preds,
                                    intercept = 0, target_prop = NULL,
                                    link = c("logit", "probit", "cloglog"),
                                    snr_db = Inf, transform_fun = NULL,
-                                   q = 4, df_spline = 3, seed = NULL,
+                                   transform_type = NWQS_DEFAULTS$transform_type,
+                                   q = NWQS_DEFAULTS$q,
+                                   ties = NWQS_DEFAULTS$ties,
+                                   eval_points = NULL,
+                                   effect_grid = seq(0, 1, by = 0.01),
+                                   df_spline = 3, seed = NULL,
                                    shape = "linear_like", ...) {
   if (!requireNamespace("splines", quietly = TRUE)) stop("Package 'splines' required")
   if (!requireNamespace("MASS", quietly = TRUE)) stop("Package 'MASS' required")
@@ -418,85 +576,24 @@ gen_nonlinear_bio_data <- function(n_obs = 1000, mu_preds, sigma_preds,
   n_vars <- ncol(preds_scaled)
   names(preds_scaled) <- paste0("Component", 1:ncol(preds_scaled))
 
-  if (!is.null(transform_fun) && is.function(transform_fun)) {
-    preds_trans <- transform_fun(preds_scaled)
-  } else {
-    preds_trans <- preds_scaled
-  }
-
-  if (length(beta_preds) != n_vars) stop("Length of 'beta_preds' must match n_vars.")
+  dgp <- .build_nonlinear_dgp(
+    preds_scaled = preds_scaled,
+    beta_wqs = beta_wqs,
+    beta_preds = beta_preds,
+    transform_fun = transform_fun,
+    transform_type = transform_type,
+    ties = ties,
+    q = q,
+    df_spline = df_spline,
+    shape = shape,
+    eval_points = eval_points,
+    effect_grid = effect_grid,
+    allow_pure_linear = TRUE
+  )
 
   cov_list <- generate_covariates(n_obs = n_obs, ...)
-
-  eval_pts <- 0:(q - 1)
-  temp_spline <- splines::ns(eval_pts, df = df_spline)
-  global_knots <- attr(temp_spline, "knots")
-  global_boundary <- attr(temp_spline, "Boundary.knots")
-
-  mat_spline_list <- lapply(preds_trans, function(x) {
-    splines::ns(x, df = df_spline, knots = global_knots, Boundary.knots = global_boundary)
-  })
-
-  basis_std_true <- splines::ns(eval_pts, df = df_spline, knots = global_knots, Boundary.knots = global_boundary, intercept = FALSE)
-
-  if (length(shape) == 1) shape <- rep(shape, n_vars)
-
-  eta_components_raw <- matrix(0, nrow = n_obs, ncol = n_vars)
-  baseline_components <- numeric(n_vars)
-
-  true_eff_mat <- matrix(0, nrow = n_vars + 1, ncol = q - 1)
-  rownames(true_eff_mat) <- c("Overall", names(preds_scaled))
-  colnames(true_eff_mat) <- paste0("Q", 2:q, "_vs_Q1")
-
-  for (i in 1:n_vars) {
-    current_shape <- shape[i]
-    b <- beta_preds[i] * beta_wqs
-    min_x <- min(preds_trans[, i])
-
-    if (current_shape == "pure_linear") {
-      eta_components_raw[, i] <- preds_trans[, i] * b
-      baseline_components[i] <- min_x * b
-
-      for (k in 2:q) {
-        true_eff_mat[i + 1, k - 1] <- (eval_pts[k] - eval_pts[1]) * b
-      }
-    } else {
-      if (current_shape == "linear_like") {
-        pattern <- c(1, 2, 3)
-      } else if (current_shape == "neg_linear") {
-        pattern <- c(-1, -2, -3)
-      } else if (current_shape == "u_shape") {
-        pattern <- c(1.5, -3.0, 1.5)
-      } else if (current_shape == "inv_u_shape") {
-        pattern <- c(-1.5, 3.0, -1.5)
-      } else if (current_shape == "s_shape") {
-        pattern <- c(1, -1, 1)
-      } else if (current_shape == "threshold") {
-        pattern <- c(0, 0.5, 4.0)
-      } else if (current_shape == "inv_threshold") {
-        pattern <- c(0, -0.5, -4.0)
-      } else {
-        pattern <- rep(1, df_spline)
-      }
-
-      comp_beta <- b * pattern
-
-      eta_components_raw[, i] <- as.vector(mat_spline_list[[i]] %*% comp_beta)
-      baseline_components[i] <- as.vector(predict(mat_spline_list[[i]], newx = min_x) %*% comp_beta)
-
-      for (k in 2:q) {
-        b_diff <- basis_std_true[k, ] - basis_std_true[1, ]
-        true_eff_mat[i + 1, k - 1] <- sum(b_diff * comp_beta)
-      }
-    }
-  }
-
-  for (k in 2:q) {
-    true_eff_mat[1, k - 1] <- sum(true_eff_mat[2:(n_vars + 1), k - 1])
-  }
-
-  eta_spline_raw <- rowSums(eta_components_raw)
-  baseline_effect <- sum(baseline_components)
+  eta_spline_raw <- rowSums(dgp$eta_components_raw)
+  baseline_effect <- sum(dgp$baseline_components)
 
   eta_spline_adjusted <- eta_spline_raw - baseline_effect
   eta_partial <- eta_spline_adjusted + cov_list$eta_cov
@@ -537,13 +634,10 @@ gen_nonlinear_bio_data <- function(n_obs = 1000, mu_preds, sigma_preds,
   y_binary <- rbinom(n_obs, size = 1, prob = probs)
 
   cols_cov <- setdiff(names(cov_list$mm), "eta_cov")
-  final_df <- cbind(y = y_binary, preds_scaled, cov_list$mm[, cols_cov, drop = FALSE])
-
-  attr(final_df, "true_effect_mat") <- true_eff_mat
+  final_df <- as.data.frame(cbind(y = y_binary, preds_scaled, cov_list$mm[, cols_cov, drop = FALSE]))
+  final_df <- .attach_nonlinear_dgp_attrs(final_df, dgp)
   attr(final_df, "true_prob") <- probs
-  attr(final_df, "spline_knots") <- global_knots
-  attr(final_df, "spline_boundary") <- global_boundary
-  return(as.data.frame(final_df))
+  final_df
 }
 
 
@@ -566,8 +660,20 @@ gen_nonlinear_bio_data <- function(n_obs = 1000, mu_preds, sigma_preds,
 #' @param snr_db Numeric. Signal-to-noise ratio in dB. Default is
 #'   \code{Inf} (no noise).
 #' @param transform_fun Function or \code{NULL}. Custom transformation for
-#'   exposures.
-#' @param q Integer. Number of quantile bins. Default is 4.
+#'   exposures. If supplied, it is used instead of \code{transform_type}.
+#' @param transform_type Character. Either \code{"percentile_rank"} (default)
+#'   or \code{"q_bin"}. The default aligns the simulation DGP with the
+#'   default \code{\link{nwqs}} exposure transform.
+#' @param q Integer. Number of contrast/evaluation points. With
+#'   \code{transform_type = "q_bin"} it is also the number of discrete bins.
+#'   Default is 4.
+#' @param ties Character. Tie handling passed to \code{\link{trans_quantile}}
+#'   when \code{transform_type = "percentile_rank"}.
+#' @param eval_points Numeric vector or \code{NULL}. Points used to construct
+#'   the compact \code{true_effect_mat}. If \code{NULL}, percentile-rank uses
+#'   \code{seq(0, 1, length.out = q)} and q-bin uses \code{0:(q - 1)}.
+#' @param effect_grid Numeric vector. Grid used to construct the full
+#'   \code{true_effect_curve}; default is every percentile from 0 to 1.
 #' @param df_spline Integer. Degrees of freedom for natural cubic splines.
 #'   Default is 3.
 #' @param seed Integer or \code{NULL}. Random seed.
@@ -578,7 +684,12 @@ gen_nonlinear_bio_data <- function(n_obs = 1000, mu_preds, sigma_preds,
 gen_nonlinear_count_data <- function(n_obs = 1000, mu_preds, sigma_preds,
                                      beta_wqs = 1, beta_preds,
                                      intercept = 0, snr_db = Inf,
-                                     transform_fun = NULL, q = 4,
+                                     transform_fun = NULL,
+                                     transform_type = NWQS_DEFAULTS$transform_type,
+                                     q = NWQS_DEFAULTS$q,
+                                     ties = NWQS_DEFAULTS$ties,
+                                     eval_points = NULL,
+                                     effect_grid = seq(0, 1, by = 0.01),
                                      df_spline = 3, seed = NULL,
                                      shape = "linear_like", ...) {
   if (!requireNamespace("splines", quietly = TRUE)) stop("Package 'splines' required")
@@ -590,85 +701,24 @@ gen_nonlinear_count_data <- function(n_obs = 1000, mu_preds, sigma_preds,
   n_vars <- ncol(preds_scaled)
   names(preds_scaled) <- paste0("Component", 1:n_vars)
 
-  if (!is.null(transform_fun) && is.function(transform_fun)) {
-    preds_trans <- transform_fun(preds_scaled)
-  } else {
-    preds_trans <- preds_scaled
-  }
-
-  if (length(beta_preds) != n_vars) stop("Length of 'beta_preds' must match n_vars.")
+  dgp <- .build_nonlinear_dgp(
+    preds_scaled = preds_scaled,
+    beta_wqs = beta_wqs,
+    beta_preds = beta_preds,
+    transform_fun = transform_fun,
+    transform_type = transform_type,
+    ties = ties,
+    q = q,
+    df_spline = df_spline,
+    shape = shape,
+    eval_points = eval_points,
+    effect_grid = effect_grid,
+    allow_pure_linear = TRUE
+  )
 
   cov_list <- generate_covariates(n_obs = n_obs, ...)
-
-  eval_pts <- 0:(q - 1)
-  temp_spline <- splines::ns(eval_pts, df = df_spline)
-  global_knots <- attr(temp_spline, "knots")
-  global_boundary <- attr(temp_spline, "Boundary.knots")
-
-  mat_spline_list <- lapply(preds_trans, function(x) {
-    splines::ns(x, df = df_spline, knots = global_knots, Boundary.knots = global_boundary)
-  })
-
-  basis_std_true <- splines::ns(eval_pts, df = df_spline, knots = global_knots, Boundary.knots = global_boundary, intercept = FALSE)
-
-  if (length(shape) == 1) shape <- rep(shape, n_vars)
-
-  eta_components_raw <- matrix(0, nrow = n_obs, ncol = n_vars)
-  baseline_components <- numeric(n_vars)
-
-  true_eff_mat <- matrix(0, nrow = n_vars + 1, ncol = q - 1)
-  rownames(true_eff_mat) <- c("Overall", names(preds_scaled))
-  colnames(true_eff_mat) <- paste0("Q", 2:q, "_vs_Q1")
-
-  for (i in 1:n_vars) {
-    current_shape <- shape[i]
-    b <- beta_preds[i] * beta_wqs
-    min_x <- min(preds_trans[, i])
-
-    if (current_shape == "pure_linear") {
-      eta_components_raw[, i] <- preds_trans[, i] * b
-      baseline_components[i] <- min_x * b
-
-      for (k in 2:q) {
-        true_eff_mat[i + 1, k - 1] <- (eval_pts[k] - eval_pts[1]) * b
-      }
-    } else {
-      if (current_shape == "linear_like") {
-        pattern <- c(1, 2, 3)
-      } else if (current_shape == "neg_linear") {
-        pattern <- c(-1, -2, -3)
-      } else if (current_shape == "u_shape") {
-        pattern <- c(1.5, -3.0, 1.5)
-      } else if (current_shape == "inv_u_shape") {
-        pattern <- c(-1.5, 3.0, -1.5)
-      } else if (current_shape == "s_shape") {
-        pattern <- c(1, -1, 1)
-      } else if (current_shape == "threshold") {
-        pattern <- c(0, 0.5, 4.0)
-      } else if (current_shape == "inv_threshold") {
-        pattern <- c(0, -0.5, -4.0)
-      } else {
-        pattern <- rep(1, df_spline)
-      }
-
-      comp_beta <- b * pattern
-
-      eta_components_raw[, i] <- as.vector(mat_spline_list[[i]] %*% comp_beta)
-      baseline_components[i] <- as.vector(predict(mat_spline_list[[i]], newx = min_x) %*% comp_beta)
-
-      for (k in 2:q) {
-        b_diff <- basis_std_true[k, ] - basis_std_true[1, ]
-        true_eff_mat[i + 1, k - 1] <- sum(b_diff * comp_beta)
-      }
-    }
-  }
-
-  for (k in 2:q) {
-    true_eff_mat[1, k - 1] <- sum(true_eff_mat[2:(n_vars + 1), k - 1])
-  }
-
-  eta_spline_raw <- rowSums(eta_components_raw)
-  baseline_effect <- sum(baseline_components)
+  eta_spline_raw <- rowSums(dgp$eta_components_raw)
+  baseline_effect <- sum(dgp$baseline_components)
 
   eta_spline_adjusted <- eta_spline_raw - baseline_effect
   eta_partial <- eta_spline_adjusted + cov_list$eta_cov
@@ -687,12 +737,8 @@ gen_nonlinear_count_data <- function(n_obs = 1000, mu_preds, sigma_preds,
   y_count <- rpois(n_obs, lambda = lambda)
 
   cols_cov <- setdiff(names(cov_list$mm), "eta_cov")
-  final_df <- cbind(y = y_count, preds_scaled, cov_list$mm[, cols_cov, drop = FALSE])
-
-  attr(final_df, "true_effect_mat") <- true_eff_mat
-  attr(final_df, "spline_knots") <- global_knots
-  attr(final_df, "spline_boundary") <- global_boundary
-  return(as.data.frame(final_df))
+  final_df <- as.data.frame(cbind(y = y_count, preds_scaled, cov_list$mm[, cols_cov, drop = FALSE]))
+  .attach_nonlinear_dgp_attrs(final_df, dgp)
 }
 
 

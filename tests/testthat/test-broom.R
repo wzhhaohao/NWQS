@@ -63,11 +63,11 @@ test_that("glance_nwqs returns a one-row data.frame with n / family / rh", {
 
 test_that("tidy_nwqs_boot returns estimate / std.error / conf.low / conf.high", {
   d <- make_broom_data()
-  boot_fit <- nwqs_boot(
+  boot_fit <- expect_small_boot_warning(nwqs_boot(
     data = d, mix_name = c("X1", "X2", "X3"), outcome = "y",
     family = "gaussian", n_boot = 8, rh_inner = 1, n_permutation = 3,
     seed = 1, quiet = TRUE, transform_type = "q_bin", q = 4
-  )
+  ))
   out <- NWQS:::tidy_nwqs_boot(boot_fit)
   expect_s3_class(out, "data.frame")
   expect_true(all(c("term", "estimate", "std.error",
@@ -77,11 +77,11 @@ test_that("tidy_nwqs_boot returns estimate / std.error / conf.low / conf.high", 
 
 test_that("glance_nwqs_boot includes n_boot and n_success", {
   d <- make_broom_data()
-  boot_fit <- nwqs_boot(
+  boot_fit <- expect_small_boot_warning(nwqs_boot(
     data = d, mix_name = c("X1", "X2", "X3"), outcome = "y",
     family = "gaussian", n_boot = 8, rh_inner = 1, n_permutation = 3,
     seed = 1, quiet = TRUE, transform_type = "q_bin", q = 4
-  )
+  ))
   out <- NWQS:::glance_nwqs_boot(boot_fit)
   expect_equal(nrow(out), 1)
   expect_true(all(c("n", "family", "transform_type", "n_boot", "n_success",

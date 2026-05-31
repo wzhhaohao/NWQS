@@ -20,6 +20,9 @@
 #'
 #' Weight derivation formula:
 #' \deqn{w_i = \frac{\sqrt{\max(0, \Delta Loss_i)}}{\sum \sqrt{\max(0, \Delta Loss)}}}
+#' If every component has non-positive OOB loss delta, \code{zero_weight_action}
+#' controls the degenerate case: \code{"na"} returns all-NA weights, while
+#' \code{"uniform"} returns \eqn{w_i = 1 / p} for \eqn{p} mixture components.
 #'
 #' @param x Numeric matrix. Design matrix containing spline basis columns and
 #'   adjustment covariates.
@@ -32,6 +35,9 @@
 #' @param n_permutation Integer. Number of OOB permutations for stabilizing
 #'   importance scores. Default is 30 (raised from 10 in 0.2.0 to give more
 #'   stable weight estimates on small samples).
+#' @param zero_weight_action Character. One of \code{"na"} or
+#'   \code{"uniform"}. Determines how zero total importance is converted to
+#'   weights.
 #' @param ... Additional compatibility parameters (accepted but ignored, so
 #'   callers that pass extras like \code{strata_id} from older revisions still
 #'   work).
@@ -47,10 +53,12 @@
 #' @importFrom stats coef predict glm.fit as.formula
 #' @export
 permutation_scorer <- function(x, y, mix_name, spline_vars, family,
-                               n_permutation = 30, ...) {
+                               n_permutation = 30,
+                               zero_weight_action = c("na", "uniform"), ...) {
   n_obs <- nrow(x)
   fam_name <- family$family
   linkinv <- family$linkinv
+  zero_weight_action <- match.arg(zero_weight_action)
 
   idx <- sample(seq_len(n_obs), size = n_obs, replace = TRUE)
   oob_idx <- setdiff(seq_len(n_obs), idx)
@@ -119,18 +127,37 @@ permutation_scorer <- function(x, y, mix_name, spline_vars, family,
     importance_scores[var] <- max(0, mean(shuffled_loss_list) - base_loss)
   }
 
-  if (sum(importance_scores) <= 0) {
-    weights <- rep(NA_real_, length(mix_name))
-    names(weights) <- mix_name
+  weights <- .importance_to_weights(importance_scores, zero_weight_action)
+
+  if (all(is.na(weights))) {
     shape_coefs <- rep(NA_real_, length(spline_vars))
     names(shape_coefs) <- spline_vars
   } else {
-    weights <- sqrt(importance_scores) / sum(sqrt(importance_scores))
     shape_coefs <- coefs_no_int[spline_vars]
     shape_coefs[is.na(shape_coefs)] <- 0
   }
 
   return(list(weights = weights, shapes = shape_coefs))
+}
+
+.importance_to_weights <- function(importance_scores,
+                                   zero_weight_action = c("na", "uniform")) {
+  zero_weight_action <- match.arg(zero_weight_action)
+  importance_scores <- pmax(importance_scores, 0)
+  score_sqrt <- sqrt(importance_scores)
+  total <- sum(score_sqrt, na.rm = TRUE)
+
+  if (!is.finite(total) || total <= 0) {
+    if (zero_weight_action == "uniform") {
+      weights <- rep(1 / length(importance_scores), length(importance_scores))
+    } else {
+      weights <- rep(NA_real_, length(importance_scores))
+    }
+    names(weights) <- names(importance_scores)
+    return(weights)
+  }
+
+  score_sqrt / total
 }
 
 

@@ -163,13 +163,13 @@ make_boot_fit_pr <- function(n_boot = 8) {
   beta <- c(0.6, 0.3, 0.1)
   eta  <- as.matrix(mix) %*% beta + rnorm(n, sd = 0.5)
   dat <- cbind(mix, y = as.numeric(eta))
-  nwqs_boot(
+  expect_small_boot_warning(nwqs_boot(
     data = dat, mix_name = paste0("Component", 1:3),
     outcome = "y", family = "gaussian",
     transform_type = "percentile_rank", q = 4,
     n_boot = n_boot, rh_inner = 1, n_permutation = 5,
     seed = 1234, quiet = TRUE
-  )
+  ))
 }
 
 test_that("extract_nwqs_effects on nwqs_boot returns bootstrap CI columns", {

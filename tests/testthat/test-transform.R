@@ -81,6 +81,22 @@ test_that("apply_percentile_rank() clips newdata outside training range to (0, 1
   expect_equal(apply_percentile_rank(c(0, 100), train_x), c(0, 1))
 })
 
+test_that("apply_percentile_rank() uses the requested exact-tie rank convention", {
+  train_x <- c(10, 10, 20, 30)
+  expect_equal(
+    apply_percentile_rank(c(10, 20), train_x, ties = "average"),
+    c(1.5 / 4, 3 / 4)
+  )
+  expect_equal(
+    apply_percentile_rank(c(10, 20), train_x, ties = "min"),
+    c(1 / 4, 3 / 4)
+  )
+  expect_equal(
+    apply_percentile_rank(c(10, 20), train_x, ties = "max"),
+    c(2 / 4, 3 / 4)
+  )
+})
+
 # ----- build_spline_basis_knots ------------------------------------------
 
 test_that("build_spline_basis_knots() percentile_rank uses [0, 1] grid", {
@@ -109,6 +125,17 @@ test_that("build_spline_basis_knots() custom_knots / custom_boundary override de
   )
   expect_equal(as.numeric(res$knots), 0.5)
   expect_equal(res$boundary, c(-1, 2))
+})
+
+test_that("NWQS evaluation grids are transform-aware", {
+  expect_equal(
+    NWQS:::.nwqs_eval_points(list(transform_type = "percentile_rank", q = 4)),
+    seq(0, 1, length.out = 4)
+  )
+  expect_equal(
+    NWQS:::.nwqs_eval_points(list(transform_type = "q_bin", q = 4)),
+    0:3
+  )
 })
 
 # ----- nwqs() new signature ----------------------------------------------

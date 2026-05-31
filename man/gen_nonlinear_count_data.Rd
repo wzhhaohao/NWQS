@@ -13,7 +13,11 @@ gen_nonlinear_count_data(
   intercept = 0,
   snr_db = Inf,
   transform_fun = NULL,
-  q = 4,
+  transform_type = NWQS_DEFAULTS$transform_type,
+  q = NWQS_DEFAULTS$q,
+  ties = NWQS_DEFAULTS$ties,
+  eval_points = NULL,
+  effect_grid = seq(0, 1, by = 0.01),
   df_spline = 3,
   seed = NULL,
   shape = "linear_like",
@@ -39,9 +43,25 @@ controlling the baseline Poisson rate \eqn{\lambda}.}
 \code{Inf} (no noise).}
 
 \item{transform_fun}{Function or \code{NULL}. Custom transformation for
-exposures.}
+exposures. If supplied, it is used instead of \code{transform_type}.}
 
-\item{q}{Integer. Number of quantile bins. Default is 4.}
+\item{transform_type}{Character. Either \code{"percentile_rank"} (default)
+or \code{"q_bin"}. The default aligns the simulation DGP with the
+default \code{\link{nwqs}} exposure transform.}
+
+\item{q}{Integer. Number of contrast/evaluation points. With
+\code{transform_type = "q_bin"} it is also the number of discrete bins.
+Default is 4.}
+
+\item{ties}{Character. Tie handling passed to \code{\link{trans_quantile}}
+when \code{transform_type = "percentile_rank"}.}
+
+\item{eval_points}{Numeric vector or \code{NULL}. Points used to construct
+the compact \code{true_effect_mat}. If \code{NULL}, percentile-rank uses
+\code{seq(0, 1, length.out = q)} and q-bin uses \code{0:(q - 1)}.}
+
+\item{effect_grid}{Numeric vector. Grid used to construct the full
+\code{true_effect_curve}; default is every percentile from 0 to 1.}
 
 \item{df_spline}{Integer. Degrees of freedom for natural cubic splines.
 Default is 3.}

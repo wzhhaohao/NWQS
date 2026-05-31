@@ -23,7 +23,8 @@
     for (comp in mix_name) {
       newdata_trans[[comp]] <- apply_percentile_rank(
         newdata[[comp]],
-        object$train_components_sorted[[comp]]
+        object$train_components_sorted[[comp]],
+        ties = if (!is.null(object$ties)) object$ties else NWQS_DEFAULTS$ties
       )
     }
   } else {
@@ -79,10 +80,9 @@
 #'
 #' @description
 #' Computes the NWQS latent index, the linear predictor, or the response-scale
-#' prediction for new data. The training-sample empirical distribution (saved
-#' as \code{train_components_sorted}) and the globally aligned spline knots
-#' are reused so that newdata is interpreted on the same scale used during
-#' fitting.
+#' prediction for new data. The fit-sample empirical distribution (saved as
+#' \code{train_components_sorted}) and the globally aligned spline knots are
+#' reused so that newdata is interpreted on the same scale used during fitting.
 #'
 #' @param object An object of class \code{"nwqs"}.
 #' @param newdata Optional \code{data.frame}. If \code{NULL}, the training
@@ -182,6 +182,7 @@ predict.nwqs_boot <- function(object, newdata = NULL,
     mean_coefs              = object$mean_coefs,
     formula                 = object$formula,
     family                  = object$family,
+    ties                    = if (!is.null(object$ties)) object$ties else NWQS_DEFAULTS$ties,
     data                    = object$data
   )
   class(stub) <- c("nwqs", "list")

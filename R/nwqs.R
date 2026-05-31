@@ -670,7 +670,7 @@ nwqs_boot <- function(data,
   boot_success <- vapply(boot_results, function(x) x$Success, logical(1))
   n_success <- sum(boot_success)
 
-  if (n_success < max(20, ceiling(0.5 * n_boot))) {
+  if (n_success < ceiling(0.5 * n_boot)) {
     warning("A large proportion of bootstrap fits failed. Bootstrap CI may be unstable.")
   }
   if (n_success == 0) {

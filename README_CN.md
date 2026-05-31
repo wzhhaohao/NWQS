@@ -20,12 +20,17 @@
 
 ## 安装
 
-从 GitHub 安装开发版本：
+从 GitHub 安装当前源码版本：
 
 ```r
 # install.packages("devtools")
 devtools::install_github("wzhhaohao/NWQS")
 ```
+
+## 文档
+
+- 应用型完整示例：[`vignettes/nwqs-applied.Rmd`](vignettes/nwqs-applied.Rmd)
+- 发布说明 / 迁移指南：[`NEWS.md`](NEWS.md)
 
 ## 快速上手
 
@@ -93,7 +98,10 @@ boot_res <- nwqs_boot(
 )
 
 print(boot_res)
+confint(boot_res)
 plot(boot_res)
+
+predict(fit, newdata = dat[1:5, ], type = "response")
 ```
 
 ## 支持的模型族
@@ -116,6 +124,9 @@ plot(boot_res)
 |---|---|
 | `nwqs()` | 拟合带有重复留出的非线性 WQS 模型 |
 | `nwqs_boot()` | Bootstrap 置信区间（有效推断） |
+| `predict()` | 在已拟合的 NWQS 标度上对 `newdata` 进行预测 |
+| `vcov()` / `confint()` | 提取协方差矩阵和置信区间 |
+| `nwqs_control()` | 统一封装高级样条 / 权重处理参数 |
 | `nwqs_contrast()` | 联合暴露分位数对比显著性检验 |
 | `extract_nwqs_effects()` | 提取各成分特异性分位数对比效应 |
 | `plot.nwqs()` | 剂量-反应曲线及权重诊断图 |
@@ -131,6 +142,11 @@ plot(boot_res)
 | `generate_linear_data()` | 线性混合效应（基线对照） |
 | `generate_sigma()` | 相关矩阵（低/中/高/混合相关） |
 
+三个非线性 generator 默认使用与 `nwqs()` 一致的 percentile-rank DGP，
+并同时附加 `true_effect_mat` 与覆盖 `0, 0.01, ..., 1` 的完整
+`true_effect_curve`。如需复现旧版离散分箱模拟 DGP，请传入
+`transform_type = "q_bin"`。
+
 ## 方法概述
 
 NWQS 算法采用三阶段架构：
@@ -140,6 +156,8 @@ NWQS 算法采用三阶段架构：
 3. **单自由度效应估计**（验证集）：将标准化形状和权重投影为单一 `nwqs` 指数，再通过标准 GLM 估计混合暴露的整体效应。
 
 当 `rh > 1` 时，`nwqs()` 输出的标准误仅反映数据划分变异性，**不可用于统计推断**。请使用 `nwqs_boot()` 获取有效的百分位 Bootstrap 置信区间。
+
+`custom_knots`、`custom_boundary`、`zero_weight_action` 等高级控制参数通过 `nwqs_control()` 统一传入，而不再分散在主模型接口中。
 
 ## 许可证
 

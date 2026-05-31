@@ -58,11 +58,11 @@ test_that("vcov.nwqs with rh > 1 warns about algorithmic variance and returns th
 
 test_that("vcov.nwqs_boot is the bootstrap-iteration covariance of regression coefs", {
   d <- make_vc_data()
-  boot_fit <- nwqs_boot(
+  boot_fit <- expect_small_boot_warning(nwqs_boot(
     data = d, mix_name = c("X1", "X2", "X3"), outcome = "y",
     family = "gaussian", n_boot = 8, rh_inner = 1, n_permutation = 3,
     seed = 1, quiet = TRUE, transform_type = "q_bin", q = 4
-  )
+  ))
   v <- vcov(boot_fit)
   expect_true(is.matrix(v))
   expect_equal(rownames(v), colnames(v))
@@ -102,11 +102,11 @@ test_that("confint.nwqs with rh > 1 warns about algorithmic variance and returns
 
 test_that("confint.nwqs_boot returns the bootstrap percentile CI from ci_table", {
   d <- make_vc_data()
-  boot_fit <- nwqs_boot(
+  boot_fit <- expect_small_boot_warning(nwqs_boot(
     data = d, mix_name = c("X1", "X2", "X3"), outcome = "y",
     family = "gaussian", n_boot = 8, rh_inner = 1, n_permutation = 3,
     seed = 1, quiet = TRUE, transform_type = "q_bin", q = 4
-  )
+  ))
   ci <- confint(boot_fit)
   expect_true(is.matrix(ci))
   expect_true("nwqs" %in% rownames(ci))

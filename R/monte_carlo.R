@@ -215,6 +215,10 @@ check_boot_coverage <- function(boot_res, true_value) {
 #' @details
 #' Two methods are available:
 #' \itemize{
+#'   \item \code{"curve_range"}: Uses the range (max minus min) across the
+#'     full percentile effect curve. This is the default when the input has
+#'     percentile-curve columns such as \code{P000}, \code{P001}, ...,
+#'     \code{P100}.
 #'   \item \code{"q4q1_abs"}: Uses absolute Q4 vs Q1 effects. Suitable for
 #'     monotonic linear scenarios only.
 #'   \item \code{"max_range"}: Uses the range (max minus min) across all
@@ -222,18 +226,38 @@ check_boot_coverage <- function(boot_res, true_value) {
 #'     (e.g., U-shaped, inverted-U).
 #' }
 #'
-#' @param true_effect_mat Matrix. The true effect matrix.
+#' @param true_effect_mat Matrix. Either the compact true effect matrix or
+#'   the full true effect curve.
 #' @param mix_name Character vector. Names of mixture components.
-#' @param method Character. Importance derivation method: \code{"q4q1_abs"} or
-#'   \code{"max_range"} (default).
+#' @param method Character or \code{NULL}. Importance derivation method:
+#'   \code{"curve_range"}, \code{"q4q1_abs"}, or \code{"max_range"}. If
+#'   \code{NULL}, full percentile curves default to \code{"curve_range"} and
+#'   compact matrices default to \code{"max_range"}.
 #'
 #' @return Named numeric vector of true relative importance weights summing
 #'   to 1.
 #'
 #' @export
-calc_true_importance <- function(true_effect_mat, mix_name, method = "max_range") {
+calc_true_importance <- function(true_effect_mat, mix_name, method = NULL) {
+  if (is.null(true_effect_mat) || !is.matrix(true_effect_mat)) {
+    stop("`true_effect_mat` must be a matrix.")
+  }
+  if (!all(mix_name %in% rownames(true_effect_mat))) {
+    stop("`true_effect_mat` must contain one row for each mixture component.")
+  }
 
-  if (method == "q4q1_abs") {
+  is_curve <- any(grepl("^P[0-9]{3}", colnames(true_effect_mat)))
+  if (is.null(method)) {
+    method <- if (is_curve) "curve_range" else "max_range"
+  }
+  method <- match.arg(method, c("curve_range", "q4q1_abs", "max_range"))
+
+  if (method == "curve_range") {
+    contrib <- apply(true_effect_mat[mix_name, , drop = FALSE], 1, function(vals) {
+      max(vals, na.rm = TRUE) - min(vals, na.rm = TRUE)
+    })
+
+  } else if (method == "q4q1_abs") {
     if (!"Q4_vs_Q1" %in% colnames(true_effect_mat)) {
       stop("true_effect_mat must contain column 'Q4_vs_Q1'.")
     }

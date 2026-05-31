@@ -12,8 +12,11 @@ skip_if_not_installed("future")
 # ----- Contract 1: user-set plan is preserved ----------------------------
 
 test_that("configure_parallel_plan() leaves a user-set multisession plan untouched", {
-  old <- future::plan(future::multisession, workers = 2)
-  on.exit(future::plan(old), add = TRUE)
+  old_options <- options(parallelly.maxWorkers.localhost = Inf)
+  on.exit(options(old_options), add = TRUE)
+  on.exit(future::plan(future::sequential), add = TRUE)
+
+  future::plan(future::multisession, workers = 1)
 
   res <- configure_parallel_plan(
     loop_number = 10,
@@ -29,8 +32,8 @@ test_that("configure_parallel_plan() leaves a user-set multisession plan untouch
 # ----- Contract 2: sequential strategy short-circuits to sequential ------
 
 test_that("configure_parallel_plan() with strategy = 'sequential' yields a sequential plan", {
-  old <- future::plan(future::sequential)
-  on.exit(future::plan(old), add = TRUE)
+  on.exit(future::plan(future::sequential), add = TRUE)
+  future::plan(future::sequential)
 
   configure_parallel_plan(
     loop_number = 10,
@@ -45,8 +48,8 @@ test_that("configure_parallel_plan() with strategy = 'sequential' yields a seque
 # ----- Contract 3: loop_number = 1 short-circuits to sequential ----------
 
 test_that("configure_parallel_plan() with loop_number = 1 short-circuits to sequential", {
-  old <- future::plan(future::sequential)
-  on.exit(future::plan(old), add = TRUE)
+  on.exit(future::plan(future::sequential), add = TRUE)
+  future::plan(future::sequential)
 
   configure_parallel_plan(
     loop_number = 1,
@@ -61,16 +64,18 @@ test_that("configure_parallel_plan() with loop_number = 1 short-circuits to sequ
 # ----- Contract 4: explicit n_workers wins over auto load balancing ------
 
 test_that("configure_parallel_plan() honors explicit n_workers when computing a fresh plan", {
-  old <- future::plan(future::sequential)
-  on.exit(future::plan(old), add = TRUE)
+  old_options <- options(parallelly.maxWorkers.localhost = Inf)
+  on.exit(options(old_options), add = TRUE)
+  on.exit(future::plan(future::sequential), add = TRUE)
+  future::plan(future::sequential)
 
   configure_parallel_plan(
     loop_number = 10,
     strategy    = "multisession",
-    n_workers   = 2,
+    n_workers   = 1,
     verbose     = FALSE
   )
 
   expect_true(inherits(future::plan(), "multisession"))
-  expect_equal(future::nbrOfWorkers(), 2)
+  expect_equal(future::nbrOfWorkers(), 1)
 })

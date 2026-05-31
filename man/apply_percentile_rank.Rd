@@ -2,15 +2,22 @@
 % Please edit documentation in R/utils.R
 \name{apply_percentile_rank}
 \alias{apply_percentile_rank}
-\title{Apply a Training-Sample Percentile Rank to New Data}
+\title{Apply a Fit-Sample Percentile Rank to New Data}
 \usage{
-apply_percentile_rank(newdata, train_x)
+apply_percentile_rank(
+  newdata,
+  train_x,
+  ties = c("average", "min", "max", "random")
+)
 }
 \arguments{
 \item{newdata}{Numeric vector. Values to be mapped.}
 
-\item{train_x}{Numeric vector. Training-sample values (NA values removed
-before computation).}
+\item{train_x}{Numeric vector. Fit-sample values (NA values removed before
+computation).}
+
+\item{ties}{Character. Exact-tie rule: one of \code{"average"},
+\code{"min"}, \code{"max"}, or \code{"random"}.}
 }
 \value{
 Numeric vector of the same length as \code{newdata}, with values in
@@ -18,13 +25,17 @@ Numeric vector of the same length as \code{newdata}, with values in
 }
 \description{
 Maps each element of \code{newdata} to its empirical CDF value under the
-training-sample distribution \code{train_x}. Used by \code{predict.nwqs()}
-so that newdata is always interpreted on the training distribution's scale,
+fit-sample distribution \code{train_x}. Used by \code{predict.nwqs()} so
+that newdata is always interpreted on the fitted model's empirical scale,
 avoiding train/predict drift.
 }
 \details{
-For each new observation \eqn{x'},
-\deqn{u' = \frac{\#\{i : x_{\text{train},i} \le x'\}}{n_{\text{train}}}.}
-Values of \code{newdata} below \code{min(train_x)} map to \code{0}; values
-at or above \code{max(train_x)} map to \code{1}.
+For non-tied values, each new observation \eqn{x'} is mapped by the
+right-continuous empirical CDF,
+\deqn{u' = \frac{\#\{i : x_{\text{fit},i} \le x'\}}{n_{\text{fit}}}.}
+If \eqn{x'} exactly equals tied fit-sample values, the requested
+\code{ties} rule is used for the tied rank, matching
+\code{trans_quantile(type = "percentile_rank")}. Values below
+\code{min(train_x)} map to \code{0}; values at or above
+\code{max(train_x)} map to \code{1}.
 }

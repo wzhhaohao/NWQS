@@ -47,6 +47,8 @@ test_that("nwqs() reads its defaults from NWQS_DEFAULTS", {
   # entry. Using eval() because the formal is a language object referring
   # to NWQS_DEFAULTS$key, not the literal value.
   expect_equal(eval(formals(nwqs)$q), NWQS_DEFAULTS$q)
+  expect_equal(eval(formals(nwqs)$transform_type), NWQS_DEFAULTS$transform_type)
+  expect_equal(eval(formals(nwqs)$ties), NWQS_DEFAULTS$ties)
   expect_equal(eval(formals(nwqs)$df_spline), NWQS_DEFAULTS$df_spline)
   expect_equal(eval(formals(nwqs)$train_prop), NWQS_DEFAULTS$train_prop)
   expect_equal(eval(formals(nwqs)$rh), NWQS_DEFAULTS$rh)
@@ -60,6 +62,8 @@ test_that("nwqs_boot() reads its defaults from NWQS_DEFAULTS", {
   expect_equal(eval(formals(nwqs_boot)$rh_inner), NWQS_DEFAULTS$rh_inner)
   expect_equal(eval(formals(nwqs_boot)$n_permutation), NWQS_DEFAULTS$n_permutation)
   expect_equal(eval(formals(nwqs_boot)$conf_level), NWQS_DEFAULTS$conf_level)
+  expect_equal(eval(formals(nwqs_boot)$transform_type), NWQS_DEFAULTS$transform_type)
+  expect_equal(eval(formals(nwqs_boot)$ties), NWQS_DEFAULTS$ties)
 })
 
 # ----- nwqs_control() contract -------------------------------------------

@@ -75,11 +75,11 @@ test_that("vcov.nwqs and confint.nwqs work on a negbin rh = 1 fit", {
 
 test_that("nwqs_boot() with family = 'negbin' returns a valid CI table", {
   d <- make_nb_data()
-  boot_fit <- nwqs_boot(
+  boot_fit <- expect_small_boot_warning(nwqs_boot(
     data = d, mix_name = c("X1", "X2", "X3"), outcome = "y",
     family = "negbin", n_boot = 8, rh_inner = 1, n_permutation = 3,
     seed = 1, quiet = TRUE, transform_type = "q_bin", q = 4
-  )
+  ))
   expect_s3_class(boot_fit, "nwqs_boot")
   expect_equal(boot_fit$family, "negbin")
   expect_true(boot_fit$n_success > 0)

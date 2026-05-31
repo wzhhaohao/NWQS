@@ -4,15 +4,18 @@
 \alias{calc_true_importance}
 \title{Derive True Importance Weights from Effect Matrix}
 \usage{
-calc_true_importance(true_effect_mat, mix_name, method = "max_range")
+calc_true_importance(true_effect_mat, mix_name, method = NULL)
 }
 \arguments{
-\item{true_effect_mat}{Matrix. The true effect matrix.}
+\item{true_effect_mat}{Matrix. Either the compact true effect matrix or
+the full true effect curve.}
 
 \item{mix_name}{Character vector. Names of mixture components.}
 
-\item{method}{Character. Importance derivation method: \code{"q4q1_abs"} or
-\code{"max_range"} (default).}
+\item{method}{Character or \code{NULL}. Importance derivation method:
+\code{"curve_range"}, \code{"q4q1_abs"}, or \code{"max_range"}. If
+\code{NULL}, full percentile curves default to \code{"curve_range"} and
+compact matrices default to \code{"max_range"}.}
 }
 \value{
 Named numeric vector of true relative importance weights summing
@@ -26,6 +29,10 @@ to 1.
 \details{
 Two methods are available:
 \itemize{
+\item \code{"curve_range"}: Uses the range (max minus min) across the
+full percentile effect curve. This is the default when the input has
+percentile-curve columns such as \code{P000}, \code{P001}, ...,
+\code{P100}.
 \item \code{"q4q1_abs"}: Uses absolute Q4 vs Q1 effects. Suitable for
 monotonic linear scenarios only.
 \item \code{"max_range"}: Uses the range (max minus min) across all

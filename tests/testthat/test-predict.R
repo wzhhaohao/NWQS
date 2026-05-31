@@ -109,6 +109,22 @@ test_that("predict.nwqs works under both percentile_rank and q_bin", {
   }
 })
 
+test_that("predict.nwqs percentile-rank transform reuses fit-sample tie rules", {
+  object <- list(
+    transform_type = "percentile_rank",
+    train_components_sorted = list(X1 = sort(c(10, 10, 20, 30))),
+    ties = "average",
+    q = 4
+  )
+  class(object) <- c("nwqs", "list")
+
+  out <- NWQS:::.nwqs_transform_newdata(
+    object,
+    data.frame(X1 = c(10, 20))
+  )
+  expect_equal(out$X1, c(1.5 / 4, 3 / 4))
+})
+
 # ----- Default type ------------------------------------------------------
 
 test_that("predict.nwqs() default type is 'response'", {
@@ -123,7 +139,7 @@ test_that("predict.nwqs() default type is 'response'", {
 
 test_that("predict.nwqs_boot returns predictions with bootstrap CIs", {
   d <- make_pred_data(family = "gaussian", seed = 11)
-  boot_fit <- nwqs_boot(
+  boot_fit <- expect_small_boot_warning(nwqs_boot(
     data           = d,
     mix_name       = c("X1", "X2", "X3"),
     outcome        = "y",
@@ -135,7 +151,7 @@ test_that("predict.nwqs_boot returns predictions with bootstrap CIs", {
     quiet          = TRUE,
     transform_type = "percentile_rank",
     q              = 4
-  )
+  ))
   out <- predict(boot_fit, newdata = d, type = "nwqs_index")
   expect_true(is.numeric(out) || is.data.frame(out))
   if (is.data.frame(out)) {

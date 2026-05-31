@@ -18,9 +18,9 @@ nwqs_boot(
   keep_fits = FALSE,
   plan_strategy = c("sequential", "multisession", "multicore"),
   n_workers = NULL,
-  transform_type = c("percentile_rank", "q_bin"),
+  transform_type = NWQS_DEFAULTS$transform_type,
   q = NWQS_DEFAULTS$q,
-  ties = c("average", "min", "max", "random"),
+  ties = NWQS_DEFAULTS$ties,
   control = nwqs_control(),
   quiet = TRUE,
   ...

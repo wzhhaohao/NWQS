@@ -52,6 +52,25 @@ test_that(".calc_loss() quasipoisson matches poisson on the same input", {
   )
 })
 
+test_that("zero_weight_action = 'uniform' turns zero importance into equal weights", {
+  importance <- c(X1 = 0, X2 = 0, X3 = 0)
+  weights <- NWQS:::.importance_to_weights(
+    importance_scores = importance,
+    zero_weight_action = "uniform"
+  )
+  expect_equal(weights, c(X1 = 1 / 3, X2 = 1 / 3, X3 = 1 / 3))
+})
+
+test_that("zero_weight_action = 'na' keeps zero-importance weights as NA", {
+  importance <- c(X1 = 0, X2 = 0)
+  weights <- NWQS:::.importance_to_weights(
+    importance_scores = importance,
+    zero_weight_action = "na"
+  )
+  expect_true(all(is.na(weights)))
+  expect_named(weights, names(importance))
+})
+
 # ----- In-bag rank deficiency -> warning + NULL --------------------------
 
 test_that("permutation_scorer warns and returns NULL on rank-deficient in-bag fit", {
