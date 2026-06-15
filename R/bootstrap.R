@@ -51,9 +51,11 @@ run_oob_permutation <- function(data, mix_name, outcome = "y",
     # negbin: the in-bag OOB loss uses Poisson as a fast surrogate. The
     # final NWQS regression in nwqs() still calls MASS::glm.nb on the
     # validation split; only the importance ranking inside the engine
-    # uses Poisson deviance. The ranking is unchanged because the
-    # negbin and Poisson deviances differ by an additive theta-dependent
-    # constant that drops out of the per-component permutation delta.
+    # uses Poisson deviance. In practice this preserves the importance
+    # *ranking* closely, but it is an approximation: the negbin and Poisson
+    # unit deviances are NOT related by a component-independent additive
+    # constant (the negbin deviance carries mu/theta-dependent terms), so the
+    # per-component permutation delta is not guaranteed identical.
     surrogate <- if (fam_arg == "negbin") "poisson" else fam_arg
     fam_obj <- get(surrogate, mode = "function")()
   } else {

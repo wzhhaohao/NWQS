@@ -79,7 +79,8 @@
 #'   \code{"binomial"}, \code{"poisson"}, \code{"quasipoisson"}, or
 #'   \code{"negbin"}. \code{"negbin"} fits the final NWQS regression
 #'   with \code{MASS::glm.nb()}; the inner OOB permutation loss uses a
-#'   Poisson surrogate for speed (the importance ranking is unchanged).
+#'   Poisson surrogate for speed (this approximately preserves the importance
+#'   ranking; see Details).
 #' @param plan_strategy Character. Parallel strategy: \code{"sequential"},
 #'   \code{"multicore"}, or \code{"multisession"}.
 #' @param n_workers Integer. Number of parallel workers. If \code{NULL},
