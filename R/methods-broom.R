@@ -22,12 +22,14 @@ tidy_nwqs <- function(x, conf.int = FALSE, conf.level = 0.95, ...) {
   p_col <- grep("^Pr\\(", names(coef_df), value = TRUE)
   if (length(p_col) == 0) p_col <- NA_character_ else p_col <- p_col[1]
 
+  is_inferential <- isTRUE(x$rh == 1)
   out <- data.frame(
     term      = rownames(coef_df),
     estimate  = coef_df$Estimate,
     std.error = coef_df[["Std. Error"]],
-    statistic = if (!is.na(z_col)) coef_df[[z_col]] else NA_real_,
-    p.value   = if (!is.na(p_col)) coef_df[[p_col]] else NA_real_,
+    statistic = if (is_inferential && !is.na(z_col)) coef_df[[z_col]] else NA_real_,
+    p.value   = if (is_inferential && !is.na(p_col)) coef_df[[p_col]] else NA_real_,
+    inference = if (is_inferential) "glm" else "repeated_holdout_algorithmic",
     stringsAsFactors = FALSE
   )
 

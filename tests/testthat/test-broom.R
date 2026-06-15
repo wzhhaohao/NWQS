@@ -59,6 +59,15 @@ test_that("glance_nwqs returns a one-row data.frame with n / family / rh", {
   expect_equal(out$family, "gaussian")
 })
 
+test_that("tidy_nwqs flags rh>1 as non-inferential and NAs statistic/p.value (S2)", {
+  fit <- fit_broom(rh = 3)
+  out <- NWQS:::tidy_nwqs(fit)
+  expect_true("inference" %in% names(out))
+  expect_true(all(out$inference == "repeated_holdout_algorithmic"))
+  expect_true(all(is.na(out$p.value)))
+  expect_true(all(is.na(out$statistic)))
+})
+
 # ----- tidy / glance for nwqs_boot --------------------------------------
 
 test_that("tidy_nwqs_boot returns estimate / std.error / conf.low / conf.high", {

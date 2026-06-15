@@ -157,3 +157,32 @@ test_that("plot.nwqs percentile_rank x-axis label is percentile rank", {
   p <- plot(fit, type = "curves")
   expect_match(p$labels$x, "Percentile rank|percentile rank|Percentile Rank")
 })
+
+# ----- S2: rh>1 must not present algorithmic variance as Wald inference ----
+
+.s2_fit <- function(rh) {
+  set.seed(7)
+  n  <- 150
+  df <- data.frame(y = rnorm(n), M1 = rnorm(n), M2 = rnorm(n), M3 = rnorm(n))
+  df$y <- 0.6 * rank(df$M1) / n + rnorm(n, sd = 0.4)
+  suppressWarnings(nwqs(
+    df, mix_name = c("M1", "M2", "M3"), outcome = "y", family = "gaussian",
+    rh = rh, n_permutation = 2, n_shuffle = 2,
+    seed = 1, plan_strategy = "sequential", quiet = TRUE
+  ))
+}
+
+test_that("rh>1 print/summary neutralize Wald significance (S2)", {
+  fit  <- .s2_fit(4)
+  outp <- paste(capture.output(print(fit)), collapse = "\n")
+  outs <- paste(capture.output(summary(fit)), collapse = "\n")
+  expect_false(grepl("Signif\\. codes", outs))
+  expect_false(grepl("Overall Significance", outp))
+  expect_true(grepl("nwqs_boot", outs))
+  expect_true(grepl("RH_SD", outs))
+})
+
+test_that("rh==1 keeps the standard GLM significance table (S2)", {
+  outs1 <- paste(capture.output(summary(.s2_fit(1))), collapse = "\n")
+  expect_true(grepl("Signif\\. codes", outs1))
+})

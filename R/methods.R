@@ -19,7 +19,24 @@
 #' @return Invisibly returns the printed data frame.
 #' @keywords internal
 #' @noRd
-.print_coef_table <- function(coef_table, digits = 4) {
+.print_coef_table <- function(coef_table, digits = 4, inferential = TRUE) {
+  if (!inferential) {
+    # rh > 1: the SE/CIs are data-splitting (algorithmic) dispersion, not
+    # sampling variance. Drop the Wald p-value / z / significance stars and
+    # relabel the SE column so the table cannot be read as GLM inference.
+    out <- as.data.frame(coef_table)
+    drop_cols <- grep("Pr\\(|z value|t value", colnames(out))
+    if (length(drop_cols)) out <- out[, -drop_cols, drop = FALSE]
+    names(out)[names(out) == "Std. Error"] <- "RH_SD"
+    num_cols <- which(vapply(out, is.numeric, logical(1)))
+    for (j in num_cols) out[[j]] <- round(out[[j]], digits)
+    print(out)
+    cat("---\nRH_SD = SD of the estimate across holdout splits (algorithmic\n",
+        "dispersion, NOT a standard error). No p-values are shown for rh > 1;\n",
+        "use nwqs_boot() for valid inference.\n", sep = "")
+    return(invisible(out))
+  }
+
   if (!any(grepl("Pr\\(", colnames(coef_table)))) {
     z_stat <- coef_table$Estimate / coef_table$`Std. Error`
     p_values <- 2 * stats::pnorm(-abs(z_stat))
@@ -490,11 +507,15 @@ print.nwqs <- function(x,
   }
 
   cat(sprintf("\n>>> Joint & Component Effects (%s with 95%% Empirical CI):\n", eff_name))
-  cat(sprintf("    Overall Significance (nwqs): P = %s\n\n", p_wqs_str))
+  if (isTRUE(x$rh == 1)) {
+    cat(sprintf("    Overall Significance (nwqs): P = %s\n\n", p_wqs_str))
+  } else {
+    cat("    (rh > 1: see CI validity warning above; use nwqs_boot() for inference)\n\n")
+  }
   print(print_df, right = FALSE)
 
   cat("\n>>> Model Coefficients (Averaged across RH iterations):\n")
-  .print_coef_table(coef_table, digits = 4)
+  .print_coef_table(coef_table, digits = 4, inferential = isTRUE(x$rh == 1))
 
   aic_val <- if (is.na(x$fit$aic)) "NA" else sprintf("%.2f", x$fit$aic)
   cat(sprintf("\nMean AIC: %s | Mean Residual Deviance: %.2f\n", aic_val, x$fit$deviance))
@@ -532,8 +553,13 @@ summary.nwqs <- function(object, digits = max(3L, getOption("digits") - 3L), ...
   print(object$call)
   cat(sprintf("\nModel Family: %s\n", object$family))
 
+  if (isTRUE(object$rh > 1)) {
+    cat("\n[!] rh > 1: coefficient SEs/CIs reflect data-splitting (algorithmic)\n",
+        "    variance only, NOT sampling variance. No p-values are reported.\n",
+        "    Use nwqs_boot() for valid inference.\n", sep = "")
+  }
   cat("\nCoefficients:\n")
-  .print_coef_table(coef_table, digits = 4)
+  .print_coef_table(coef_table, digits = 4, inferential = isTRUE(object$rh == 1))
 
   if (object$family != "quasipoisson") {
     cat(sprintf(
