@@ -15,8 +15,11 @@
 #'   adjust for.
 #' @param weight_engine Function. The engine function for computing weights and
 #'   shapes. Default is \code{\link{permutation_scorer}}.
-#' @param n_permutation Integer. Number of internal bootstrap or permutation
-#'   iterations. Default is 30 (raised from 10 in 0.2.0).
+#' @param n_permutation Integer. Number of \emph{outer} OOB resamples (bagging
+#'   rounds) over which component importance is averaged. Default is 30. NOTE:
+#'   this is NOT the per-component shuffle count; see \code{n_shuffle}.
+#' @param n_shuffle Integer. Number of \emph{inner} permutation shuffles per
+#'   mixture component, forwarded to the weight engine. Default is 30.
 #' @param seed Integer or \code{NULL}. Random seed for reproducible parallel
 #'   computation.
 #' @param boot_strategy Character. Parallel strategy: \code{"sequential"},
@@ -36,7 +39,9 @@
 run_oob_permutation <- function(data, mix_name, outcome = "y",
                                 covariates = NULL,
                                 weight_engine = permutation_scorer,
-                                n_permutation = 30, seed = NULL,
+                                n_permutation = NWQS_DEFAULTS$n_permutation,
+                                n_shuffle = NWQS_DEFAULTS$n_shuffle,
+                                seed = NULL,
                                 boot_strategy = c("sequential", "multicore", "multisession"),
                                 boot_n_workers = NULL, ...) {
   args <- list(...)
@@ -120,7 +125,8 @@ run_oob_permutation <- function(data, mix_name, outcome = "y",
             y = y_vector,
             mix_name = mix_name,
             spline_vars = spline_vars,
-            family = fam_obj
+            family = fam_obj,
+            n_shuffle = n_shuffle
           ), args))
         },
         error = function(e) {

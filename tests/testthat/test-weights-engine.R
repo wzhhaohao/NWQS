@@ -126,3 +126,34 @@ test_that("permutation_scorer warns and returns NULL on rank-deficient in-bag fi
   )
   expect_null(res)
 })
+
+# ----- run_oob_permutation exposes + forwards n_shuffle -------------------
+
+test_that("run_oob_permutation exposes n_shuffle and forwards it to the engine", {
+  # Discriminating red: the explicit formal must exist with the 30 default.
+  expect_equal(eval(formals(run_oob_permutation)$n_shuffle), 30)
+
+  spy_engine <- function(x, y, mix_name, spline_vars, family,
+                         n_shuffle = 30, ...) {
+    list(
+      weights        = stats::setNames(rep(1 / length(mix_name), length(mix_name)), mix_name),
+      shapes         = stats::setNames(rep(0, length(spline_vars)), spline_vars),
+      seen_n_shuffle = n_shuffle
+    )
+  }
+
+  set.seed(1)
+  df <- data.frame(y = rnorm(40), A = rnorm(40), B = rnorm(40))
+  basis <- build_spline_basis_knots("percentile_rank", q = 4, df_spline = 3)
+
+  res <- run_oob_permutation(
+    data = df, mix_name = c("A", "B"), outcome = "y",
+    weight_engine = spy_engine,
+    n_permutation = 2, n_shuffle = 7,
+    model_knots = basis$knots, model_boundary = basis$boundary,
+    df_spline = 3, q = 4, family = "gaussian",
+    boot_strategy = "sequential"
+  )
+
+  expect_equal(res[["B_1"]]$seen_n_shuffle, 7)
+})
