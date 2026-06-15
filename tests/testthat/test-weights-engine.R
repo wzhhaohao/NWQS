@@ -157,3 +157,25 @@ test_that("run_oob_permutation exposes n_shuffle and forwards it to the engine",
 
   expect_equal(res[["B_1"]]$seen_n_shuffle, 7)
 })
+
+# ----- P4: incremental-eta refactor is behavior-preserving ---------------
+
+test_that("permutation_scorer unchanged by incremental-eta refactor (P4)", {
+  set.seed(99)
+  n  <- 120
+  xm <- cbind(
+    "(Intercept)" = 1,
+    A_B1 = rnorm(n), A_B2 = rnorm(n), A_B3 = rnorm(n),
+    B_B1 = rnorm(n), B_B2 = rnorm(n), B_B3 = rnorm(n)
+  )
+  yv <- 0.8 * xm[, "A_B1"] - 0.4 * xm[, "B_B2"] + rnorm(n, sd = 0.5)
+  sv <- c("A_B1", "A_B2", "A_B3", "B_B1", "B_B2", "B_B3")
+
+  set.seed(42)
+  w <- permutation_scorer(xm, yv, mix_name = c("A", "B"), spline_vars = sv,
+                          family = gaussian(), n_shuffle = 25)$weights
+
+  # Reference captured from the pre-refactor implementation (same seeds).
+  expect_equal(unname(w), c(0.797661639807809, 0.202338360192191),
+               tolerance = 1e-8)
+})

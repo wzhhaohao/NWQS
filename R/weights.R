@@ -103,8 +103,13 @@ permutation_scorer <- function(x, y, mix_name, spline_vars, family,
   importance_scores <- numeric(length(mix_name))
   names(importance_scores) <- mix_name
 
-  x_oob_shuffled <- x_oob_net
   n_oob <- length(oob_idx)
+  # Full OOB linear predictor (= eta_oob from the baseline-loss step). Only the
+  # target component's columns change under permutation, so we precompute the
+  # fixed remainder once per component and add back only the permuted target
+  # contribution each shuffle -- a df_spline-wide matrix product instead of the
+  # full design each iteration.
+  eta_base_full <- eta_oob
 
   for (var in mix_name) {
     target_cols <- grep(paste0("^", var, "_B"), colnames(x_oob_net))
@@ -114,18 +119,21 @@ permutation_scorer <- function(x, y, mix_name, spline_vars, family,
       return(NULL)
     }
 
+    target_mat       <- as.matrix(x_oob_net[, target_cols, drop = FALSE])
+    target_beta      <- coefs_no_int[target_cols]
+    target_contrib   <- as.numeric(target_mat %*% target_beta)
+    eta_minus_target <- eta_base_full - target_contrib
+
     shuffled_loss_list <- numeric(n_shuffle)
 
     for (k in seq_len(n_shuffle)) {
-      shuffle_idx <- sample(n_oob)
-      x_oob_shuffled[, target_cols] <- x_oob_net[shuffle_idx, target_cols, drop = FALSE]
-
-      eta_shuffled <- intercept_val + as.numeric(as.matrix(x_oob_shuffled) %*% coefs_no_int)
-      mu_shuffled <- linkinv(eta_shuffled)
+      shuffle_idx  <- sample(n_oob)
+      eta_shuffled <- eta_minus_target +
+        as.numeric(target_mat[shuffle_idx, , drop = FALSE] %*% target_beta)
+      mu_shuffled  <- linkinv(eta_shuffled)
       shuffled_loss_list[k] <- .calc_loss(y_oob, mu_shuffled, fam_name)
     }
 
-    x_oob_shuffled[, target_cols] <- x_oob_net[, target_cols, drop = FALSE]
     importance_scores[var] <- max(0, mean(shuffled_loss_list) - base_loss)
   }
 
