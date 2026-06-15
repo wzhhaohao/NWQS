@@ -91,7 +91,8 @@ lowering \code{n_shuffle} is the primary runtime lever.}
 \code{"binomial"}, \code{"poisson"}, \code{"quasipoisson"}, or
 \code{"negbin"}. \code{"negbin"} fits the final NWQS regression
 with \code{MASS::glm.nb()}; the inner OOB permutation loss uses a
-Poisson surrogate for speed (the importance ranking is unchanged).}
+Poisson surrogate for speed (this approximately preserves the importance
+ranking; see Details).}
 
 \item{plan_strategy}{Character. Parallel strategy: \code{"sequential"},
 \code{"multicore"}, or \code{"multisession"}.}
