@@ -178,6 +178,9 @@ apply_percentile_rank <- function(newdata, train_x,
     .validate_pr_points(contrast_points, model$transform_type)
     return(as.numeric(contrast_points))
   }
+  if (identical(model$transform_type, "percentile_rank")) {
+    return(NWQS_DEFAULTS$contrast_points_print_pr)
+  }
   .nwqs_eval_points(model)
 }
 
@@ -563,9 +566,10 @@ nwqs_contrast <- function(model,
 #' \code{0:(q-1)} when \code{model$transform_type = "q_bin"}.
 #'
 #' @details
-#' Default contrast points reproduce the legacy numeric grid of the model
-#' (\code{.nwqs_eval_points(model)}); only the \code{Target} column labels
-#' change from \code{Q*_vs_Q1} (q_bin) to \code{P*_vs_P*} (percentile_rank).
+#' For percentile_rank the default contrast is \code{c(0.25, 0.75, 0.95)}
+#' versus \code{ref = 0.5} (matching \code{print.nwqs()} and
+#' \code{nwqs_contrast()}); for q_bin it is the legacy grid \code{Q2..Qq}
+#' versus \code{Q1}.
 #' Confidence intervals come from repeated holdout iterations when invoked on
 #' an \code{"nwqs"} object; they come from the bootstrap distribution when
 #' invoked on an \code{"nwqs_boot"} object (S3 dispatch).
@@ -573,7 +577,8 @@ nwqs_contrast <- function(model,
 #' @param model_res An object of class \code{"nwqs"} or \code{"nwqs_boot"}.
 #' @param contrast_points Numeric vector, or \code{NULL}. Points at which to
 #'   evaluate the contrast vs. \code{ref}. When \code{NULL}, defaults to
-#'   \code{.nwqs_eval_points(model_res)}. Must lie in \code{[0, 1]} for
+#'   \code{c(0.25, 0.75, 0.95)} for percentile_rank and to the legacy
+#'   \code{0:(q-1)} grid for q_bin. Must lie in \code{[0, 1]} for
 #'   percentile_rank.
 #' @param ref Numeric scalar, or \code{NULL}. Reference point. When
 #'   \code{NULL}, defaults to \code{0.5} (percentile_rank) or \code{0} (q_bin).
@@ -614,7 +619,9 @@ extract_nwqs_effects <- function(model_res,
   points <- .resolve_contrast_points(model_res, contrast_points)
   ref_pt <- .resolve_ref(model_res, ref)
 
-  if (is.null(contrast_points) && is.null(ref)) {
+  if (is.null(contrast_points) && is.null(ref) &&
+      !identical(model_res$transform_type, "percentile_rank")) {
+    # legacy q_bin default grid: reference = first bin (Q1)
     ref_pt <- points[1]
     target_points <- points[-1]
   } else {

@@ -76,13 +76,13 @@ make_qbin_fit <- function(q = 4, rh = 5) {
   )
 }
 
-test_that("extract_nwqs_effects (percentile_rank) uses P labels by default", {
+test_that("extract_nwqs_effects (percentile_rank) defaults to {P25,P75,P95} vs P50", {
   fit <- make_pr_fit(q = 4, rh = 5)
   eff <- extract_nwqs_effects(fit)
   expect_true(all(grepl("^P[0-9]+_vs_P[0-9]+$", unique(eff$Target))))
   expect_false(any(grepl("Q", eff$Target)))
-  expect_equal(sort(unique(eff$Target)),
-               sort(c("P33_vs_P0", "P67_vs_P0", "P100_vs_P0")))
+  expect_setequal(unique(eff$Target),
+                  c("P25_vs_P50", "P75_vs_P50", "P95_vs_P50"))
 })
 
 test_that("extract_nwqs_effects respects user contrast_points/ref", {
