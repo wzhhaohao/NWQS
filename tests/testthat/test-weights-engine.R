@@ -1,17 +1,43 @@
 # Unit tests for the permutation_scorer engine and its internal loss
 # function .calc_loss(). These tests:
-#   1. pin n_permutation default to 30 across nwqs/nwqs_boot/permutation_scorer
+#   1. pin the outer n_permutation (nwqs/nwqs_boot) and inner n_shuffle
+#      (permutation_scorer) defaults to 30, and that n_shuffle drives the loop
 #   2. lock the Poisson mu = 0 + binomial p = 0/1 boundary defenses in
 #      .calc_loss so future refactors cannot silently remove them
 #   3. assert in-bag rank deficiency now produces a warning and returns
 #      NULL (0.2.0 change from the legacy silent NA -> 0 fallback)
 
-# ----- Default n_permutation = 30 ----------------------------------------
+# ----- Default counts: outer n_permutation = 30, inner n_shuffle = 30 -----
 
-test_that("n_permutation default is 30 across nwqs(), nwqs_boot(), permutation_scorer()", {
+test_that("default outer n_permutation = 30 and inner n_shuffle = 30", {
   expect_equal(eval(formals(nwqs)$n_permutation), 30)
   expect_equal(eval(formals(nwqs_boot)$n_permutation), 30)
-  expect_equal(formals(permutation_scorer)$n_permutation, 30)
+  expect_equal(eval(formals(permutation_scorer)$n_shuffle), 30)
+  # nwqs()/nwqs_boot() $n_shuffle defaults are asserted in test-nwqs-internals.R
+  # (Task 3, where those formals are added).
+})
+
+test_that("permutation_scorer: n_shuffle controls the inner shuffle count", {
+  set.seed(123)
+  n  <- 80
+  xm <- cbind(
+    "(Intercept)" = 1,
+    A_B1 = rnorm(n), A_B2 = rnorm(n), A_B3 = rnorm(n),
+    B_B1 = rnorm(n), B_B2 = rnorm(n), B_B3 = rnorm(n)
+  )
+  yv <- 0.7 * xm[, "A_B1"] + 0.3 * xm[, "B_B2"] + rnorm(n, sd = 0.5)
+  sv <- c("A_B1", "A_B2", "A_B3", "B_B1", "B_B2", "B_B3")
+
+  set.seed(7)
+  r1 <- permutation_scorer(xm, yv, mix_name = c("A", "B"), spline_vars = sv,
+                           family = gaussian(), n_shuffle = 1)
+  set.seed(7)
+  r2 <- permutation_scorer(xm, yv, mix_name = c("A", "B"), spline_vars = sv,
+                           family = gaussian(), n_shuffle = 60)
+
+  # Same in-bag draw (same seed) but a different number of shuffles must
+  # produce a different averaged permutation-importance estimate.
+  expect_false(isTRUE(all.equal(unname(r1$weights), unname(r2$weights))))
 })
 
 # ----- .calc_loss boundary contracts --------------------------------------
@@ -94,7 +120,7 @@ test_that("permutation_scorer warns and returns NULL on rank-deficient in-bag fi
       mix_name     = "X1",
       spline_vars  = c("X1_B1", "X1_B2"),
       family       = gaussian(),
-      n_permutation = 2
+      n_shuffle    = 2
     ),
     regexp = "rank deficiency"
   )

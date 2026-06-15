@@ -14,6 +14,7 @@ NWQS_DEFAULTS <- list(
   train_prop               = 0.6,
   rh                       = 10,
   n_permutation            = 30,
+  n_shuffle                = 30,
   n_boot                   = 100,
   rh_inner                 = 1,
   conf_level               = 0.95,

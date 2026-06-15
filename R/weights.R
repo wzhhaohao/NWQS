@@ -32,9 +32,11 @@
 #'   spline basis functions.
 #' @param family List. GLM family object (e.g., \code{gaussian()},
 #'   \code{binomial()}, \code{poisson()}, \code{quasipoisson()}).
-#' @param n_permutation Integer. Number of OOB permutations for stabilizing
-#'   importance scores. Default is 30 (raised from 10 in 0.2.0 to give more
-#'   stable weight estimates on small samples).
+#' @param n_shuffle Integer. Number of OOB permutation shuffles per mixture
+#'   component used to stabilize a single importance estimate. Default is 30.
+#'   Renamed from \code{n_permutation} in 0.2.0 to disambiguate it from the
+#'   \emph{outer} OOB-resample count carried by \code{run_oob_permutation()}
+#'   (which is the parameter exposed as \code{n_permutation} on \code{nwqs()}).
 #' @param zero_weight_action Character. One of \code{"na"} or
 #'   \code{"uniform"}. Determines how zero total importance is converted to
 #'   weights.
@@ -53,7 +55,7 @@
 #' @importFrom stats coef predict glm.fit as.formula
 #' @export
 permutation_scorer <- function(x, y, mix_name, spline_vars, family,
-                               n_permutation = 30,
+                               n_shuffle = NWQS_DEFAULTS$n_shuffle,
                                zero_weight_action = c("na", "uniform"), ...) {
   n_obs <- nrow(x)
   fam_name <- family$family
@@ -112,9 +114,9 @@ permutation_scorer <- function(x, y, mix_name, spline_vars, family,
       return(NULL)
     }
 
-    shuffled_loss_list <- numeric(n_permutation)
+    shuffled_loss_list <- numeric(n_shuffle)
 
-    for (k in seq_len(n_permutation)) {
+    for (k in seq_len(n_shuffle)) {
       shuffle_idx <- sample(n_oob)
       x_oob_shuffled[, target_cols] <- x_oob_net[shuffle_idx, target_cols, drop = FALSE]
 
