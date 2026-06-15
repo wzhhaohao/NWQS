@@ -103,3 +103,30 @@ test_that("rh > 1 with all-identical-iteration coefs (coef_sd = 0) does not cras
   expect_true(all(is.na(coef_summary$`Pr(>|z|)`)))
   expect_true(is.numeric(coef_summary$Estimate))
 })
+
+# ----- n_shuffle exposed + threaded through the public API ---------------
+
+test_that("nwqs()/nwqs_boot() default n_shuffle = 30", {
+  expect_equal(eval(formals(nwqs)$n_shuffle), 30)
+  expect_equal(eval(formals(nwqs_boot)$n_shuffle), 30)
+})
+
+test_that("nwqs() accepts n_shuffle end-to-end and it affects the fit", {
+  set.seed(2024)
+  n  <- 150
+  df <- data.frame(y = rnorm(n), M1 = rnorm(n), M2 = rnorm(n), M3 = rnorm(n))
+  df$y <- 0.6 * rank(df$M1) / n + 0.2 * rank(df$M3) / n + rnorm(n, sd = 0.4)
+  mix <- c("M1", "M2", "M3")
+
+  f_small <- nwqs(df, mix_name = mix, outcome = "y", family = "gaussian",
+                  rh = 1, n_permutation = 2, n_shuffle = 2,
+                  seed = 11, plan_strategy = "sequential", quiet = TRUE)
+  f_big   <- nwqs(df, mix_name = mix, outcome = "y", family = "gaussian",
+                  rh = 1, n_permutation = 2, n_shuffle = 80,
+                  seed = 11, plan_strategy = "sequential", quiet = TRUE)
+
+  expect_s3_class(f_small, "nwqs")
+  expect_s3_class(f_big, "nwqs")
+  expect_false(isTRUE(all.equal(unname(f_small$final_weights),
+                                unname(f_big$final_weights))))
+})
