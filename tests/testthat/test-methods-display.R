@@ -137,10 +137,10 @@ test_that("summary.nwqs_boot stability table reads largest target dynamically", 
   out <- capture.output(summary(fit))
   combined <- paste(out, collapse = "\n")
   expect_false(grepl("Q[0-9]+_Effect_SD", combined))
-  # Largest percentile_rank target with default q=4 grid is P100_vs_P0
-  expect_true(grepl("P100_vs_P0_Effect_SD", combined))
+  # Default percentile_rank contrast is {P25,P75,P95} vs P50; largest is P95_vs_P50
+  expect_true(grepl("P95_vs_P50_Effect_SD", combined))
   expect_match(combined,
-               "Note: P100_vs_P0_Effect_SD = SD of P100_vs_P0 effect")
+               "Note: P95_vs_P50_Effect_SD = SD of P95_vs_P50 effect")
 })
 
 test_that("plot_nwqs_contrast_box uses P-labelled facets in percentile_rank", {
