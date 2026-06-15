@@ -20,6 +20,7 @@ nwqs(
   rh = NWQS_DEFAULTS$rh,
   seed = NWQS_DEFAULTS$seed,
   n_permutation = NWQS_DEFAULTS$n_permutation,
+  n_shuffle = NWQS_DEFAULTS$n_shuffle,
   family = c("gaussian", "binomial", "poisson", "quasipoisson", "negbin"),
   plan_strategy = c("sequential", "multisession", "multicore"),
   n_workers = NULL,
@@ -77,9 +78,14 @@ iteration. Default is 0.6.}
 
 \item{seed}{Integer. Random seed for reproducible splits. Default is 1234.}
 
-\item{n_permutation}{Integer. Number of internal permutations for variable
-importance. Default is 30 (raised from 10 in 0.2.0 for more stable
-weight estimates on small samples).}
+\item{n_permutation}{Integer. Number of \emph{outer} OOB resamples (bagging
+rounds) used to average component importance. Default is 30. This is NOT
+the per-component shuffle count.}
+
+\item{n_shuffle}{Integer. Number of \emph{inner} permutation shuffles per
+component within each OOB resample. Default is 30. Total permutation work
+per RH iteration scales as \code{n_permutation * n_shuffle * n_components};
+lowering \code{n_shuffle} is the primary runtime lever.}
 
 \item{family}{Character. Error distribution: \code{"gaussian"},
 \code{"binomial"}, \code{"poisson"}, \code{"quasipoisson"}, or

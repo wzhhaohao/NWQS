@@ -10,7 +10,7 @@ permutation_scorer(
   mix_name,
   spline_vars,
   family,
-  n_permutation = 30,
+  n_shuffle = NWQS_DEFAULTS$n_shuffle,
   zero_weight_action = c("na", "uniform"),
   ...
 )
@@ -29,9 +29,11 @@ spline basis functions.}
 \item{family}{List. GLM family object (e.g., \code{gaussian()},
 \code{binomial()}, \code{poisson()}, \code{quasipoisson()}).}
 
-\item{n_permutation}{Integer. Number of OOB permutations for stabilizing
-importance scores. Default is 30 (raised from 10 in 0.2.0 to give more
-stable weight estimates on small samples).}
+\item{n_shuffle}{Integer. Number of OOB permutation shuffles per mixture
+component used to stabilize a single importance estimate. Default is 30.
+Renamed from \code{n_permutation} in 0.2.0 to disambiguate it from the
+\emph{outer} OOB-resample count carried by \code{run_oob_permutation()}
+(which is the parameter exposed as \code{n_permutation} on \code{nwqs()}).}
 
 \item{zero_weight_action}{Character. One of \code{"na"} or
 \code{"uniform"}. Determines how zero total importance is converted to

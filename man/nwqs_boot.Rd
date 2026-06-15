@@ -13,6 +13,7 @@ nwqs_boot(
   n_boot = NWQS_DEFAULTS$n_boot,
   rh_inner = NWQS_DEFAULTS$rh_inner,
   n_permutation = NWQS_DEFAULTS$n_permutation,
+  n_shuffle = NWQS_DEFAULTS$n_shuffle,
   conf_level = NWQS_DEFAULTS$conf_level,
   seed = NWQS_DEFAULTS$seed,
   keep_fits = FALSE,
@@ -44,8 +45,11 @@ nwqs_boot(
 \item{rh_inner}{Integer. RH iterations per bootstrap replicate. Default
 is 1.}
 
-\item{n_permutation}{Integer. Permutation count for variable importance.
-Default is 30 (raised from 10 in 0.2.0).}
+\item{n_permutation}{Integer. Outer OOB-resample (bagging) count for variable
+importance, forwarded to \code{nwqs()}. Default is 30.}
+
+\item{n_shuffle}{Integer. Inner per-component permutation shuffle count,
+forwarded to \code{nwqs()}. Default is 30.}
 
 \item{conf_level}{Numeric. Confidence level. Default is 0.95.}
 

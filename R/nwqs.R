@@ -68,9 +68,13 @@
 #'   iteration. Default is 0.6.
 #' @param rh Integer. Number of repeated holdout iterations. Default is 10.
 #' @param seed Integer. Random seed for reproducible splits. Default is 1234.
-#' @param n_permutation Integer. Number of internal permutations for variable
-#'   importance. Default is 30 (raised from 10 in 0.2.0 for more stable
-#'   weight estimates on small samples).
+#' @param n_permutation Integer. Number of \emph{outer} OOB resamples (bagging
+#'   rounds) used to average component importance. Default is 30. This is NOT
+#'   the per-component shuffle count.
+#' @param n_shuffle Integer. Number of \emph{inner} permutation shuffles per
+#'   component within each OOB resample. Default is 30. Total permutation work
+#'   per RH iteration scales as \code{n_permutation * n_shuffle * n_components};
+#'   lowering \code{n_shuffle} is the primary runtime lever.
 #' @param family Character. Error distribution: \code{"gaussian"},
 #'   \code{"binomial"}, \code{"poisson"}, \code{"quasipoisson"}, or
 #'   \code{"negbin"}. \code{"negbin"} fits the final NWQS regression
@@ -504,8 +508,10 @@ nwqs <- function(data, mix_name, covariates = NULL, outcome = "y",
 #' @param n_boot Integer. Number of bootstrap replicates. Default is 100.
 #' @param rh_inner Integer. RH iterations per bootstrap replicate. Default
 #'   is 1.
-#' @param n_permutation Integer. Permutation count for variable importance.
-#'   Default is 30 (raised from 10 in 0.2.0).
+#' @param n_permutation Integer. Outer OOB-resample (bagging) count for variable
+#'   importance, forwarded to \code{nwqs()}. Default is 30.
+#' @param n_shuffle Integer. Inner per-component permutation shuffle count,
+#'   forwarded to \code{nwqs()}. Default is 30.
 #' @param conf_level Numeric. Confidence level. Default is 0.95.
 #' @param seed Integer or \code{NULL}. Random seed.
 #' @param keep_fits Logical. Whether to retain all bootstrap model objects.

@@ -10,7 +10,8 @@ run_oob_permutation(
   outcome = "y",
   covariates = NULL,
   weight_engine = permutation_scorer,
-  n_permutation = 30,
+  n_permutation = NWQS_DEFAULTS$n_permutation,
+  n_shuffle = NWQS_DEFAULTS$n_shuffle,
   seed = NULL,
   boot_strategy = c("sequential", "multicore", "multisession"),
   boot_n_workers = NULL,
@@ -32,8 +33,12 @@ adjust for.}
 \item{weight_engine}{Function. The engine function for computing weights and
 shapes. Default is \code{\link{permutation_scorer}}.}
 
-\item{n_permutation}{Integer. Number of internal bootstrap or permutation
-iterations. Default is 30 (raised from 10 in 0.2.0).}
+\item{n_permutation}{Integer. Number of \emph{outer} OOB resamples (bagging
+rounds) over which component importance is averaged. Default is 30. NOTE:
+this is NOT the per-component shuffle count; see \code{n_shuffle}.}
+
+\item{n_shuffle}{Integer. Number of \emph{inner} permutation shuffles per
+mixture component, forwarded to the weight engine. Default is 30.}
 
 \item{seed}{Integer or \code{NULL}. Random seed for reproducible parallel
 computation.}
