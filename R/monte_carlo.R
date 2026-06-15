@@ -61,6 +61,12 @@ calc_weight_error <- function(w_est, w_true) {
 #' @importFrom dplyr select arrange %>%
 #' @export
 check_coverage <- function(est_df, true_mat) {
+  warning(
+    "check_coverage(): coverage from RH-based Wald/empirical CIs reflects ",
+    "data-splitting (algorithmic) variance only and is NOT valid inference. ",
+    "For valid CI coverage use nwqs_boot() + check_boot_coverage().",
+    call. = FALSE
+  )
   true_df <- as.data.frame(as.table(true_mat))
   colnames(true_df) <- c("Term", "Target", "True_Value")
   true_df$Term <- as.character(true_df$Term)
@@ -113,6 +119,12 @@ check_coverage <- function(est_df, true_mat) {
 #' @export
 evaluate_sim_performance <- function(sim_weight_df, sim_effect_df, true_w,
                                      true_eff_mat, w_threshold = 0.01) {
+  warning(
+    "evaluate_sim_performance(): CP_Wald/CP_Empirical and Reject_H0 are based ",
+    "on RH (data-splitting) CIs and reflect algorithmic variance only, NOT ",
+    "valid inference. For valid coverage use nwqs_boot() + check_boot_coverage().",
+    call. = FALSE
+  )
   true_toxics <- names(true_w)[true_w > 0]
   true_noises <- names(true_w)[true_w == 0]
 
